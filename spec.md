@@ -2,24 +2,25 @@
 
 ## Overview
 
-Bartleby is a Python static site generator inspired by Hugo's power and flexibility, with MkDocs's simplicity and the Material theme built in. Named after Melville's scrivener, Bartleby combines the best ideas from Hugo (template lookup, shortcodes, taxonomies, content types) and MkDocs (YAML-driven nav, simple config, great defaults) into a single Python tool.
+Bartleby is a batteries-included Python static site generator for people who build content-heavy sites — blogs, tutorials, documentation, conference sites — and want everything in one tool. Named after Melville's scrivener, Bartleby ships with a Material Design theme, a modern frontend stack (Tailwind CSS, Alpine.js, HTMX), multiple content types with build-time metadata validation, a flexible taxonomy system, and every markdown extension you'd reach for — all out of the box.
 
-Unlike MkDocs + mkdocs-material (two separate projects), Bartleby ships the Material theme as its default and only built-in theme. The Material design is ported from the open-source mkdocs-material project (MIT licensed) using a hybrid approach: CSS/JS carried over largely as-is, Jinja2 templates rewritten to fit Bartleby's architecture.
+Bartleby draws architectural ideas from Hugo (content types, taxonomies, template lookup, shortcodes) and MkDocs (YAML-driven config, simple defaults), but it's its own tool. The theme is reimplemented from scratch using Tailwind and Alpine.js rather than ported from mkdocs-material, making it genuinely extensible — users can modify styles and behavior directly in template overrides without reverse-engineering a complex CSS/JS build system.
 
 ## Motivation
 
-- mkdocs-material's move toward Zensical introduces uncertainty for users who depend on the current open-source theme
-- MkDocs's blog/tutorial plugin system feels limiting — custom metadata, taxonomy control, and template flexibility are constrained
-- Hugo has the right architecture but is written in Go; the Python ecosystem (PyTexas, do-markdown, pymdownx) needs a Python-native SSG with similar power
-- Bartleby will serve both Mason Egger's personal site and PyTexas, with potential for broader adoption
+- The Python ecosystem needs a content-architecture-first SSG. MkDocs is great for docs but limited for blogs, tutorials, and mixed-content sites. Hugo has the right architecture but is written in Go.
+- mkdocs-material's move toward Zensical introduces uncertainty for users who depend on the current open-source theme.
+- Existing Python SSGs make you assemble features from plugins. Bartleby ships them — search, feeds, taxonomies, do-markdown, pymdownx, metadata validation, HTMX for forms — so you spend time writing content, not configuring tools.
+- Bartleby will serve both Mason Egger's personal site and PyTexas, with potential for broader adoption in the Python community.
 
 ## Design Principles
 
-1. **Simple by default, powerful when you need it** — YAML config and sensible defaults get you running immediately. When you need customization, the escape hatches are clean and predictable.
-2. **Material is the theme** — no theme marketplace, no separate theme package. Material is built in. Override templates and CSS if you want a different look.
-3. **Batteries included** — search, RSS/Atom, sitemap, syntax highlighting, do-markdown, pymdownx extensions all ship out of the box.
-4. **Build-time validation** — content type metadata schemas catch errors before deployment, not after.
-5. **Plugin-friendly** — extend via pip packages or local Python files in a `plugins/` directory.
+1. **Batteries included** — search, RSS/Atom, sitemap, syntax highlighting, do-markdown, pymdownx, icon packs, Tailwind CSS, Alpine.js, HTMX, dark mode — all ship out of the box. The library size doesn't matter; users ship the rendered output, not the library.
+2. **Simple by default, powerful when you need it** — YAML config and sensible defaults get you running immediately. When you need customization, the escape hatches are clean and predictable.
+3. **Content architecture first** — multiple content types with their own metadata schemas, URL patterns, pagination, and taxonomies. Build-time validation catches errors before deployment, not after.
+4. **Extensible by design** — Tailwind utility classes and Alpine.js directives are visible in templates. Override a partial and you can see and modify both styles and behavior. No opaque CSS class names or hidden JS component trees.
+5. **Material is the theme** — no theme marketplace, no separate theme package. Material Design is built in, reimplemented with Tailwind CSS for clean customization. Override templates and add `extra_css` if you want a different look.
+6. **Plugin-friendly** — extend via pip packages or local Python files in a `plugins/` directory.
 
 ---
 
@@ -35,6 +36,8 @@ site:
   url: "https://masonegger.com"
   description: "Personal site of Mason Egger"
   author: "Mason Egger"
+  default_image: /images/default-social.png  # Fallback Open Graph image
+  twitter: "@maboroshi"                       # Twitter handle for cards
 
 nav:
   - Home: index.md
@@ -50,9 +53,13 @@ nav:
 
 theme:
   palette:
-    primary: "#283618"
-    accent: "#BC6C25"
+    # Named shortcuts (e.g., "indigo", "teal", "deep-purple") or hex values
+    primary: "#283618"       # or: primary: indigo
+    accent: "#BC6C25"        # or: accent: teal
     background: "#FEFAE0"
+  color_mode:
+    default: system          # "light", "dark", or "system"
+    toggle: true             # Show light/dark toggle button
   features:
     - search
     - navigation.tabs
@@ -60,6 +67,12 @@ theme:
     - content.code.copy
     - content.code.annotate
     - content.tooltips
+  icon_packs:                # All enabled by default; set to false to exclude
+    material: true           # Material Design Icons
+    fontawesome: true        # FontAwesome (brands, solid, regular)
+    octicons: true           # GitHub Octicons
+    simple: true             # Simple Icons
+    # simple: false          # ← explicitly disable a pack
   logo: static/logo.png
   favicon: static/favicon.ico
   font:
@@ -71,6 +84,7 @@ authors_file: .authors.yml  # Default location for author definitions
 content_types:
   blog:
     path: blog/posts
+    url_base: blog              # Optional: URL prefix (default: derived from filepath)
     url_format: "{date:%Y/%m/%d}/{slug}"  # Optional: default is path-based
     pagination:
       enabled: true
@@ -129,6 +143,14 @@ plugins:
   - search
   - rss
 
+ai:
+  llms_txt: true             # Generate llms.txt (site overview for LLMs)
+  llms_full_txt: true        # Generate llms-full.txt (full content dump)
+  markdown_variants: true    # Write .md files alongside HTML for every page
+  robots:                    # AI-specific robots.txt directives
+    allow: [GPTBot, ClaudeBot, PerplexityBot]
+    # disallow: [GPTBot]     # ← block specific AI crawlers
+
 dev_server:
   host: "127.0.0.1"
   port: 8000
@@ -136,15 +158,16 @@ dev_server:
 
 ### Configuration Sections
 
-- **site**: Global site metadata (title, URL, description, author).
+- **site**: Global site metadata (title, URL, description, author) and SEO defaults (default_image, twitter handle).
 - **nav**: MkDocs-style navigation definition. Ordered list of nav items. Supports nesting. Omit to auto-generate from directory structure.
-- **theme**: Material theme configuration (palette, features, logo, favicon, fonts). Controls Material's built-in features.
+- **theme**: Material theme configuration (palette, color mode, features, icon packs, logo, favicon, fonts).
 - **authors_file**: Path to the authors definition file (default: `.authors.yml`).
-- **content_types**: Define content sections with their own paths, URL formats, pagination, taxonomy, feed generation, read time, excerpts, and metadata schemas.
+- **content_types**: Define content sections with their own paths, URL bases, URL formats, pagination, taxonomy, feed generation, read time, excerpts, and metadata schemas.
 - **taxonomies**: Site-wide taxonomy definitions with slugification options. Content types opt in via their `taxonomies` list.
 - **exclude_patterns**: Gitignore-style patterns to exclude files from content discovery.
 - **markdown_extensions**: Configure Python-Markdown extension options. All default extensions (do-markdown, pymdownx, standard) are loaded automatically — this section is for overriding their configuration or adding new extensions.
 - **plugins**: List of enabled plugins. Pip-installed packages and local `plugins/` files are both valid.
+- **ai**: LLM-friendliness settings — control `llms.txt`, `llms-full.txt`, markdown variant generation, and AI crawler directives in `robots.txt`.
 - **dev_server**: Development server configuration (host, port).
 
 ### Config Validation
@@ -231,13 +254,12 @@ my-site/
 │   │       └── deploy-with-temporal.md
 │   └── speaking/
 │       ├── index.md        # Optional: content displayed above talks listing
-│       ├── posts/
-│       │   └── pycon-2025.md
-│       └── docs/
-│           └── pycon-2025-slides.pdf
+│       └── posts/
+│           ├── pycon-2025.md
+│           └── pycon-2025-slides.pdf  # Co-located asset, copied to output
 ├── templates/               # User template overrides
 ├── plugins/                 # Local plugin files
-├── static/                  # Static assets (images, etc.)
+├── static/                  # Site-wide static assets (logo, favicon, etc.)
 └── site/                    # Build output (generated)
 ```
 
@@ -284,6 +306,7 @@ These fields are recognized on all content:
 | `draft` | bool | Exclude from production builds (default: `false`) |
 | `template` | string | Override template lookup |
 | `url` | string | Override the generated URL path |
+| `url_base` | string | Override the URL base prefix (keeps `url_format` pattern) |
 | `authors` | list | Author keys from `.authors.yml` |
 | `{taxonomy}` | list | Values for any configured taxonomy (e.g., `tags`, `categories`) |
 
@@ -293,6 +316,44 @@ These fields are recognized on all content:
 - **Drafts**: Set `draft: true` to exclude from production builds. Shown during `bartleby serve`.
 - **Read time**: When `readtime: true` is set on a content type, Bartleby calculates estimated reading time and makes it available in templates as `page.readtime` (in minutes).
 - **Custom metadata**: Content-type-specific fields defined in config, validated at build time.
+
+### Static Files and Co-Located Assets
+
+Non-markdown files are handled in two ways:
+
+**Co-located assets** — files placed alongside content in `content/` are copied to the build output following the page's URL, not the source file path. This ensures relative links always work, even when `url_format` changes the page's output path:
+
+```
+# Path-based URLs (default) — source and output paths match:
+content/speaking/posts/pycon-2025.md          → /speaking/posts/pycon-2025/
+content/speaking/posts/pycon-2025-slides.pdf  → /speaking/posts/pycon-2025-slides.pdf
+
+# With url_format — assets follow the page's URL:
+content/blog/posts/my-post.md                → /blog/2026/03/01/my-post/  (via url_format)
+content/blog/posts/diagram.png               → /blog/2026/03/01/my-post/diagram.png
+```
+
+Reference co-located assets with relative links from the content file:
+
+```markdown
+Download the [slides](pycon-2025-slides.pdf).
+![Diagram](diagram.png)
+```
+
+Relative links work regardless of `url_format` because assets always follow their page's output URL. For path-based URLs (no `url_format`), this is a no-op since source and output paths already align.
+
+**Site-wide static assets** — the `static/` directory at the project root is for assets shared across the site (logo, favicon, fonts, global CSS/JS). Copied to the root of the build output: `static/logo.png` → `/logo.png`.
+
+### Cross-References
+
+Link between content pages using relative markdown file paths. Bartleby rewrites these to the correct output URLs at build time, following MkDocs's convention:
+
+```markdown
+Check out my [Temporal tutorial](../tutorials/posts/deploy-with-temporal.md).
+See the [about page](../../about.md).
+```
+
+Relative paths are resolved from the current file's location within `content/`. Bartleby validates that the target file exists and produces a build error (or warning in non-strict mode) for broken links. This catches dead links before deployment.
 
 ### File Exclusion
 
@@ -335,7 +396,19 @@ Available placeholders:
 | `{title}` | Slugified title | `deploy-with-temporal` |
 | `{categories}` | First category (slugified) | `devops` |
 
-The content type's base path is prepended: `blog` + `url_format` → `/blog/2026/03/01/my-first-post/`.
+The URL base is prepended to the formatted URL. By default, the URL base is derived from the content file's directory path relative to `content/`. Content types can override this with `url_base` in config:
+
+```yaml
+content_types:
+  blog:
+    path: blog/posts           # Files live in content/blog/posts/
+    url_base: blog             # URLs start with /blog/ (not /blog/posts/)
+    url_format: "{date:%Y/%m/%d}/{slug}"
+```
+
+This produces: `/blog/2026/03/01/my-first-post/`.
+
+If `url_base` is not set, the default path-based URL for `content/blog/posts/my-first-post.md` would be `/blog/posts/my-first-post/`. Setting `url_base: blog` shortens it to `/blog/{url_format}/`.
 
 ### Per-Page URL Override
 
@@ -348,6 +421,14 @@ url: custom/path/to/page
 ```
 
 This produces an absolute path: `/custom/path/to/page/`.
+
+Pages can also override just the URL base with `url_base` in front matter, keeping the `url_format` pattern:
+
+```yaml
+---
+url_base: articles
+---
+```
 
 ---
 
@@ -391,10 +472,11 @@ Bartleby uses Python-Markdown as its rendering engine. All extensions — do-mar
 
 Extension processor ordering matters. Bartleby manages this internally to ensure correct behavior:
 
-1. `pymdownx.superfences` (priority 25) — must run before do-markdown fence
-2. `do_markdown.fence` (priority 40) — enhances code blocks after superfences processes them
-3. `do_markdown.highlight` (priority 175 inline, 25 post) — text highlighting in code blocks
-4. All other extensions in standard priority order
+1. `do_markdown.fence` preprocessor (priority 40) — extracts `[label]`, `[secondary_label]`, `[environment]` directives from code blocks before superfences processes them
+2. `pymdownx.superfences` preprocessor (priority 25) — processes fenced code blocks into HTML after directives are extracted
+3. `do_markdown.fence` postprocessor (priority 25) — injects labels, environment classes, and line prefixes into the HTML that superfences generated
+4. `do_markdown.highlight` (priority 175 inline, 25 post) — text highlighting; inline processor converts `<^>` in prose, postprocessor handles `<^>` inside code blocks
+5. All other extensions in standard priority order
 
 Users do not need to worry about ordering — Bartleby handles it.
 
@@ -824,7 +906,7 @@ A^T^A (superscript)
 
 ### Grids
 
-Card layouts and grid arrangements. Powered by `attr_list` and `md_in_html`.
+Card layouts and grid arrangements. Powered by `attr_list` and `md_in_html`. Class names use mkdocs-material conventions (`grid`, `cards`) — Bartleby maps these to Tailwind grid/flexbox styles via `@apply`.
 
 **Card grid (list syntax):**
 
@@ -1020,7 +1102,7 @@ markdown_extensions:
 
 ### Buttons
 
-Styled link buttons. Powered by `attr_list`.
+Styled link buttons. Powered by `attr_list`. Class names use the `md-button` convention from mkdocs-material for content compatibility — Bartleby maps these to Tailwind styles via `@apply`.
 
 ```markdown
 [Subscribe to newsletter](#){ .md-button }
@@ -1089,7 +1171,7 @@ theme:
 
 ### Engine: Jinja2
 
-Bartleby uses Jinja2 for all template rendering. The Material theme's templates are written in Jinja2 (ported from mkdocs-material).
+Bartleby uses Jinja2 for all template rendering. The Material theme's templates are reimplemented in Jinja2 using Tailwind CSS and Alpine.js.
 
 ### Template Lookup Order
 
@@ -1173,28 +1255,43 @@ Shortcodes are resolved during markdown preprocessing, before the markdown engin
 
 ## Material Theme (Built-In)
 
-### Porting Approach
+### Approach: Reimplemented with Modern Frontend Stack
 
-**Hybrid**: Take mkdocs-material's CSS and JavaScript largely as-is. Rewrite the Jinja2 templates to fit Bartleby's template context and architecture.
+Rather than porting mkdocs-material's CSS/JS (62 SCSS files, 115 TypeScript files using RxJS + Preact), Bartleby reimplements the Material Design aesthetic using a modern, extensible frontend stack:
 
-### Components to Port
+- **Tailwind CSS** — utility-first styling. Classes are visible directly in templates, making user overrides intuitive. Compiled at package build time via the Tailwind standalone CLI (no Node dependency for users). PurgeCSS ensures minimal production bundles.
+- **Alpine.js** — lightweight (15KB) reactive JS for theme interactivity: search modal, sidebar toggles, content tabs, dark mode, scroll tracking, tooltips. Logic lives in HTML attributes (`x-data`, `x-show`, `x-on`), visible and modifiable in template overrides.
+- **HTMX** — included as a user-facing tool for adding server-backed interactions (contact forms, newsletter signups, API calls) to static pages. Not used by the default theme, but available out of the box for users who need it.
+- **lunr.js** — client-side search engine.
+
+This "batteries included" philosophy means users get Tailwind, Alpine, HTMX, and lunr.js without installing anything. The library size doesn't matter — users ship the rendered output, not the library.
+
+### Why Not Port mkdocs-material's CSS/JS?
+
+mkdocs-material's frontend is tightly coupled: TypeScript components use DOM selectors that expect specific HTML class names and element structures produced by the templates. Porting the CSS/JS "as-is" while rewriting templates requires reverse-engineering every selector in 115 TypeScript files. The maintenance burden is high and extensibility is poor — users overriding templates see opaque BEM class names (`md-header__inner md-grid`) with no way to understand the styles without tracing through SCSS.
+
+With Tailwind, a user overriding a template partial sees `class="flex items-center gap-4 px-6"` and can modify styles directly. With Alpine, they see `x-data="{ open: false }"` and understand the behavior. This is a transformative extensibility difference.
+
+### Theme Components
 
 - **Header** — site title, navigation tabs, search button, color scheme toggle
-- **Navigation drawer** — sidebar navigation with collapsible sections, active state tracking
-- **Table of contents sidebar** — auto-generated from heading structure
-- **Search modal** — instant search with keyboard navigation, section highlighting
-- **Content area** — typography, code blocks, admonitions, tables, all content elements
+- **Navigation drawer** — sidebar navigation with collapsible sections (Alpine.js `x-data`), active state tracking
+- **Table of contents sidebar** — auto-generated from heading structure, scroll spy via Alpine.js `x-intersect`
+- **Search modal** — Alpine.js modal with lunr.js search, keyboard navigation, result highlighting
+- **Content area** — typography, code blocks, admonitions, tables, all content elements (Tailwind typography plugin + custom styles)
 - **Footer** — previous/next navigation, site info, social links
 - **Blog layouts** — post listings with pagination, post pages with metadata (authors, date, readtime, tags)
 - **Taxonomy layouts** — tag/category listing pages, term pages
 - **404 page** — styled not-found page
-- **Mobile responsive** — hamburger menu, collapsible nav, responsive content
+- **Mobile responsive** — Tailwind responsive prefixes (`md:`, `lg:`), Alpine.js hamburger menu
 
 ### Theme Configuration
 
 Configurable via `bartleby.yml` `theme` section:
 
-- Color palette (primary, accent, background)
+- Color palette (primary, accent, background) — named shortcuts (`indigo`, `teal`, etc.) or arbitrary hex values, mapped to Tailwind CSS custom properties
+- Color mode — default to system preference (`prefers-color-scheme`), manual toggle with `localStorage` persistence. Configurable: `default: system|light|dark`, `toggle: true|false`
+- Icon packs — Material Design Icons, FontAwesome, Octicons, Simple Icons all enabled by default. Set a pack to `false` to exclude it. Referenced in content via `:material-account:`, `:fontawesome-brands-github:`, etc. Only icons actually used in content are included in the build output (tree-shaking).
 - Logo and favicon
 - Social links
 - Font customization
@@ -1219,6 +1316,14 @@ Configurable via `bartleby.yml` `theme` section:
   - `search.share` — shareable search links
   - `toc.follow` — TOC follows scroll position
 
+### Theme Asset Pipeline
+
+During Bartleby **development**: Tailwind standalone CLI compiles CSS from template classes. No Node dependency.
+
+In the **shipped package**: Compiled CSS, Alpine.js, HTMX, and lunr.js are vendored. Users never need Tailwind, Node, or npm.
+
+For **user template overrides**: The shipped CSS includes comprehensive Tailwind utility classes covering common customization needs. Users needing additional styles add `extra_css` files — same workflow as mkdocs-material today.
+
 ---
 
 ## Search
@@ -1229,7 +1334,7 @@ Replicate mkdocs-material's search system exactly:
 
 - **Build time**: Generate a JSON search index from all rendered content (titles, headings, body text, tags)
 - **Client side**: Ship lunr.js (or lunr equivalent) to the browser
-- **UI**: Material-style search modal with instant results, keyboard navigation, section highlighting
+- **UI**: Alpine.js-powered search modal with instant results, keyboard navigation, section highlighting
 - **Plugin**: Implemented as a built-in plugin (enabled by default)
 
 ### Search Index Format
@@ -1364,7 +1469,218 @@ A gzipped version (`sitemap.xml.gz`) is also generated.
 
 ### Robots.txt
 
-Auto-generated `robots.txt` referencing the sitemap URL. Can be overridden by placing a `robots.txt` in `static/`.
+Auto-generated `robots.txt` referencing the sitemap URL. Includes AI-specific crawler directives from the `ai.robots` config:
+
+```
+User-agent: *
+Allow: /
+Sitemap: https://masonegger.com/sitemap.xml
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+```
+
+Can be fully overridden by placing a `robots.txt` in `static/`.
+
+---
+
+## LLM Friendliness
+
+Bartleby generates LLM-friendly output by default, making site content easily consumable by AI systems.
+
+### llms.txt
+
+Auto-generated `llms.txt` at the site root following the [llmstxt.org](https://llmstxt.org) standard. Provides a structured overview of the site:
+
+```
+# Mason Egger
+
+> Personal site of Mason Egger
+
+## Blog
+- [Deploy with Temporal](https://masonegger.com/blog/2026/03/01/deploy-with-temporal.md): Learn how to deploy workflows with Temporal
+- [First Post](https://masonegger.com/blog/2026/01/15/first-post.md): My first blog post
+
+## Tutorials
+- [Deploy with Temporal](https://masonegger.com/tutorials/deploy-with-temporal.md): Step-by-step Temporal deployment guide
+
+## Pages
+- [About](https://masonegger.com/about.md): About Mason Egger
+```
+
+Links point to the `.md` variants so LLMs receive markdown, not HTML. Content is organized by content type. Descriptions come from the `description` front matter field.
+
+Controlled by `ai.llms_txt` config (default: `true`).
+
+### llms-full.txt
+
+A comprehensive version that inlines the full markdown content of every page, so an LLM can consume the entire site in a single request:
+
+```
+# Mason Egger
+
+> Personal site of Mason Egger
+
+## Blog
+
+### Deploy with Temporal
+
+Learn how to deploy workflows with Temporal
+
+[Full markdown content here...]
+
+---
+
+### First Post
+
+My first blog post
+
+[Full markdown content here...]
+```
+
+Controlled by `ai.llms_full_txt` config (default: `true`). Disable for large sites where this file would be prohibitively large.
+
+### Markdown Variants
+
+When `ai.markdown_variants` is enabled (default: `true`), Bartleby writes a `.md` file alongside the HTML for every page:
+
+```
+site/blog/2026/03/01/my-post/index.html   ← rendered page
+site/blog/2026/03/01/my-post/index.md     ← raw markdown (front matter stripped)
+site/about/index.html
+site/about/index.md
+```
+
+Visiting `/blog/2026/03/01/my-post/index.md` on any static host returns the raw markdown. LLMs and tools that prefer markdown over HTML can append `.md` to any page URL.
+
+### JSON-LD Structured Data
+
+Bartleby generates Schema.org JSON-LD in the base template for every page:
+
+**For content type posts** (`Article` schema):
+
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "Deploy with Temporal",
+  "author": {"@type": "Person", "name": "Mason Egger", "url": "https://masonegger.com"},
+  "datePublished": "2026-03-01",
+  "dateModified": "2026-03-10",
+  "description": "Learn how to deploy workflows with Temporal",
+  "publisher": {"@type": "Organization", "name": "Mason Egger"},
+  "mainEntityOfPage": {"@type": "WebPage", "@id": "https://masonegger.com/blog/2026/03/01/deploy-with-temporal/"}
+}
+</script>
+```
+
+**For static pages** (`WebPage` schema):
+
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "name": "About",
+  "description": "About Mason Egger",
+  "url": "https://masonegger.com/about/"
+}
+</script>
+```
+
+### AI Crawler Policy
+
+The `ai.robots` config controls which AI crawlers can access the site. Directives are merged into the auto-generated `robots.txt`:
+
+```yaml
+ai:
+  robots:
+    allow: [GPTBot, ClaudeBot, PerplexityBot]   # Explicitly allowed
+    # disallow: [GPTBot]                          # Explicitly blocked
+```
+
+If neither `allow` nor `disallow` is set, no AI-specific directives are added (default `robots.txt` behavior applies).
+
+### Testable Components
+
+- llms.txt generator: produces valid llmstxt.org format from site content
+- llms-full.txt generator: inlines full markdown content
+- Markdown variant writer: strips front matter, writes correct paths
+- JSON-LD generator: produces valid Schema.org markup for Article and WebPage types
+- Robots.txt AI directives: correctly merges crawler policy into robots.txt
+
+---
+
+## SEO
+
+### Built-In Meta Tags
+
+Bartleby auto-generates SEO meta tags in the base template from page front matter and site config. No plugins needed.
+
+**Open Graph tags** (generated for every page):
+
+```html
+<meta property="og:type" content="article">
+<meta property="og:title" content="{{ page.title }}">
+<meta property="og:description" content="{{ page.description }}">
+<meta property="og:url" content="{{ page.canonical_url }}">
+<meta property="og:site_name" content="{{ site.title }}">
+<meta property="og:image" content="{{ page.meta.image or site.default_image }}">
+<meta property="article:published_time" content="{{ page.date }}">
+<meta property="article:author" content="{{ page.authors[0].name }}">
+<meta property="article:tag" content="{{ tag }}" />  <!-- per tag -->
+```
+
+**Twitter Card tags**:
+
+```html
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ page.title }}">
+<meta name="twitter:description" content="{{ page.description }}">
+<meta name="twitter:image" content="{{ page.meta.image or site.default_image }}">
+```
+
+**Canonical URL**:
+
+```html
+<link rel="canonical" href="{{ page.canonical_url }}">
+```
+
+The canonical URL is the full absolute URL (`site.url` + page path). Ensures search engines index the correct URL.
+
+### SEO Configuration
+
+Optional site-level defaults in `bartleby.yml`:
+
+```yaml
+site:
+  title: "Mason Egger"
+  url: "https://masonegger.com"
+  description: "Personal site of Mason Egger"
+  author: "Mason Egger"
+  default_image: /images/default-social.png  # Fallback OG image
+  twitter: "@maboroshi"                       # Twitter handle for cards
+```
+
+Pages can override `description` and provide an `image` in front matter for per-page control.
+
+### JSON-LD Structured Data
+
+Bartleby generates Schema.org JSON-LD in the base template for every page. See the **LLM Friendliness** section for full details and examples. Content type posts use `Article` schema; static pages use `WebPage` schema.
+
+### Testable Components
+
+- Meta tag generator: produces correct OG/Twitter/canonical tags from page data
+- JSON-LD generator: produces valid Schema.org markup for Article and WebPage types
+- Fallback logic: site defaults used when page-level fields are missing
+- Canonical URL: correctly combines site.url with page path
 
 ---
 
@@ -1541,24 +1857,48 @@ Creates a new project directory with:
     d. Fire `on_page_markdown` — plugins can modify markdown
     e. Render markdown to HTML via Python-Markdown pipeline
     f. Fire `on_page_content` — plugins can modify rendered HTML
-    g. Calculate read time (if enabled for this content type)
-    h. Resolve template (lookup order)
-    i. Build template context
-    j. Fire `on_page_context` — plugins can modify context
-    k. Render template with Jinja2
-    l. Fire `on_post_page` — plugins can modify final output
-    m. Write to `site/` directory
-17. **Generate search index** — build lunr.js JSON index from all rendered pages
-18. **Generate feeds** — RSS/Atom for configured content types
-19. **Generate sitemap** — sitemap.xml and sitemap.xml.gz
-20. **Generate robots.txt** — unless overridden by static/robots.txt
-21. **Render static templates** — 404.html and other static templates
-22. **Copy static assets** — copy `static/` to `site/`
-23. **Copy theme assets** — CSS, JS, fonts to `site/`
-24. **Fire `on_post_build`** — plugins can do cleanup
-25. **Fire `on_shutdown`** — one-time cleanup
+    g. Validate and rewrite cross-reference links — resolve relative `.md` paths to output URLs, flag broken links
+    h. Calculate read time (if enabled for this content type)
+    i. Resolve template (lookup order)
+    j. Build template context
+    k. Fire `on_page_context` — plugins can modify context
+    l. Render template with Jinja2
+    m. Fire `on_post_page` — plugins can modify final output
+    n. Write to `site/` directory
+    o. Copy co-located assets to page's output URL directory
+17. **Write markdown variants** — for each page, write stripped markdown to `.md` file alongside HTML (if `ai.markdown_variants` enabled)
+18. **Tree-shake icons** — scan rendered HTML for icon references, copy only used SVGs to `site/`
+19. **Generate search index** — build lunr.js JSON index from all rendered pages
+20. **Generate feeds** — RSS/Atom for configured content types
+21. **Generate sitemap** — sitemap.xml and sitemap.xml.gz
+22. **Generate robots.txt** — include AI crawler directives from config, unless overridden by static/robots.txt
+23. **Generate llms.txt** — site overview with links to `.md` variants (if `ai.llms_txt` enabled)
+24. **Generate llms-full.txt** — full site content in markdown (if `ai.llms_full_txt` enabled)
+25. **Render static templates** — 404.html and other static templates
+26. **Copy static assets** — copy `static/` to `site/`
+27. **Copy theme assets** — CSS, JS, fonts to `site/`
+28. **Fire `on_post_build`** — plugins can do cleanup
+29. **Fire `on_shutdown`** — one-time cleanup
 
 On build error at any stage, `on_build_error` is fired before `on_shutdown`.
+
+### Async Build Architecture
+
+Bartleby uses asyncio to maximize build performance. The build pipeline is an async orchestrator that parallelizes I/O-bound work (file reads, file writes) using `aiofiles`, while CPU-bound work (markdown rendering, template rendering) is dispatched to a `ProcessPoolExecutor` via `asyncio.run_in_executor()`.
+
+**Critical design constraint**: All plugin hooks run in the main process. Only the pure rendering work (markdown→HTML, template→output) is dispatched to worker processes. This keeps the plugin API simple — plugin authors never deal with serialization, pickling, or cross-process state. The main process orchestrates: fire pre-hooks → dispatch render to pool → collect result → fire post-hooks → async write to disk.
+
+The build phases that benefit from parallelism:
+
+- **Step 6 (content discovery)**: Async directory scanning and concurrent front matter parsing
+- **Step 16e (markdown rendering)**: The CPU-bound `markdown.convert()` call is dispatched to a process pool. Steps 16a-d (plugin hooks, shortcodes) and 16f-o (post-render hooks, template rendering, file/asset writing) run in the main process with async I/O.
+- **Steps 17-18 (markdown variants, icon tree-shaking)**: Can run concurrently after all pages are rendered
+- **Steps 19-24 (search index, feeds, sitemap, robots.txt, llms.txt, llms-full.txt)**: Generated concurrently
+- **Steps 26-27 (asset copying)**: Async file copy operations
+
+Sequential phases (config loading, navigation building, taxonomy resolution) remain synchronous as they build shared state needed by later stages.
+
+The dev server uses an async HTTP server with WebSocket support for live reload, following patterns from uvicorn/starlette.
 
 ### Dirty Build Mode
 
@@ -1654,6 +1994,24 @@ The following features are explicitly out of scope for v1 but should be consider
 - **Internationalization (i18n)** — multilingual site support
 - **Data files** — load YAML/JSON/CSV as template context data
 - **Asset pipeline** — SCSS compilation, fingerprinting, minification
+- **Page feedback widget** — thumbs up/down or rating on pages (requires server-side endpoint via HTMX)
+- **Migration tool** — `bartleby migrate` command to convert `mkdocs.yml` → `bartleby.yml` and `docs/` → `content/` for users coming from MkDocs
+
+---
+
+## License
+
+Bartleby is licensed under the **MIT License**.
+
+Bundled third-party assets have their own licenses, documented in a `THIRD-PARTY-NOTICES` file shipped with the package:
+
+- **Material Design Icons** — Apache License 2.0
+- **FontAwesome** — CC BY 4.0 (icons), MIT (code)
+- **Octicons** — MIT
+- **Simple Icons** — CC0 1.0
+- **Alpine.js** — MIT
+- **HTMX** — BSD 2-Clause
+- **lunr.js** — MIT
 
 ---
 
@@ -1665,12 +2023,14 @@ The following features are explicitly out of scope for v1 but should be consider
 - **Templates**: Jinja2
 - **Syntax highlighting**: Pygments (via pymdownx.highlight)
 - **Search**: lunr.js (client-side), JSON index (build-time)
-- **Dev server**: Built-in (Python HTTP server + WebSocket for live reload)
-- **CLI**: Click or Typer (TBD)
+- **Dev server**: Built-in (async HTTP server + WebSocket for live reload)
+- **Async**: asyncio + ProcessPoolExecutor for parallel builds, aiofiles for async I/O
+- **CLI**: argparse (stdlib)
 - **Testing**: pytest
 - **Linting**: ruff
 - **Type checking**: mypy (strict)
-- **Theme CSS/JS**: Ported from mkdocs-material
+- **Theme CSS**: Tailwind CSS (compiled via standalone CLI, no Node dependency)
+- **Theme JS**: Alpine.js (interactivity), HTMX (user-facing server interactions), lunr.js (search)
 
 ## Dependencies
 
@@ -1684,11 +2044,49 @@ The following features are explicitly out of scope for v1 but should be consider
 - `watchdog` — file system monitoring for dev server
 - `websockets` — live reload WebSocket server
 - `python-slugify` — URL slug generation
+- `aiofiles` — async file I/O for build parallelism
+
+### Bundled (vendored, not pip dependencies)
+- `alpine.js` — theme interactivity
+- `htmx` — user-facing server interactions
+- `lunr.js` — client-side search
+- Icon packs (Material Design Icons, FontAwesome, Octicons, Simple Icons)
 
 ### Dev
 - `pytest` — testing
 - `ruff` — linting and formatting
 - `mypy` — type checking
+- Tailwind CSS standalone CLI — theme CSS compilation (dev/build only, not a user dependency)
+
+---
+
+## Icon Packs
+
+### Bundled Icons
+
+All four icon packs ship with the Bartleby Python package:
+
+- **Material Design Icons** — `material-*`
+- **FontAwesome** — `fontawesome-brands-*`, `fontawesome-solid-*`, `fontawesome-regular-*`
+- **Octicons** — `octicons-*`
+- **Simple Icons** — `simple-*`
+
+### Tree-Shaking
+
+All four packs are enabled by default. To exclude a pack, set it to `false` in the `theme.icon_packs` config. In practice, most users will never touch this — tree-shaking handles output size automatically.
+
+The full icon packs are bundled in the Python package for availability, but only icons actually referenced in content and templates are copied to the build output. During the build (step 17), Bartleby scans rendered HTML for icon references and includes only those SVGs in `site/`. This keeps the package batteries-included while the output stays lean.
+
+### Usage
+
+Icons are referenced in markdown using the same syntax as mkdocs-material:
+
+```markdown
+:material-account-circle:
+:fontawesome-brands-github:
+:octicons-heart-fill-24:
+:simple-python:
+```
 
 ---
 
@@ -1698,19 +2096,23 @@ The following components should be implemented and tested independently:
 
 1. **Config** — load, parse, validate `bartleby.yml`
 2. **Authors** — load, parse, validate `.authors.yml`, resolve author references
-3. **Content** — discover files, apply exclusions, parse front matter, validate metadata
-4. **URLs** — generate URLs from path, url_format, or front matter override
-5. **Markdown** — render markdown with all extensions, manage extension ordering
-6. **Shortcodes** — preprocess `[% ... %]` syntax, resolve to Jinja2 template fragments
-7. **Templates** — Jinja2 environment, lookup order, context building
-8. **Navigation** — build nav structure from config or auto-generate from files, previous/next linking
-9. **Taxonomies** — build term → page mappings, generate taxonomy pages (global and per-content-type)
-10. **Listings** — generate content type listing pages with optional index.md content
-11. **Pagination** — split content into pages, generate paginator context
-12. **Search** — build JSON index from rendered content
-13. **Feeds** — generate RSS/Atom XML
-14. **Sitemap** — generate sitemap.xml and sitemap.xml.gz
-15. **Plugins** — discover, load, dispatch hooks, priority ordering
-16. **CLI** — command parsing, project scaffolding, dev server, build orchestration
-17. **Theme** — Material theme templates, CSS, JS assets
-18. **Server** — HTTP server, file watcher, WebSocket live reload
+3. **Content** — discover files, apply exclusions, parse front matter, copy co-located assets, validate metadata
+4. **URLs** — generate URLs from path, url_base, url_format, or front matter override
+5. **Cross-References** — resolve relative markdown links to output URLs, validate targets exist
+6. **Markdown** — render markdown with all extensions, manage extension ordering
+7. **Shortcodes** — preprocess `[% ... %]` syntax, resolve to Jinja2 template fragments
+8. **Templates** — Jinja2 environment, lookup order, context building
+9. **Navigation** — build nav structure from config or auto-generate from files, previous/next linking
+10. **Taxonomies** — build term → page mappings, generate taxonomy pages (global and per-content-type)
+11. **Listings** — generate content type listing pages with optional index.md content
+12. **Pagination** — split content into pages, generate paginator context
+13. **Search** — build JSON index from rendered content
+14. **Feeds** — generate RSS/Atom XML
+15. **SEO** — generate Open Graph, Twitter Card, and canonical URL meta tags
+16. **Sitemap** — generate sitemap.xml and sitemap.xml.gz
+17. **Icons** — resolve icon references, tree-shake unused icons from output
+18. **LLM** — generate llms.txt, llms-full.txt, markdown variants, JSON-LD structured data, AI crawler policy
+19. **Plugins** — discover, load, dispatch hooks, priority ordering
+20. **CLI** — command parsing, project scaffolding, dev server, build orchestration
+21. **Theme** — Material Design templates (Tailwind CSS + Alpine.js), dark mode, responsive layout
+22. **Server** — async HTTP server, file watcher, WebSocket live reload

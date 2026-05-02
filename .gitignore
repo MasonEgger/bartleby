@@ -1,1 +1,16 @@
 commit-msg.md
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+
+# Tools
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Project
+site/
+.venv/

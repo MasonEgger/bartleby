@@ -8,7 +8,7 @@ Bartleby is a batteries-included Python static site generator. The full specific
 
 ## Architecture
 
-Bartleby has 22 independently testable components (see spec.md "Component Boundaries"). The key architectural decisions:
+Bartleby has 27 independently testable components (see spec.md "Component Boundaries"). The key architectural decisions:
 
 - **Frontend stack**: Tailwind CSS + Alpine.js + HTMX + lunr.js (reimplemented, NOT ported from mkdocs-material)
 - **Async build**: asyncio orchestrator with `ProcessPoolExecutor` for CPU-bound markdown rendering. All plugin hooks run in the main process — only `markdown.convert()` is dispatched to workers.
@@ -49,6 +49,7 @@ uv run mypy src/           # Type check (strict mode)
 ## Key Specs to Reference
 
 - `spec.md` — Complete project specification (canonical source of truth)
-- Build pipeline: 29 steps (spec.md "Build Pipeline > Order of Operations")
+- Build pipeline: 30 steps (spec.md "Build Pipeline > Order of Operations")
 - Plugin hooks: 16 hooks (spec.md "Plugin System > Plugin API Hooks")
 - Template lookup: 5-level cascade (spec.md "Template System > Template Lookup Order")
+- Agent integration: structured CLI, schema introspection, skill generation (spec.md "AI & Agent Integration")

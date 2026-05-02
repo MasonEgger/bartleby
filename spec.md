@@ -150,6 +150,16 @@ ai:
   robots:                    # AI-specific robots.txt directives
     allow: [GPTBot, ClaudeBot, PerplexityBot]
     # disallow: [GPTBot]     # ← block specific AI crawlers
+  skills:
+    output_dir: .claude/skills   # Where to write generated skills
+    analyze_content: true        # Extract voice/patterns from existing content
+    include_examples: 3          # Example posts per content type to include in skills
+    style_guide: null            # Optional: path to explicit style rules (e.g., content/style-guide.md)
+    regenerate_on_build: false   # Auto-regenerate skills on `bartleby build`
+  agent_context:
+    voice: null                  # e.g., "Technical but approachable. Second person. Active voice."
+    audience: null               # e.g., "Python developers with 2+ years experience"
+    constraints: []              # e.g., ["All code examples must be runnable", "Include prerequisites section in tutorials"]
 
 dev_server:
   host: "127.0.0.1"
@@ -167,7 +177,7 @@ dev_server:
 - **exclude_patterns**: Gitignore-style patterns to exclude files from content discovery.
 - **markdown_extensions**: Configure Python-Markdown extension options. All default extensions (do-markdown, pymdownx, standard) are loaded automatically — this section is for overriding their configuration or adding new extensions.
 - **plugins**: List of enabled plugins. Pip-installed packages and local `plugins/` files are both valid.
-- **ai**: LLM-friendliness settings — control `llms.txt`, `llms-full.txt`, markdown variant generation, and AI crawler directives in `robots.txt`.
+- **ai**: AI and agent integration settings — control `llms.txt`, `llms-full.txt`, markdown variant generation, AI crawler directives in `robots.txt`, skill generation configuration, and agent context (voice, audience, constraints).
 - **dev_server**: Development server configuration (host, port).
 
 ### Config Validation
@@ -1490,11 +1500,25 @@ Can be fully overridden by placing a `robots.txt` in `static/`.
 
 ---
 
-## LLM Friendliness
+## AI & Agent Integration
+
+Bartleby is designed for equal drivability by humans and AI agents. This covers two complementary concerns: making the **generated site** consumable by AI systems (LLM-friendly output), and making the **tool itself** operable by AI agents (structured CLI, skill generation, schema introspection).
+
+### Design Philosophy
+
+1. **Every operation has a structured interface** — All CLI commands produce JSON output via `--output json`. An agent never needs to parse human-readable text.
+2. **Self-describing schemas** — Agents can discover what's valid (content types, metadata fields, taxonomies, authors) via introspection commands, without reading config files directly.
+3. **Non-interactive by default** — Every command is fully operable via flags. Interactive prompts are a convenience for humans, never a requirement.
+4. **Skill generation** — Bartleby generates agent skills from site content, teaching AI agents the site's voice, structure, and conventions.
+5. **Content as data** — Content is queryable, exportable, and importable in structured formats.
+
+---
+
+### LLM-Friendly Output
 
 Bartleby generates LLM-friendly output by default, making site content easily consumable by AI systems.
 
-### llms.txt
+#### llms.txt
 
 Auto-generated `llms.txt` at the site root following the [llmstxt.org](https://llmstxt.org) standard. Provides a structured overview of the site:
 
@@ -1518,7 +1542,7 @@ Links point to the `.md` variants so LLMs receive markdown, not HTML. Content is
 
 Controlled by `ai.llms_txt` config (default: `true`).
 
-### llms-full.txt
+#### llms-full.txt
 
 A comprehensive version that inlines the full markdown content of every page, so an LLM can consume the entire site in a single request:
 
@@ -1546,7 +1570,7 @@ My first blog post
 
 Controlled by `ai.llms_full_txt` config (default: `true`). Disable for large sites where this file would be prohibitively large.
 
-### Markdown Variants
+#### Markdown Variants
 
 When `ai.markdown_variants` is enabled (default: `true`), Bartleby writes a `.md` file alongside the HTML for every page:
 
@@ -1559,7 +1583,7 @@ site/about/index.md
 
 Visiting `/blog/2026/03/01/my-post/index.md` on any static host returns the raw markdown. LLMs and tools that prefer markdown over HTML can append `.md` to any page URL.
 
-### JSON-LD Structured Data
+#### JSON-LD Structured Data
 
 Bartleby generates Schema.org JSON-LD in the base template for every page:
 
@@ -1595,7 +1619,7 @@ Bartleby generates Schema.org JSON-LD in the base template for every page:
 </script>
 ```
 
-### AI Crawler Policy
+#### AI Crawler Policy
 
 The `ai.robots` config controls which AI crawlers can access the site. Directives are merged into the auto-generated `robots.txt`:
 
@@ -1608,6 +1632,163 @@ ai:
 
 If neither `allow` nor `disallow` is set, no AI-specific directives are added (default `robots.txt` behavior applies).
 
+---
+
+### Skill Generation
+
+Bartleby can generate agent skills — structured prompt files that teach AI coding agents how to create, review, and manage content for a specific site. This is Bartleby's core agent-first feature: the SSG that teaches AI how to write for your site.
+
+#### How It Works
+
+`bartleby generate-skill` reads the site configuration and (optionally) analyzes existing content to produce skill files. These skills are standard markdown files with frontmatter that agent systems (like Claude Code's skill system) can consume.
+
+The generated skills are written to `ai.skills.output_dir` (default: `.claude/skills/`).
+
+#### Generated Skills
+
+**`bartleby-write.md`** — Content creation skill
+
+Teaches an agent to create new content for the site. Includes:
+
+- Exact metadata schema for each content type (required fields, types, valid choices)
+- Available authors, taxonomies, and existing taxonomy terms
+- Voice and tone patterns (extracted from content analysis or explicit `ai.agent_context` config)
+- Structural conventions (heading patterns, section ordering, code-to-prose ratio)
+- Example posts (configurable count per content type via `ai.skills.include_examples`)
+- The correct CLI command to create posts (`bartleby new post ... --output json`)
+
+**`bartleby-review.md`** — Content review skill
+
+Teaches an agent to review and improve existing content. Includes:
+
+- Site-specific quality criteria derived from content patterns
+- Metadata completeness checks
+- Cross-reference validation expectations
+- Taxonomy consistency rules (e.g., "use existing tags when possible")
+- Style conformance guidelines from `ai.agent_context` or analyzed patterns
+- The correct CLI command to validate (`bartleby validate --output json`)
+
+**`bartleby-ops.md`** — Site operations skill
+
+Teaches an agent to operate the site. Includes:
+
+- Build, validate, and serve commands with `--output json` examples
+- Content query examples for discovering existing pages
+- Common maintenance workflows (update dates, fix broken links, manage drafts)
+- Export commands for data extraction
+- Schema introspection commands for self-discovery
+
+#### Content Analysis
+
+When `ai.skills.analyze_content` is `true` (default), the skill generator performs heuristic analysis of existing content to extract patterns:
+
+| Pattern | How Extracted | Example Output |
+|---|---|---|
+| Voice/tone | Sentence length distribution, person (1st/2nd/3rd), formality markers | "Second person, technical but approachable, avg sentence 15 words" |
+| Structure | Heading frequency, common section titles, section ordering | "H2 every ~300 words; tutorials use: Prerequisites → Steps → Conclusion" |
+| Code density | Code block frequency relative to prose | "Code block every ~200 words, mostly Python" |
+| Length | Word count distribution per content type | "Blog posts: 800-1500 words. Tutorials: 1500-3000 words." |
+| Taxonomy usage | Tag/category frequency histogram | "Top tags: python (15), temporal (4), web (8). Prefer existing tags." |
+| Front matter patterns | Which optional fields are typically populated | "89% of blog posts include 'image'. All tutorials set 'difficulty'." |
+
+The analysis is heuristic — no LLM calls, no network requests. It uses basic NLP metrics (word counts, sentence splitting, regex patterns) to extract these patterns deterministically.
+
+#### Explicit Agent Context
+
+The `ai.agent_context` config provides explicit overrides that take precedence over analyzed patterns:
+
+```yaml
+ai:
+  agent_context:
+    voice: "Technical but approachable. Second person. Active voice."
+    audience: "Python developers with 2+ years experience"
+    constraints:
+      - "All code examples must be runnable"
+      - "Include prerequisites section in tutorials"
+      - "Never use 'simply' or 'just' — respect the reader's experience level"
+      - "Code blocks must specify the language for syntax highlighting"
+```
+
+When both analysis and explicit context exist, explicit context wins. Analyzed patterns fill gaps that explicit context doesn't cover.
+
+#### Skill Regeneration
+
+Skills can be regenerated at any time:
+
+```bash
+bartleby generate-skill           # Regenerate all skills
+bartleby generate-skill --force   # Overwrite even if unchanged
+```
+
+When `ai.skills.regenerate_on_build` is `true`, skills are regenerated as part of `bartleby build`. This keeps skills in sync with evolving content but adds build time. Default is `false` — regenerate manually or in CI.
+
+Generated skills include a header comment with the generation timestamp and a hash of the inputs, so agents (and humans) know when a skill is stale.
+
+#### Style Guide Integration
+
+If `ai.skills.style_guide` points to a markdown file, its content is included verbatim in the generated write and review skills. This allows sites to maintain a human-readable style guide that is automatically incorporated into agent instructions.
+
+```yaml
+ai:
+  skills:
+    style_guide: content/style-guide.md
+```
+
+The style guide file is standard markdown — it's not a special format. Write it for humans; it will be included for agents too.
+
+---
+
+### Structured CLI for Agents
+
+All Bartleby CLI commands are designed for dual consumption — human-readable text by default, structured JSON via `--output json`. This is documented in the CLI section but summarized here for completeness.
+
+Key principles:
+- **Every command returns typed data** — internally, commands produce result dataclasses. The output formatter serializes these as text or JSON.
+- **Errors are structured** — JSON errors include error codes, file paths, line numbers, and actionable messages.
+- **Exit codes are meaningful** — 0 success, 1 error, 2 usage error. Agents can check exit codes before parsing output.
+- **Non-interactive operation** — every parameter that could be prompted for has a corresponding flag. When `--output json` is set, prompts are never shown; missing required parameters produce a usage error.
+
+#### Agent Workflow Example
+
+A typical agent workflow using Bartleby's CLI:
+
+```bash
+# 1. Discover what content types exist and what fields they need
+bartleby schema blog --output json
+
+# 2. Check what tags are already in use
+bartleby schema taxonomies --output json
+
+# 3. Create a new post with correct metadata
+bartleby new post "Building Workflows with Temporal" \
+  --type blog --author mason --tags "python,temporal" \
+  --date 2026-03-23 --output json
+
+# 4. (Agent writes the content to the file)
+
+# 5. Render just that page for fast validation
+bartleby render content/blog/posts/building-workflows-with-temporal.md --output json
+
+# 6. Validate the full site
+bartleby validate --output json
+
+# 7. Lint for quality issues
+bartleby lint --output json
+
+# 8. Build with dry-run to see impact
+bartleby build --dry-run --output json
+```
+
+Each step gives the agent structured data to inform the next step. No guessing, no parsing human text.
+
+---
+
+### Future: MCP Server
+
+A future version of Bartleby may expose an MCP (Model Context Protocol) server as a plugin or built-in command (`bartleby mcp`). This would expose site content as resources and build operations as tools over the MCP protocol, enabling deeper integration with MCP-compatible agent systems. The structured CLI and schema introspection commands are designed to map cleanly onto an MCP interface when this is implemented.
+
+---
+
 ### Testable Components
 
 - llms.txt generator: produces valid llmstxt.org format from site content
@@ -1615,6 +1796,11 @@ If neither `allow` nor `disallow` is set, no AI-specific directives are added (d
 - Markdown variant writer: strips front matter, writes correct paths
 - JSON-LD generator: produces valid Schema.org markup for Article and WebPage types
 - Robots.txt AI directives: correctly merges crawler policy into robots.txt
+- Skill generator: produces valid skill files from config and content analysis
+- Content analyzer: extracts correct patterns from corpus (voice, structure, length, taxonomy usage)
+- Agent context merger: explicit config overrides analyzed patterns correctly
+- JSON output formatter: all commands produce valid, correctly-structured JSON
+- Schema introspection: correct schema derivation from bartleby.yml for each content type
 
 ---
 
@@ -1764,14 +1950,45 @@ Plugins can register additional Python-Markdown extensions (via the `on_config` 
 
 ## CLI
 
+### Global Flags
+
+All commands support these flags:
+
+- `--output <format>` — Output format: `text` (default, human-readable) or `json` (structured, machine-readable). Agents should always use `--output json`.
+- `--config <path>` — Path to `bartleby.yml` (default: `./bartleby.yml`).
+- `--quiet` — Suppress non-essential output (progress bars, decorative text). Errors and results still print.
+- `--verbose` — Show detailed progress information.
+
+When `--output json` is specified, all output is valid JSON written to stdout. Errors are JSON objects with an `"error"` key. Exit codes remain meaningful: 0 for success, 1 for errors, 2 for usage errors.
+
 ### Commands
 
 ```bash
-bartleby new site <name>     # Scaffold a new site project
-bartleby new post <title>    # Create a new content file with front matter
-bartleby serve               # Start dev server with live reload
-bartleby build               # Build site to site/ directory
-bartleby validate            # Validate config and content (metadata schemas, etc.)
+# Site management
+bartleby new site <name>       # Scaffold a new site project
+bartleby new post <title>      # Create a new content file with front matter
+
+# Build and serve
+bartleby build                 # Build site to site/ directory
+bartleby serve                 # Start dev server with live reload
+bartleby render <path>         # Render a single page (fast feedback)
+
+# Validation and linting
+bartleby validate              # Validate config and content (metadata schemas, etc.)
+bartleby lint                  # Check for content quality issues
+
+# Content management
+bartleby content list          # List all content with metadata
+bartleby content get <path>    # Get a specific page's metadata and content
+
+# Schema introspection
+bartleby schema <content-type> # Show metadata schema for a content type
+bartleby schema authors        # List available authors
+bartleby schema taxonomies     # List taxonomies and their terms
+
+# AI and agent features
+bartleby generate-skill        # Generate agent skills from site content
+bartleby export                # Export site content in structured formats
 ```
 
 ### `bartleby new site <name>`
@@ -1789,12 +2006,41 @@ Creates a new project directory with:
 └── static/               # Empty, for static assets
 ```
 
+JSON output: `{"path": "<name>/", "config": "<name>/bartleby.yml"}`
+
 ### `bartleby new post <title>`
 
-- Prompts for content type (or accepts `--type blog`)
-- Generates front matter with all required metadata fields for that content type
-- Includes author placeholder if authors file exists
-- Creates the file in the correct directory with a slugified filename
+Creates a new content file with correct front matter for the specified content type.
+
+Flags:
+- `--type <content-type>` — Content type (required if multiple types exist, otherwise defaults to the only type). Replaces interactive prompt.
+- `--author <author-id>` — Author ID from `.authors.yml`
+- `--tags <comma-separated>` — Tags to apply
+- `--categories <comma-separated>` — Categories to apply
+- `--date <YYYY-MM-DD>` — Publication date (default: today)
+- `--draft` — Mark as draft (default: false)
+- `--slug <slug>` — Override auto-generated slug
+- `--meta <key=value>` — Set arbitrary front matter field (repeatable)
+
+All parameters are available as flags for fully non-interactive operation. When `--type` is omitted and multiple content types exist, the command prompts interactively (human mode) or fails with exit code 2 (when `--output json` is set).
+
+```bash
+# Human mode — prompts for missing info
+bartleby new post "Building with Temporal"
+
+# Agent mode — fully non-interactive
+bartleby new post "Building with Temporal" \
+  --type tutorials \
+  --author mason \
+  --tags "python,temporal" \
+  --date 2026-03-23 \
+  --output json
+```
+
+JSON output:
+```json
+{"path": "content/tutorials/posts/building-with-temporal.md", "url": "/tutorials/building-with-temporal/", "content_type": "tutorials", "metadata": {"title": "Building with Temporal", "date": "2026-03-23", "author": "mason", "tags": ["python", "temporal"], "draft": false}}
+```
 
 ### `bartleby serve`
 
@@ -1805,6 +2051,15 @@ Creates a new project directory with:
 - Displays build errors in the terminal
 - Supports `--dirty` flag for faster rebuilds (only rebuilds changed files)
 
+Additional flags:
+- `--events` — Emit structured JSON events to stdout (one JSON object per line): file changes, rebuild results, errors. Useful for agents monitoring the dev server.
+
+Event format:
+```json
+{"event": "rebuild", "trigger": "content/blog/posts/foo.md", "status": "success", "duration_ms": 340, "pages_rebuilt": 3}
+{"event": "error", "trigger": "content/blog/posts/foo.md", "message": "required field 'date' missing", "file": "content/blog/posts/foo.md", "line": 1}
+```
+
 ### `bartleby build`
 
 - Builds the full site to the `site/` directory
@@ -1813,6 +2068,20 @@ Creates a new project directory with:
 - Generates search index, feeds, sitemap, robots.txt
 - Outputs build statistics (page count, build time)
 - Supports `--strict` flag to treat warnings as errors
+- Supports `--dry-run` flag to show what would change without writing
+
+Additional flags:
+- `--dry-run` — Report what would be built/changed without writing to disk.
+
+JSON output:
+```json
+{"status": "success", "pages": 47, "static_files": 12, "duration_ms": 1230, "errors": [], "warnings": [{"file": "content/blog/posts/old.md", "message": "date is more than 1 year old", "code": "W001"}], "output_dir": "site/"}
+```
+
+Dry-run JSON output:
+```json
+{"status": "dry_run", "added": ["site/blog/2026/04/10/new-post/index.html"], "modified": ["site/blog/index.html"], "unchanged": 45, "deleted": []}
+```
 
 ### `bartleby validate`
 
@@ -1822,12 +2091,181 @@ Creates a new project directory with:
 - Reports errors and warnings
 - Exits with non-zero status on errors (useful for CI)
 
+JSON output:
+```json
+{"valid": false, "errors": [{"file": "content/blog/posts/foo.md", "line": 3, "field": "date", "message": "required field missing", "code": "E001"}], "warnings": [{"file": "content/tutorials/posts/bar.md", "line": 7, "field": "difficulty", "message": "unknown choice 'expert', expected: beginner, intermediate, advanced", "code": "W002"}], "files_checked": 47}
+```
+
+### `bartleby render <path>`
+
+Renders a single content file without running the full build pipeline. Useful for fast feedback when editing a single page.
+
+- Resolves shortcodes and cross-references
+- Runs markdown rendering
+- Optionally renders through template
+- Reports validation warnings for that page
+
+Flags:
+- `--format html` — Full HTML output through template (default)
+- `--format markdown` — Processed markdown (shortcodes expanded, cross-refs resolved, but no HTML conversion)
+- `--format metadata` — Just the parsed front matter
+
+```bash
+bartleby render content/blog/posts/my-post.md --output json
+```
+
+JSON output:
+```json
+{"path": "content/blog/posts/my-post.md", "url": "/blog/2026/03/01/my-post/", "metadata": {"title": "My Post", "date": "2026-03-01", "author": "mason"}, "html": "<article>...</article>", "warnings": [], "word_count": 1234, "read_time_minutes": 6}
+```
+
+### `bartleby lint`
+
+Goes beyond metadata validation to check content quality. Reports issues that are valid content but could be improved.
+
+Checks:
+- Broken internal cross-references
+- Orphaned pages (not in nav and not linked from any other page)
+- Missing image alt text
+- Duplicate titles within a content type
+- Unused taxonomy terms (defined but never applied)
+- External links that return non-200 (optional, behind `--check-external` flag)
+
+Flags:
+- `--check-external` — Also verify external URLs (slow, disabled by default)
+- `--fix` — Auto-fix issues where possible (e.g., remove orphaned taxonomy terms)
+
+JSON output:
+```json
+{"issues": [{"severity": "warning", "rule": "orphaned-page", "file": "content/blog/posts/old.md", "message": "Page is not in navigation and has no inbound links", "fixable": false}, {"severity": "error", "rule": "broken-crossref", "file": "content/tutorials/posts/foo.md", "line": 42, "message": "Cross-reference target 'setup.md' does not exist", "fixable": false}], "summary": {"errors": 1, "warnings": 3, "info": 0}}
+```
+
+### `bartleby content list`
+
+Lists all content pages with their metadata. Supports filtering and sorting.
+
+Flags:
+- `--type <content-type>` — Filter by content type
+- `--tag <tag>` — Filter by tag
+- `--category <category>` — Filter by category
+- `--author <author-id>` — Filter by author
+- `--draft` / `--no-draft` — Filter by draft status
+- `--sort <field>` — Sort by field: `date`, `title`, `path` (default: `date`)
+- `--limit <n>` — Limit results
+- `--fields <comma-separated>` — Which fields to include in output (default: path, title, date, type, url)
+
+```bash
+bartleby content list --type blog --tag python --sort date --output json
+```
+
+JSON output:
+```json
+{"count": 12, "content": [{"path": "content/blog/posts/deploy-temporal.md", "title": "Deploy with Temporal", "date": "2026-03-01", "type": "blog", "url": "/blog/2026/03/01/deploy-with-temporal/", "author": "mason", "tags": ["python", "temporal"], "draft": false}]}
+```
+
+### `bartleby content get <path>`
+
+Returns full metadata and content for a specific page.
+
+```bash
+bartleby content get content/blog/posts/my-post.md --output json
+```
+
+JSON output:
+```json
+{"path": "content/blog/posts/my-post.md", "url": "/blog/2026/03/01/my-post/", "content_type": "blog", "metadata": {"title": "My Post", "date": "2026-03-01", "author": "mason", "tags": ["python"], "draft": false}, "content": "## Introduction\n\nThis is my post...", "word_count": 1234, "read_time_minutes": 6, "inbound_links": ["content/index.md"], "outbound_links": ["content/tutorials/posts/setup.md"]}
+```
+
+### `bartleby schema <content-type>`
+
+Outputs the metadata schema for a content type. Enables agents to discover what fields are required/optional before creating content.
+
+```bash
+bartleby schema blog --output json
+```
+
+JSON output:
+```json
+{"content_type": "blog", "path": "blog/posts", "url_base": "blog", "url_format": "{date:%Y/%m/%d}/{slug}", "required_fields": [{"name": "title", "type": "string"}, {"name": "date", "type": "date"}, {"name": "author", "type": "author_ref"}], "optional_fields": [{"name": "tags", "type": "list", "taxonomy": "tags"}, {"name": "categories", "type": "list", "taxonomy": "categories"}, {"name": "draft", "type": "bool", "default": false}, {"name": "description", "type": "string"}, {"name": "image", "type": "string"}], "features": {"pagination": true, "per_page": 10, "feeds": ["rss", "atom"], "readtime": true, "excerpt_separator": "<!-- more -->"}}
+```
+
+### `bartleby schema authors`
+
+Lists available authors.
+
+```bash
+bartleby schema authors --output json
+```
+
+JSON output:
+```json
+{"authors": [{"id": "mason", "name": "Mason Egger", "url": "https://masonegger.com", "image": "images/mason.jpg", "bio": "Developer Advocate..."}]}
+```
+
+### `bartleby schema taxonomies`
+
+Lists all taxonomies with their current terms (derived from existing content).
+
+```bash
+bartleby schema taxonomies --output json
+```
+
+JSON output:
+```json
+{"taxonomies": [{"name": "tags", "slug_format": "tag:{slug}", "terms": [{"term": "python", "count": 15}, {"term": "temporal", "count": 4}, {"term": "web", "count": 8}]}, {"name": "categories", "slug_format": "category:{slug}", "terms": [{"term": "tutorials", "count": 7}, {"term": "devops", "count": 3}]}]}
+```
+
+### `bartleby generate-skill`
+
+Generates agent skills from site configuration and content analysis. See the **AI & Agent Integration > Skill Generation** section for full details.
+
+Flags:
+- `--type <skill-type>` — Generate only a specific skill: `write`, `review`, `ops` (default: all)
+- `--analyze-content` — Perform deep content analysis for voice/pattern extraction (default: uses `ai.skills.analyze_content` config)
+- `--dry-run` — Show what would be generated without writing
+- `--force` — Overwrite existing skill files
+
+```bash
+bartleby generate-skill --output json
+```
+
+JSON output:
+```json
+{"skills_generated": [{"type": "write", "path": ".claude/skills/bartleby-write.md", "content_types_covered": ["blog", "tutorials"]}, {"type": "review", "path": ".claude/skills/bartleby-review.md"}, {"type": "ops", "path": ".claude/skills/bartleby-ops.md"}], "content_analyzed": 47, "patterns_extracted": {"avg_word_count": 1200, "heading_frequency": "every 250 words", "code_block_ratio": 0.3}}
+```
+
+### `bartleby export`
+
+Exports site content in structured formats suitable for RAG pipelines, fine-tuning datasets, or bulk operations.
+
+Flags:
+- `--format <format>` — Output format: `jsonl` (default), `json`, `csv`
+- `--type <content-type>` — Filter by content type
+- `--include-content` — Include full markdown content (default: metadata only)
+- `--include-html` — Include rendered HTML
+- `--file <path>` — Write to file instead of stdout
+
+```bash
+bartleby export --format jsonl --include-content > site-content.jsonl
+```
+
+JSONL output (one object per line):
+```json
+{"path": "content/blog/posts/foo.md", "url": "/blog/2026/03/01/foo/", "type": "blog", "title": "Foo", "date": "2026-03-01", "author": "mason", "tags": ["python"], "content": "## Introduction\n...", "word_count": 1200}
+```
+
 ### Testable Components
 
 - Config loader and validator
 - Project scaffolding (correct directory structure, valid default config)
 - Post creation (correct front matter, correct file placement, slug generation)
 - Build pipeline orchestration (correct order of operations)
+- JSON output formatter (valid JSON for all commands, correct structure)
+- Content query engine (filtering, sorting, field selection)
+- Schema introspection (correct schema derivation from config)
+- Content linting rules (each rule independently testable)
+- Skill generator (correct skill output from site analysis)
+- Export formatter (valid JSONL/JSON/CSV from content)
 
 ---
 
@@ -1874,11 +2312,12 @@ Creates a new project directory with:
 22. **Generate robots.txt** — include AI crawler directives from config, unless overridden by static/robots.txt
 23. **Generate llms.txt** — site overview with links to `.md` variants (if `ai.llms_txt` enabled)
 24. **Generate llms-full.txt** — full site content in markdown (if `ai.llms_full_txt` enabled)
-25. **Render static templates** — 404.html and other static templates
-26. **Copy static assets** — copy `static/` to `site/`
-27. **Copy theme assets** — CSS, JS, fonts to `site/`
-28. **Fire `on_post_build`** — plugins can do cleanup
-29. **Fire `on_shutdown`** — one-time cleanup
+25. **Regenerate skills** — if `ai.skills.regenerate_on_build` is enabled, regenerate agent skill files from current content
+26. **Render static templates** — 404.html and other static templates
+27. **Copy static assets** — copy `static/` to `site/`
+28. **Copy theme assets** — CSS, JS, fonts to `site/`
+29. **Fire `on_post_build`** — plugins can do cleanup
+30. **Fire `on_shutdown`** — one-time cleanup
 
 On build error at any stage, `on_build_error` is fired before `on_shutdown`.
 
@@ -1894,7 +2333,8 @@ The build phases that benefit from parallelism:
 - **Step 16e (markdown rendering)**: The CPU-bound `markdown.convert()` call is dispatched to a process pool. Steps 16a-d (plugin hooks, shortcodes) and 16f-o (post-render hooks, template rendering, file/asset writing) run in the main process with async I/O.
 - **Steps 17-18 (markdown variants, icon tree-shaking)**: Can run concurrently after all pages are rendered
 - **Steps 19-24 (search index, feeds, sitemap, robots.txt, llms.txt, llms-full.txt)**: Generated concurrently
-- **Steps 26-27 (asset copying)**: Async file copy operations
+- **Step 25 (skill regeneration)**: Runs only if configured; can run concurrently with asset copying
+- **Steps 27-28 (asset copying)**: Async file copy operations
 
 Sequential phases (config loading, navigation building, taxonomy resolution) remain synchronous as they build shared state needed by later stages.
 
@@ -2111,8 +2551,13 @@ The following components should be implemented and tested independently:
 15. **SEO** — generate Open Graph, Twitter Card, and canonical URL meta tags
 16. **Sitemap** — generate sitemap.xml and sitemap.xml.gz
 17. **Icons** — resolve icon references, tree-shake unused icons from output
-18. **LLM** — generate llms.txt, llms-full.txt, markdown variants, JSON-LD structured data, AI crawler policy
+18. **LLM Output** — generate llms.txt, llms-full.txt, markdown variants, JSON-LD structured data, AI crawler policy
 19. **Plugins** — discover, load, dispatch hooks, priority ordering
-20. **CLI** — command parsing, project scaffolding, dev server, build orchestration
+20. **CLI** — command parsing, project scaffolding, dev server, build orchestration, structured JSON output
 21. **Theme** — Material Design templates (Tailwind CSS + Alpine.js), dark mode, responsive layout
 22. **Server** — async HTTP server, file watcher, WebSocket live reload
+23. **Content Query** — content listing, filtering, sorting, field selection for `content list` and `content get` commands
+24. **Schema Introspection** — derive and expose content type schemas, author list, taxonomy terms via `schema` commands
+25. **Linting** — content quality checks (broken links, orphaned pages, missing alt text, duplicate titles, unused terms)
+26. **Skills** — generate agent skill files from site config and content analysis, content pattern extraction
+27. **Export** — serialize site content to JSONL/JSON/CSV formats with configurable field inclusion

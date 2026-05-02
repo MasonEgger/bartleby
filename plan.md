@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**Step 0 of 27 complete.** Project is greenfield — `spec.md` is finalized, no code written.
+**Step 0 of 36 complete.** Project is greenfield — `spec.md` is finalized, no code written.
 
 ## Implementation Guidelines
 
@@ -21,9 +21,11 @@ src/bartleby/
 ├── __init__.py              # Version
 ├── __main__.py              # Entry point
 ├── cli.py                   # CLI commands (argparse)
+├── output.py                # Structured output formatting (text/JSON)
 ├── config.py                # Config loading and validation
 ├── authors.py               # Author loading and resolution
 ├── content.py               # Content discovery and front matter
+├── content_query.py         # Content listing, filtering, sorting
 ├── metadata.py              # Build-time metadata validation
 ├── urls.py                  # URL generation
 ├── crossrefs.py             # Cross-reference resolution
@@ -41,6 +43,10 @@ src/bartleby/
 ├── llm.py                   # LLM output (llms.txt, etc.)
 ├── icons.py                 # Icon packs and tree-shaking
 ├── plugins.py               # Plugin system
+├── skills.py                # Agent skill generation and content analysis
+├── linting.py               # Content quality checks (broken links, orphans, etc.)
+├── schema_introspection.py  # Schema export for agent self-discovery
+├── export.py                # JSONL/JSON/CSV content export
 ├── build.py                 # Build pipeline orchestration
 ├── server.py                # Dev server
 ├── py.typed                 # PEP 561 marker
@@ -61,6 +67,12 @@ tests/
 ├── conftest.py              # Shared fixtures
 ├── test_config.py
 ├── test_authors.py
+├── test_output.py
+├── test_content_query.py
+├── test_schema_introspection.py
+├── test_linting.py
+├── test_skills.py
+├── test_export.py
 ├── ...
 └── fixtures/
     ├── configs/
@@ -1820,6 +1832,338 @@ only pure rendering work dispatched to workers — no plugin hooks cross process
 
 ---
 
+## Phase 5: Agent Integration
+
+### Step 28: Structured Output Layer
+
+**Context**: Steps 1-27 complete. CLI commands work but only produce human-readable text output.
+
+**Goal**: Add `--output json` support to all CLI commands. Every command returns a typed result dataclass that can be serialized to JSON or rendered as human text.
+
+```text
+Step 28: Structured Output Layer. Steps 1-27 complete (full features, async build).
+
+Refer to spec.md "CLI > Global Flags" and "AI & Agent Integration > Structured CLI for Agents".
+
+1. RED: Write tests:
+   - Create tests/test_output.py:
+     - ABOUTME: Tests for structured JSON output formatting across all CLI commands.
+     - test_build_json_output: `bartleby build --output json` returns valid JSON
+       with status, pages, duration_ms, errors, warnings fields
+     - test_validate_json_output: `bartleby validate --output json` returns valid JSON
+       with valid bool, errors array (each with file, line, field, message, code)
+     - test_new_post_json_output: `bartleby new post --output json` returns valid JSON
+       with path, url, content_type, metadata fields
+     - test_json_error_output: when a command fails, JSON output includes "error" key
+       with structured error info, exit code is 1
+     - test_text_output_default: without --output flag, human-readable text is produced
+     - test_quiet_flag: --quiet suppresses non-essential output
+     - test_non_interactive_with_json: --output json never prompts, fails with
+       exit code 2 if required flags missing
+
+2. GREEN: Create src/bartleby/output.py:
+   - ABOUTME: Structured output formatting — serialize command results as text or JSON.
+   - Define result dataclasses: BuildResult, ValidateResult, NewPostResult, etc.
+   - OutputFormatter protocol with TextFormatter and JsonFormatter implementations
+   - Each CLI command returns its result dataclass; cli.py selects formatter
+   - Update cli.py: add --output, --quiet, --verbose global flags
+   - Update each command to return result dataclass instead of printing directly
+
+3. REFACTOR: Ensure all existing tests still pass with the refactored CLI.
+
+4. Verify: `just check` passes.
+```
+
+### Step 29: Non-Interactive Content Creation
+
+**Context**: Steps 1-28 complete. `bartleby new post` works but prompts for content type interactively.
+
+**Goal**: Add full flag support to `bartleby new post` for fully non-interactive operation. All metadata fields settable via flags.
+
+```text
+Step 29: Non-Interactive Content Creation. Steps 1-28 complete (structured output works).
+
+Refer to spec.md "CLI > bartleby new post".
+
+1. RED: Write tests:
+   - In tests/test_cli.py (or tests/test_new_post.py):
+     - test_new_post_all_flags: create post with --type, --author, --tags, --date,
+       --draft, --slug, --meta all specified — verify correct front matter and file path
+     - test_new_post_type_required_json_mode: when --output json and multiple content
+       types exist but --type omitted, exit code 2 with error JSON
+     - test_new_post_meta_flag_repeatable: --meta key1=val1 --meta key2=val2 sets
+       both fields in front matter
+     - test_new_post_slug_override: --slug custom-slug uses that instead of title-derived slug
+     - test_new_post_date_default: omitting --date uses today's date
+     - test_new_post_validates_author: --author nonexistent fails with error
+     - test_new_post_validates_type: --type nonexistent fails with error
+
+2. GREEN: Update cli.py new post command:
+   - Add flags: --type, --author, --tags, --categories, --date, --draft, --slug, --meta
+   - When all required info available via flags, skip prompts entirely
+   - When --output json is set, never prompt — fail with structured error if info missing
+   - Validate --author against .authors.yml, --type against config content types
+   - Return NewPostResult dataclass
+
+3. REFACTOR: Ensure interactive mode still works when flags omitted and --output json not set.
+
+4. Verify: `just check` passes.
+```
+
+### Step 30: Content Query Commands
+
+**Context**: Steps 1-29 complete. Content discovery exists in the build pipeline but is not exposed as standalone CLI commands.
+
+**Goal**: Add `bartleby content list` and `bartleby content get` commands for programmatic content access.
+
+```text
+Step 30: Content Query Commands. Steps 1-29 complete (non-interactive CLI works).
+
+Refer to spec.md "CLI > bartleby content list" and "CLI > bartleby content get".
+
+1. RED: Write tests:
+   - Create tests/test_content_query.py:
+     - ABOUTME: Tests for content list/get commands — filtering, sorting, field selection.
+     - test_content_list_all: lists all content with path, title, date, type, url fields
+     - test_content_list_filter_type: --type blog returns only blog posts
+     - test_content_list_filter_tag: --tag python returns only posts with that tag
+     - test_content_list_filter_author: --author mason returns only that author's posts
+     - test_content_list_filter_draft: --draft returns only drafts, --no-draft excludes them
+     - test_content_list_sort: --sort date sorts by date descending
+     - test_content_list_limit: --limit 5 returns at most 5 results
+     - test_content_list_fields: --fields path,title returns only those fields
+     - test_content_get: returns full metadata, content, word_count, links for a path
+     - test_content_get_nonexistent: exit code 1 with structured error
+
+2. GREEN: Create src/bartleby/content_query.py:
+   - ABOUTME: Content query engine — filtering, sorting, field selection over site content.
+   - ContentQuery dataclass (filters, sort, limit, fields)
+   - query_content(config, query) -> list[ContentResult]
+   - get_content(config, path) -> ContentDetail
+   - Wire into cli.py as `content list` and `content get` subcommands
+
+3. REFACTOR: Extract shared content loading logic between build pipeline and query commands.
+
+4. Verify: `just check` passes.
+```
+
+### Step 31: Schema Introspection
+
+**Context**: Steps 1-30 complete. Content types, authors, and taxonomies are defined in config but not programmatically queryable.
+
+**Goal**: Add `bartleby schema` commands that let agents discover valid metadata schemas, authors, and taxonomy terms.
+
+```text
+Step 31: Schema Introspection. Steps 1-30 complete (content query works).
+
+Refer to spec.md "CLI > bartleby schema".
+
+1. RED: Write tests:
+   - Create tests/test_schema_introspection.py:
+     - ABOUTME: Tests for schema introspection — content type schemas, authors, taxonomies.
+     - test_schema_content_type: schema blog returns required_fields, optional_fields,
+       features (pagination, feeds, readtime, excerpt_separator)
+     - test_schema_content_type_custom_metadata: custom metadata fields (like difficulty
+       with choices) appear correctly in schema output
+     - test_schema_authors: lists all authors with id, name, url, image, bio
+     - test_schema_taxonomies: lists taxonomies with terms and counts from existing content
+     - test_schema_nonexistent_type: exit code 1 with structured error
+     - test_schema_json_output: all schema commands produce valid JSON
+
+2. GREEN: Create src/bartleby/schema_introspection.py:
+   - ABOUTME: Schema export for agent self-discovery — expose content type schemas, authors, terms.
+   - content_type_schema(config, type_name) -> ContentTypeSchema
+   - authors_schema(config) -> list[AuthorSchema]
+   - taxonomies_schema(config, content_dir) -> list[TaxonomySchema]
+   - Wire into cli.py as `schema <type>`, `schema authors`, `schema taxonomies`
+
+3. REFACTOR: Ensure schema output stays in sync when config format changes.
+
+4. Verify: `just check` passes.
+```
+
+### Step 32: Content Linting
+
+**Context**: Steps 1-31 complete. Metadata validation exists but no broader content quality checks.
+
+**Goal**: Add `bartleby lint` command for content quality issues beyond schema validation.
+
+```text
+Step 32: Content Linting. Steps 1-31 complete (schema introspection works).
+
+Refer to spec.md "CLI > bartleby lint".
+
+1. RED: Write tests:
+   - Create tests/test_linting.py:
+     - ABOUTME: Tests for content linting rules — broken links, orphans, missing alt, etc.
+     - test_lint_broken_crossref: detects cross-reference to nonexistent .md file
+     - test_lint_orphaned_page: detects page not in nav and not linked from anywhere
+     - test_lint_missing_alt_text: detects images without alt text
+     - test_lint_duplicate_title: detects two pages in same content type with same title
+     - test_lint_unused_taxonomy: detects taxonomy term defined but never used
+     - test_lint_clean_site: no issues reported for well-formed site
+     - test_lint_json_output: structured output with severity, rule, file, line, message
+     - test_lint_external_links: --check-external verifies external URLs (mock HTTP)
+
+2. GREEN: Create src/bartleby/linting.py:
+   - ABOUTME: Content quality checks — broken links, orphaned pages, missing alt text, duplicates.
+   - Define LintRule protocol and individual rule implementations
+   - LintRunner that applies all rules and collects issues
+   - Each issue: LintIssue(severity, rule, file, line, message, fixable)
+   - Wire into cli.py as `lint` command with --check-external and --fix flags
+
+3. REFACTOR: Share cross-reference resolution logic with crossrefs.py.
+
+4. Verify: `just check` passes.
+```
+
+### Step 33: Single-Page Render
+
+**Context**: Steps 1-32 complete. Full build works but no way to render a single page for fast feedback.
+
+**Goal**: Add `bartleby render <path>` command for rendering a single content file without full build.
+
+```text
+Step 33: Single-Page Render. Steps 1-32 complete (linting works).
+
+Refer to spec.md "CLI > bartleby render".
+
+1. RED: Write tests:
+   - In tests/test_cli.py or tests/test_render.py:
+     - test_render_html: renders page through full pipeline including template
+     - test_render_markdown: --format markdown returns processed markdown
+       (shortcodes expanded, cross-refs resolved, no HTML conversion)
+     - test_render_metadata: --format metadata returns just parsed front matter
+     - test_render_json_output: --output json returns path, url, metadata, html,
+       warnings, word_count, read_time_minutes
+     - test_render_nonexistent: exit code 1 with structured error
+     - test_render_validation_warnings: includes warnings for the rendered page
+
+2. GREEN: Add render command to cli.py:
+   - Load config, resolve single page through pipeline subset
+   - Skip full content discovery — just load the target page (and enough context
+     for cross-refs and template rendering)
+   - Return RenderResult dataclass
+
+3. REFACTOR: Extract single-page render logic that can be shared with build pipeline.
+
+4. Verify: `just check` passes.
+```
+
+### Step 34: Export Command
+
+**Context**: Steps 1-33 complete. Content is queryable but not bulk-exportable.
+
+**Goal**: Add `bartleby export` for bulk content export in JSONL/JSON/CSV formats.
+
+```text
+Step 34: Export Command. Steps 1-33 complete (single-page render works).
+
+Refer to spec.md "CLI > bartleby export".
+
+1. RED: Write tests:
+   - Create tests/test_export.py:
+     - ABOUTME: Tests for content export — JSONL, JSON, CSV formats with field options.
+     - test_export_jsonl: produces valid JSONL (one JSON object per line)
+     - test_export_json: produces valid JSON array
+     - test_export_csv: produces valid CSV with headers
+     - test_export_include_content: --include-content includes full markdown body
+     - test_export_include_html: --include-html includes rendered HTML
+     - test_export_filter_type: --type blog exports only blog content
+     - test_export_to_file: --file path writes to file instead of stdout
+     - test_export_metadata_only: default export includes metadata but not content
+
+2. GREEN: Create src/bartleby/export.py:
+   - ABOUTME: Content export — serialize site content to JSONL/JSON/CSV formats.
+   - ExportFormat enum (jsonl, json, csv)
+   - export_content(config, format, filters, include_content, include_html) -> str | bytes
+   - Wire into cli.py as `export` command
+
+3. REFACTOR: Reuse content_query.py filtering logic.
+
+4. Verify: `just check` passes.
+```
+
+### Step 35: Skill Generation
+
+**Context**: Steps 1-34 complete. All CLI commands work with structured output. Content is queryable and exportable.
+
+**Goal**: Implement `bartleby generate-skill` — the core agent-first feature. Analyzes site content and generates agent skill files.
+
+```text
+Step 35: Skill Generation. Steps 1-34 complete (all CLI + agent features working).
+
+Refer to spec.md "AI & Agent Integration > Skill Generation".
+
+1. RED: Write tests:
+   - Create tests/test_skills.py:
+     - ABOUTME: Tests for agent skill generation — content analysis and skill file output.
+     - test_generate_write_skill: produces valid markdown skill file with frontmatter,
+       includes content type schemas, example posts, voice description
+     - test_generate_review_skill: produces review skill with quality criteria
+     - test_generate_ops_skill: produces ops skill with CLI command examples
+     - test_content_analysis_voice: extracts voice patterns (sentence length, person,
+       formality) from content corpus
+     - test_content_analysis_structure: extracts heading frequency, common section titles
+     - test_content_analysis_code_density: calculates code-to-prose ratio
+     - test_content_analysis_length: calculates word count distribution per content type
+     - test_content_analysis_taxonomy: extracts taxonomy term frequency histogram
+     - test_agent_context_override: explicit ai.agent_context overrides analyzed patterns
+     - test_style_guide_inclusion: ai.skills.style_guide content included in skills
+     - test_skill_output_dir: skills written to configured directory
+     - test_skill_dry_run: --dry-run reports what would be generated without writing
+     - test_skill_force_overwrite: --force overwrites existing files
+     - test_skill_generation_header: generated files include timestamp and input hash
+
+2. GREEN: Create src/bartleby/skills.py:
+   - ABOUTME: Agent skill generation — analyze site content and produce skill files for AI agents.
+   - ContentAnalyzer class:
+     - analyze_voice(pages) -> VoiceProfile (avg_sentence_length, person, formality)
+     - analyze_structure(pages) -> StructureProfile (heading_freq, common_sections)
+     - analyze_code_density(pages) -> CodeProfile (blocks_per_n_words, languages)
+     - analyze_length(pages, by_type) -> LengthProfile (min, max, avg, median per type)
+     - analyze_taxonomy(pages) -> TaxonomyProfile (term frequencies)
+     - analyze_frontmatter(pages) -> FrontmatterProfile (field usage percentages)
+   - SkillGenerator class:
+     - generate_write_skill(config, analysis, examples) -> str
+     - generate_review_skill(config, analysis) -> str
+     - generate_ops_skill(config) -> str
+   - Skill templates are Jinja2 templates bundled with the package
+   - Wire into cli.py as `generate-skill` command
+
+3. REFACTOR: Ensure content analysis is deterministic (no randomness, same input → same output).
+
+4. Verify: `just check` passes.
+```
+
+### Step 36: Build Dry-Run
+
+**Context**: Steps 1-35 complete. Build works but no way to preview what would change.
+
+**Goal**: Add `--dry-run` flag to `bartleby build` that reports what would be written/modified/deleted without actually writing.
+
+```text
+Step 36: Build Dry-Run. Steps 1-35 complete (skill generation works).
+
+1. RED: Write tests:
+   - test_build_dry_run: --dry-run returns added/modified/deleted/unchanged counts
+     without writing any files
+   - test_build_dry_run_new_site: all files show as "added" on first build
+   - test_build_dry_run_no_changes: rebuilding identical site shows all "unchanged"
+   - test_build_dry_run_json: --dry-run --output json returns structured diff
+
+2. GREEN: Add --dry-run to build command:
+   - Run full pipeline but collect output paths instead of writing
+   - Compare against existing site/ directory (if any)
+   - Return DryRunResult with added, modified, unchanged, deleted lists
+
+3. REFACTOR: Ensure dry-run is truly read-only (no side effects).
+
+4. Verify: `just check` passes.
+```
+
+---
+
 ## Success Metrics
 
 ### Minimum Viable Product (after Step 10)
@@ -1848,3 +2192,15 @@ only pure rendering work dispatched to workers — no plugin hooks cross process
 - Icon packs with tree-shaking
 - Async build pipeline for performance
 - All tests passing, mypy strict, ruff clean
+
+### Agent Ready (after Step 36)
+- All CLI commands support `--output json` for structured machine-readable output
+- Fully non-interactive operation via flags (no prompts when `--output json`)
+- Schema introspection (`bartleby schema`) for agent self-discovery
+- Content query commands (`bartleby content list/get`) for programmatic content access
+- Single-page render (`bartleby render`) for fast agent feedback loops
+- Content linting (`bartleby lint`) with structured, actionable output
+- Content export (`bartleby export`) in JSONL/JSON/CSV for RAG and analysis
+- Skill generation (`bartleby generate-skill`) that teaches agents the site's voice and conventions
+- Build dry-run for impact assessment before committing changes
+- Equal drivability by humans and AI agents

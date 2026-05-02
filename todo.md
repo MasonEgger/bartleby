@@ -2,13 +2,13 @@
 
 ## Phase 1: Foundation
 
-- [ ] **Step 1: Project Scaffolding**
-  - [ ] 1.1: Create pyproject.toml with all dependencies and tool config
-  - [ ] 1.2: Create package structure (src/bartleby/, tests/, fixtures/)
-  - [ ] 1.3: Create Justfile (check, lint, typecheck, test, format)
-  - [ ] 1.4: Update .gitignore
-  - [ ] 1.5: Write smoke tests (test_init.py)
-  - [ ] 1.6: Verify `uv sync --dev` and `just check` pass
+- [x] **Step 1: Project Scaffolding**
+  - [x] 1.1: Create pyproject.toml with all dependencies and tool config
+  - [x] 1.2: Create package structure (src/bartleby/, tests/, fixtures/)
+  - [x] 1.3: Create Justfile (check, lint, typecheck, test, format)
+  - [x] 1.4: Update .gitignore
+  - [x] 1.5: Write smoke tests (test_init.py)
+  - [x] 1.6: Verify `uv sync --dev` and `just check` pass
 
 - [ ] **Step 2: Configuration System**
   - [ ] 2.1: Create test fixture configs (minimal.yml, full.yml, invalid_*.yml)

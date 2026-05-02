@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bartleby"
+version = "0.1.0"
+description = "A batteries-included Python static site generator"
+requires-python = ">=3.14"
+dependencies = [
+    "markdown>=3.4",
+    "pymdown-extensions>=10.0",
+    "do-markdown>=0.1.0",
+    "jinja2>=3.1",
+    "pyyaml>=6.0",
+    "pygments>=2.17",
+    "watchdog>=4.0",
+    "websockets>=12.0",
+    "python-slugify>=8.0",
+    "aiofiles>=23.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "types-pyyaml",
+    "types-markdown",
+    "types-pygments",
+    "types-aiofiles",
+]
+
+[project.scripts]
+bartleby = "bartleby.cli:main"
+
+[tool.ruff]
+line-length = 99
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "TCH"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["bartleby"]
+
+[tool.mypy]
+strict = true
+python_version = "3.14"
+warn_return_any = true
+disallow_any_generics = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.uv.sources]
+do-markdown = { path = "../do-markdown", editable = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bartleby"]

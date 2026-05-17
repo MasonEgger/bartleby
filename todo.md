@@ -10,12 +10,12 @@
   - [x] 1.5: Write smoke tests (test_init.py)
   - [x] 1.6: Verify `uv sync --dev` and `just check` pass
 
-- [ ] **Step 2: Configuration System**
-  - [ ] 2.1: Create test fixture configs (minimal.yml, full.yml, invalid_*.yml)
-  - [ ] 2.2: Write config loading and validation tests (test_config.py)
-  - [ ] 2.3: Implement config dataclasses and load_config (config.py)
-  - [ ] 2.4: Refactor — validation error messages with key paths
-  - [ ] 2.5: Verify `just check` passes
+- [x] **Step 2: Configuration System**
+  - [x] 2.1: Create test fixture configs (minimal.yml, full.yml, invalid_*.yml)
+  - [x] 2.2: Write config loading and validation tests (test_config.py)
+  - [x] 2.3: Implement config dataclasses and load_config (config.py)
+  - [x] 2.4: Refactor — validation error messages with key paths
+  - [x] 2.5: Verify `just check` passes
 
 - [ ] **Step 3: Authors System**
   - [ ] 3.1: Create test fixture author files (valid.yml, minimal.yml)

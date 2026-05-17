@@ -1,0 +1,107 @@
+site:
+  title: "Full Test Site"
+  url: "https://full.example.com"
+  description: "A complete configuration fixture for tests"
+  author: "Test Author"
+  default_image: /images/default-social.png
+  twitter: "@example"
+
+nav:
+  - Home: index.md
+  - Blog: blog/
+  - Tutorials: tutorials/
+  - About: about.md
+
+theme:
+  palette:
+    primary: "#283618"
+    accent: "#BC6C25"
+    background: "#FEFAE0"
+  color_mode:
+    default: system
+    toggle: true
+  features:
+    - search
+    - navigation.tabs
+    - navigation.sections
+    - content.code.copy
+    - content.code.annotate
+  icon_packs:
+    material: true
+    fontawesome: true
+    octicons: true
+    simple: false
+  logo: static/logo.png
+  favicon: static/favicon.ico
+  font:
+    text: Roboto
+    code: Roboto Mono
+
+authors_file: .authors.yml
+
+content_types:
+  blog:
+    path: blog/posts
+    url_base: blog
+    url_format: "{date:%Y/%m/%d}/{slug}"
+    pagination:
+      enabled: true
+      per_page: 10
+    taxonomies: [tags, categories]
+    feeds: [rss, atom]
+    readtime: true
+    excerpt_separator: "<!-- more -->"
+  tutorials:
+    path: tutorials/posts
+    pagination:
+      enabled: true
+      per_page: 5
+    taxonomies: [tags, categories]
+    feeds: [rss]
+    readtime: true
+    excerpt_separator: "<!-- more -->"
+    metadata:
+      last_verified:
+        type: date
+        required: true
+      first_published:
+        type: date
+        required: true
+      difficulty:
+        type: string
+        required: false
+        choices: [beginner, intermediate, advanced]
+
+taxonomies:
+  tags:
+    slug_format: "tag:{slug}"
+  categories:
+    slug_format: "category:{slug}"
+
+exclude_patterns:
+  - "_drafts/**"
+  - "_*.md"
+  - ".git/**"
+
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+  - do_markdown.fence:
+      allowed_environments: []
+
+plugins:
+  - search
+  - rss
+
+ai:
+  llms_txt: true
+  llms_full_txt: true
+  markdown_variants: true
+  robots:
+    allow: [GPTBot, ClaudeBot, PerplexityBot]
+
+dev_server:
+  host: "0.0.0.0"
+  port: 9000

@@ -32,10 +32,10 @@
   - [x] 4.4: Implement Page dataclass, parse_front_matter, discover_content (content.py)
   - [x] 4.5: Verify `just check` passes
 
-- [ ] **Step 5: Metadata Validation**
-  - [ ] 5.1: Write metadata validation tests (test_metadata.py)
-  - [ ] 5.2: Implement validate_page_metadata, validate_all_metadata (metadata.py)
-  - [ ] 5.3: Verify `just check` passes
+- [x] **Step 5: Metadata Validation**
+  - [x] 5.1: Write metadata validation tests (test_metadata.py)
+  - [x] 5.2: Implement validate_page_metadata, validate_all_metadata (metadata.py)
+  - [x] 5.3: Verify `just check` passes
 
 - [ ] **Step 6: URL Generation**
   - [ ] 6.1: Write URL generation tests (test_urls.py)

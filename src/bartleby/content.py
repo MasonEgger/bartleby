@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 FRONT_MATTER_DELIMITER = "---"
 
-PageMetadataValue = str | int | bool | list[str] | datetime.date
+PageMetadataValue = str | int | bool | list[str] | datetime.date | object
 
 
 @dataclass(slots=True)

@@ -86,13 +86,13 @@
   - [x] 11.4: Wire into build.py
   - [x] 11.5: Verify `just check` passes
 
-- [ ] **Step 12: Listing Pages and Pagination**
-  - [ ] 12.1: Write pagination tests (test_pagination.py)
-  - [ ] 12.2: Write listing tests (test_listings.py)
-  - [ ] 12.3: Implement paginate (pagination.py)
-  - [ ] 12.4: Implement generate_listing_pages (listings.py)
-  - [ ] 12.5: Wire into build.py
-  - [ ] 12.6: Verify `just check` passes
+- [x] **Step 12: Listing Pages and Pagination**
+  - [x] 12.1: Write pagination tests (test_pagination.py)
+  - [x] 12.2: Write listing tests (test_listings.py)
+  - [x] 12.3: Implement paginate (pagination.py)
+  - [x] 12.4: Implement generate_listing_pages (listings.py)
+  - [x] 12.5: Wire into build.py
+  - [x] 12.6: Verify `just check` passes
 
 - [ ] **Step 13: Cross-Reference Resolution**
   - [ ] 13.1: Write cross-reference tests (test_crossrefs.py)

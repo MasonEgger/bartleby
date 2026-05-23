@@ -14,6 +14,7 @@ import bartleby
 from bartleby.authors import load_authors
 from bartleby.config import load_config
 from bartleby.content import discover_content
+from bartleby.listings import generate_listing_pages
 from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
 from bartleby.metadata import validate_all_metadata
 from bartleby.navigation import build_navigation, link_pages
@@ -79,7 +80,8 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
     generate_all_urls(pages, config)
     taxonomy_data = build_taxonomies(pages, config)
     taxonomy_pages = generate_taxonomy_pages(taxonomy_data, config)
-    all_pages = pages + taxonomy_pages
+    listing_pages = generate_listing_pages(pages, config, content_dir)
+    all_pages = pages + taxonomy_pages + listing_pages
     nav = build_navigation(config, pages)
     link_pages(nav)
 
@@ -130,12 +132,14 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
 
 
 def _template_type_for(page: Page, content_type: object) -> str:
-    """Pick the template type bucket — taxonomy pages bypass post/page logic."""
+    """Pick the template type bucket — taxonomy and listing pages bypass post/page logic."""
     taxonomy_kind = page.custom_metadata.get("taxonomy_kind")
     if taxonomy_kind == "term":
         return "taxonomy"
     if taxonomy_kind == "index":
         return "taxonomy_index"
+    if page.custom_metadata.get("listing_kind") == "content_type":
+        return "list"
     return "post" if content_type is not None else "page"
 
 

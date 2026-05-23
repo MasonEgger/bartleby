@@ -160,11 +160,11 @@
 
 ## Phase 8: CLI and Server
 
-- [ ] **Step 22: CLI Commands**
-  - [ ] 22.1: Write CLI tests (test_cli.py)
-  - [ ] 22.2: Implement main, new site, new post, build, validate (cli.py)
-  - [ ] 22.3: Update __main__.py entry point
-  - [ ] 22.4: Verify `just check` passes
+- [x] **Step 22: CLI Commands**
+  - [x] 22.1: Write CLI tests (test_cli.py)
+  - [x] 22.2: Implement main, new site, new post, build, validate (cli.py)
+  - [x] 22.3: Update __main__.py entry point
+  - [x] 22.4: Verify `just check` passes
 
 - [ ] **Step 23: Dev Server**
   - [ ] 23.1: Write dev server tests (test_server.py)

@@ -17,11 +17,11 @@
   - [x] 2.4: Refactor — validation error messages with key paths
   - [x] 2.5: Verify `just check` passes
 
-- [ ] **Step 3: Authors System**
-  - [ ] 3.1: Create test fixture author files (valid.yml, minimal.yml)
-  - [ ] 3.2: Write author loading and resolution tests (test_authors.py)
-  - [ ] 3.3: Implement Author dataclass, load_authors, resolve_authors (authors.py)
-  - [ ] 3.4: Verify `just check` passes
+- [x] **Step 3: Authors System**
+  - [x] 3.1: Create test fixture author files (valid.yml, minimal.yml)
+  - [x] 3.2: Write author loading and resolution tests (test_authors.py)
+  - [x] 3.3: Implement Author dataclass, load_authors, resolve_authors (authors.py)
+  - [x] 3.4: Verify `just check` passes
 
 ## Phase 2: Content Layer
 
@@ -51,13 +51,15 @@
   - [ ] 7.3: Verify extension ordering (fence before superfences)
   - [ ] 7.4: Verify `just check` passes
 
-- [ ] **Step 8: Template System**
-  - [ ] 8.1: Create test fixture templates
-  - [ ] 8.2: Write template system tests (test_templates.py)
-  - [ ] 8.3: Implement create_jinja_env, resolve_template_name, build_page_context (templates.py)
-  - [ ] 8.4: Create theme package and minimal built-in templates
-  - [ ] 8.5: Create SEO/JSON-LD partials in base template
-  - [ ] 8.6: Verify `just check` passes
+- [ ] **Step 8: Template System (+ customization seams)**
+  - [ ] 8.1: Create test fixture templates, overrides/, partials/, data/ fixtures
+  - [ ] 8.2: Write template system tests (test_templates.py) including overrides, partials, data, extra_css/js
+  - [ ] 8.3: Implement create_jinja_env with 6-level cascade (overrides/ on top, project_dir for partials/shortcodes)
+  - [ ] 8.4: Implement load_data_files() — YAML + TOML auto-load from data/
+  - [ ] 8.5: Implement build_page_context including `data`, `extra_css`, `extra_js`
+  - [ ] 8.6: Create theme package and minimal built-in templates
+  - [ ] 8.7: Create SEO/JSON-LD partials in base template
+  - [ ] 8.8: Verify `just check` passes
 
 ## Phase 4: First Working Build
 
@@ -99,8 +101,8 @@
   - [ ] 13.4: Verify `just check` passes
 
 - [ ] **Step 14: Shortcode Preprocessing**
-  - [ ] 14.1: Create shortcode fixture templates
-  - [ ] 14.2: Write shortcode tests (test_shortcodes.py)
+  - [ ] 14.1: Create shortcode fixture templates (project-root `shortcodes/` preferred)
+  - [ ] 14.2: Write shortcode tests (test_shortcodes.py) — resolve via Jinja env from Step 8
   - [ ] 14.3: Implement process_shortcodes (shortcodes.py)
   - [ ] 14.4: Wire into build.py (before markdown rendering)
   - [ ] 14.5: Verify `just check` passes
@@ -146,14 +148,15 @@
 
 ## Phase 7: Extensibility
 
-- [ ] **Step 21: Plugin System**
-  - [ ] 21.1: Write plugin system tests (test_plugins.py)
-  - [ ] 21.2: Implement BasePlugin with all 16 hooks
-  - [ ] 21.3: Implement @event_priority decorator
-  - [ ] 21.4: Implement discover_plugins (entry points + local plugins/)
-  - [ ] 21.5: Update PluginCollection with priority ordering
-  - [ ] 21.6: Wire discovery into build.py
-  - [ ] 21.7: Verify `just check` passes
+- [ ] **Step 21: Internal Plugin Architecture + Hooks Directory**
+  - [ ] 21.1: Write hook system tests (test_plugins.py) — file-convention discovery, no entry-points
+  - [ ] 21.2: Create hooks/ fixture files (inject_banner.py, jinja_extras.py)
+  - [ ] 21.3: Implement BasePlugin with all 16 hooks (internal use)
+  - [ ] 21.4: Implement @event_priority decorator (works on methods AND module functions)
+  - [ ] 21.5: Implement discover_hooks(project_dir) — globs hooks/*.py, registers module-level on_<event> functions
+  - [ ] 21.6: Update PluginCollection with priority ordering
+  - [ ] 21.7: Wire discover_hooks into build.py (merge with internal handlers from Step 10)
+  - [ ] 21.8: Verify `just check` passes (including negative test that entry_points discovery is NOT used)
 
 ## Phase 8: CLI and Server
 

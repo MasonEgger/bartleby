@@ -190,12 +190,12 @@
   - [x] 25.5: Compile final Tailwind CSS with PurgeCSS — deferred (real Tailwind tooling lives outside Python; structural CSS in place)
   - [x] 25.6: Verify `just check` passes
 
-- [ ] **Step 26: Icon Packs and Tree-Shaking**
-  - [ ] 26.1: Write icon tests (test_icons.py)
-  - [ ] 26.2: Implement get_icon_path, tree_shake_icons (icons.py)
-  - [ ] 26.3: Bundle sample icon SVGs
-  - [ ] 26.4: Wire into build.py
-  - [ ] 26.5: Verify `just check` passes
+- [x] **Step 26: Icon Packs and Tree-Shaking**
+  - [x] 26.1: Write icon tests (test_icons.py)
+  - [x] 26.2: Implement get_icon_path, tree_shake_icons (icons.py)
+  - [x] 26.3: Bundle sample icon SVGs (one per pack — full packs ship later)
+  - [x] 26.4: Wire into build.py
+  - [x] 26.5: Verify `just check` passes
 
 ## Phase 10: Performance
 

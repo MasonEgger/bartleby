@@ -17,6 +17,7 @@ from bartleby.config import load_config
 from bartleby.content import discover_content
 from bartleby.crossrefs import resolve_all_crossrefs
 from bartleby.feeds import generate_feeds
+from bartleby.icons import tree_shake_icons
 from bartleby.listings import generate_listing_pages
 from bartleby.llm import (
     generate_llms_full_txt,
@@ -153,6 +154,12 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
     copy_static_files(theme_static, output_dir)
     copy_static_files(project_dir / "static", output_dir)
     copy_colocated_assets(assets, pages, content_dir, output_dir)
+    tree_shake_icons(
+        [page.rendered_content for page in pages if page.rendered_content],
+        {pack: bool(value) for pack, value in config.theme.icon_packs.items()}
+        or {"material": True, "fontawesome": True, "octicons": True, "simple": True},
+        output_dir,
+    )
     write_search_index(build_search_index(pages, config), output_dir)
     generate_feeds(pages, config, output_dir)
     if config.ai.markdown_variants:

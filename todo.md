@@ -79,12 +79,12 @@
 
 ## Phase 5: Content Features
 
-- [ ] **Step 11: Taxonomy System**
-  - [ ] 11.1: Update test fixtures with taxonomy data
-  - [ ] 11.2: Write taxonomy tests (test_taxonomies.py)
-  - [ ] 11.3: Implement build_taxonomies, generate_taxonomy_pages (taxonomies.py)
-  - [ ] 11.4: Wire into build.py
-  - [ ] 11.5: Verify `just check` passes
+- [x] **Step 11: Taxonomy System**
+  - [x] 11.1: Update test fixtures with taxonomy data
+  - [x] 11.2: Write taxonomy tests (test_taxonomies.py)
+  - [x] 11.3: Implement build_taxonomies, generate_taxonomy_pages (taxonomies.py)
+  - [x] 11.4: Wire into build.py
+  - [x] 11.5: Verify `just check` passes
 
 - [ ] **Step 12: Listing Pages and Pagination**
   - [ ] 12.1: Write pagination tests (test_pagination.py)

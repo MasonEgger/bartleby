@@ -18,6 +18,7 @@ from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
 from bartleby.metadata import validate_all_metadata
 from bartleby.navigation import build_navigation, link_pages
 from bartleby.plugins import PluginCollection
+from bartleby.taxonomies import AllTaxonomies, build_taxonomies, generate_taxonomy_pages
 from bartleby.templates import (
     BuildInfo,
     build_page_context,
@@ -76,6 +77,9 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
         raise ValueError(f"metadata validation failed:\n{message}")
 
     generate_all_urls(pages, config)
+    taxonomy_data = build_taxonomies(pages, config)
+    taxonomy_pages = generate_taxonomy_pages(taxonomy_data, config)
+    all_pages = pages + taxonomy_pages
     nav = build_navigation(config, pages)
     link_pages(nav)
 
@@ -91,7 +95,7 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True)
 
-    for page in pages:
+    for page in all_pages:
         source = plugins.run_event("on_page_markdown", page.raw_content, page=page, config=config)
         rendered = render_markdown(source, md_renderer)
         page.rendered_content = rendered.html
@@ -99,20 +103,20 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
         content_type = (
             config.content_types.get(page.content_type_name) if page.content_type_name else None
         )
-        if content_type is not None and content_type.readtime:
+        if content_type is not None and content_type.readtime and page.raw_content:
             page.readtime = calculate_readtime(page.raw_content)
-        if content_type is not None and content_type.excerpt_separator:
+        if content_type is not None and content_type.excerpt_separator and page.raw_content:
             page.excerpt = extract_excerpt(page.raw_content, content_type.excerpt_separator)
 
-        template_type = "post" if content_type is not None else "page"
+        template_type = _template_type_for(page, content_type)
         template_name = resolve_template_name(page, template_type, project_dir)
         template = env.get_template(template_name)
         context = build_page_context(
             page=page,
             site_config=config.site,
             nav=nav.items,
-            all_pages=pages,
-            taxonomy_data={},
+            all_pages=all_pages,
+            taxonomy_data=_taxonomy_context(taxonomy_data),
             config=config,
             build_info=build_info,
             data=data,
@@ -122,7 +126,25 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
         _write_page(output_dir, page, html)
 
     duration = time.perf_counter() - started
-    return BuildResult(page_count=len(pages), duration_seconds=duration)
+    return BuildResult(page_count=len(all_pages), duration_seconds=duration)
+
+
+def _template_type_for(page: Page, content_type: object) -> str:
+    """Pick the template type bucket — taxonomy pages bypass post/page logic."""
+    taxonomy_kind = page.custom_metadata.get("taxonomy_kind")
+    if taxonomy_kind == "term":
+        return "taxonomy"
+    if taxonomy_kind == "index":
+        return "taxonomy_index"
+    return "post" if content_type is not None else "page"
+
+
+def _taxonomy_context(taxonomy_data: AllTaxonomies) -> dict[str, object]:
+    """Adapt :class:`AllTaxonomies` into a template-friendly dict."""
+    return {
+        "global": taxonomy_data.global_taxonomies,
+        "by_content_type": taxonomy_data.content_type_taxonomies,
+    }
 
 
 def extract_excerpt(markdown_source: str, separator: str | None) -> str:

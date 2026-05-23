@@ -25,12 +25,12 @@
 
 ## Phase 2: Content Layer
 
-- [ ] **Step 4: Content Discovery and Front Matter**
-  - [ ] 4.1: Create sample site fixture (tests/fixtures/site/)
-  - [ ] 4.2: Write content discovery tests (test_content.py)
-  - [ ] 4.3: Add shared fixtures to conftest.py
-  - [ ] 4.4: Implement Page dataclass, parse_front_matter, discover_content (content.py)
-  - [ ] 4.5: Verify `just check` passes
+- [x] **Step 4: Content Discovery and Front Matter**
+  - [x] 4.1: Create sample site fixture (tests/fixtures/site/)
+  - [x] 4.2: Write content discovery tests (test_content.py)
+  - [x] 4.3: Add shared fixtures to conftest.py
+  - [x] 4.4: Implement Page dataclass, parse_front_matter, discover_content (content.py)
+  - [x] 4.5: Verify `just check` passes
 
 - [ ] **Step 5: Metadata Validation**
   - [ ] 5.1: Write metadata validation tests (test_metadata.py)

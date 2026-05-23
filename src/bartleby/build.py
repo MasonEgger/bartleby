@@ -24,6 +24,7 @@ from bartleby.navigation import build_navigation, link_pages
 from bartleby.plugins import PluginCollection
 from bartleby.search import build_search_index, write_search_index
 from bartleby.shortcodes import process_shortcodes
+from bartleby.sitemap import write_robots_txt, write_sitemap
 from bartleby.taxonomies import AllTaxonomies, build_taxonomies, generate_taxonomy_pages
 from bartleby.templates import (
     BuildInfo,
@@ -145,6 +146,11 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
     copy_colocated_assets(assets, pages, content_dir, output_dir)
     write_search_index(build_search_index(pages, config), output_dir)
     generate_feeds(pages, config, output_dir)
+    write_sitemap(pages, config.site, output_dir)
+    static_robots_exists = (project_dir / "static" / "robots.txt").exists()
+    write_robots_txt(
+        config.site, config.ai, output_dir, static_override_exists=static_robots_exists
+    )
 
     duration = time.perf_counter() - started
     return BuildResult(page_count=len(all_pages), duration_seconds=duration)

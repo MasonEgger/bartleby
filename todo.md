@@ -128,11 +128,11 @@
   - [x] 17.3: Wire into build.py
   - [x] 17.4: Verify `just check` passes
 
-- [ ] **Step 18: Sitemap and Robots.txt**
-  - [ ] 18.1: Write sitemap and robots tests (test_sitemap.py)
-  - [ ] 18.2: Implement generate_sitemap, generate_robots_txt (sitemap.py)
-  - [ ] 18.3: Wire into build.py
-  - [ ] 18.4: Verify `just check` passes
+- [x] **Step 18: Sitemap and Robots.txt**
+  - [x] 18.1: Write sitemap and robots tests (test_sitemap.py)
+  - [x] 18.2: Implement generate_sitemap, generate_robots_txt (sitemap.py)
+  - [x] 18.3: Wire into build.py
+  - [x] 18.4: Verify `just check` passes
 
 - [ ] **Step 19: SEO Meta Tags**
   - [ ] 19.1: Write SEO tests (test_seo.py)

@@ -39,6 +39,7 @@ class Page:
     template_override: str | None = None
     url_override: str | None = None
     url_base_override: str | None = None
+    slug_override: str | None = None
     author_keys: list[str] = field(default_factory=list)
     taxonomy_values: dict[str, list[str]] = field(default_factory=dict)
     custom_metadata: dict[str, PageMetadataValue] = field(default_factory=dict)
@@ -200,6 +201,7 @@ def _build_page(
         template_override=_optional_str(metadata.get("template")),
         url_override=_optional_str(metadata.get("url")),
         url_base_override=_optional_str(metadata.get("url_base")),
+        slug_override=_optional_str(metadata.get("slug")),
         author_keys=_coerce_str_list(metadata.get("authors")),
         taxonomy_values=taxonomy_values,
         custom_metadata=custom_metadata,

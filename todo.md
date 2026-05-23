@@ -37,11 +37,11 @@
   - [x] 5.2: Implement validate_page_metadata, validate_all_metadata (metadata.py)
   - [x] 5.3: Verify `just check` passes
 
-- [ ] **Step 6: URL Generation**
-  - [ ] 6.1: Write URL generation tests (test_urls.py)
-  - [ ] 6.2: Implement generate_url, generate_all_urls (urls.py)
-  - [ ] 6.3: Handle edge cases (missing dates, index files)
-  - [ ] 6.4: Verify `just check` passes
+- [x] **Step 6: URL Generation**
+  - [x] 6.1: Write URL generation tests (test_urls.py)
+  - [x] 6.2: Implement generate_url, generate_all_urls (urls.py)
+  - [x] 6.3: Handle edge cases (missing dates, index files)
+  - [x] 6.4: Verify `just check` passes
 
 ## Phase 3: Rendering Pipeline
 

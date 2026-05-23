@@ -134,11 +134,11 @@
   - [x] 18.3: Wire into build.py
   - [x] 18.4: Verify `just check` passes
 
-- [ ] **Step 19: SEO Meta Tags**
-  - [ ] 19.1: Write SEO tests (test_seo.py)
-  - [ ] 19.2: Implement generate_og_tags, generate_twitter_tags, generate_canonical_url (seo.py)
-  - [ ] 19.3: Wire into template context and update base.html
-  - [ ] 19.4: Verify `just check` passes
+- [x] **Step 19: SEO Meta Tags**
+  - [x] 19.1: Write SEO tests (test_seo.py)
+  - [x] 19.2: Implement generate_og_tags, generate_twitter_tags, generate_canonical_url (seo.py)
+  - [x] 19.3: Wire into template context and update base.html
+  - [x] 19.4: Verify `just check` passes
 
 - [ ] **Step 20: LLM Output**
   - [ ] 20.1: Write LLM output tests (test_llm.py)

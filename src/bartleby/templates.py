@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 import jinja2
 import yaml
 
+from bartleby.seo import generate_all_meta_tags
 from bartleby.theme import get_theme_templates_dir
 
 if TYPE_CHECKING:
@@ -173,6 +174,7 @@ def build_page_context(
         "data": data,
         "extra_css": list(config.extra_css),
         "extra_js": list(config.extra_js),
+        "seo": generate_all_meta_tags(page, site_config),
     }
 
 

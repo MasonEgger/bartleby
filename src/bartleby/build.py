@@ -147,6 +147,10 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
         html = plugins.run_event("on_post_page", html, page=page, config=config)
         _write_page(output_dir, page, html)
 
+    from bartleby.theme import get_theme_templates_dir as _theme_dir
+
+    theme_static = _theme_dir().parent / "static"
+    copy_static_files(theme_static, output_dir)
     copy_static_files(project_dir / "static", output_dir)
     copy_colocated_assets(assets, pages, content_dir, output_dir)
     write_search_index(build_search_index(pages, config), output_dir)

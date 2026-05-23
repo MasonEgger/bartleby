@@ -1,0 +1,15 @@
+<header x-data="{ menuOpen: false }">
+  <div class="header-inner">
+    <a href="/" class="site-title">{{ site.title }}</a>
+    {% include "partials/nav.html" %}
+    {% set color_mode = (config.theme.color_mode if config is defined and config and config.theme else None) %}
+    {% if color_mode and color_mode.toggle %}
+    <button
+      type="button"
+      x-data="{ dark: false }"
+      x-on:click="dark = !dark; document.documentElement.dataset.theme = dark ? 'dark' : 'light'"
+      x-text="dark ? 'Light mode' : 'Dark mode'"
+      class="theme-toggle">Toggle theme</button>
+    {% endif %}
+  </div>
+</header>

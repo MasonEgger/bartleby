@@ -174,13 +174,13 @@
 
 ## Phase 9: Theme
 
-- [ ] **Step 24: Base Material Theme**
-  - [ ] 24.1: Write base theme tests (test_theme.py)
-  - [ ] 24.2: Create all template files (base, page, post, list, taxonomy, 404, partials)
-  - [ ] 24.3: Vendor JS assets (Alpine.js, HTMX, lunr.js)
-  - [ ] 24.4: Compile base Tailwind CSS
-  - [ ] 24.5: Update build.py to copy theme assets
-  - [ ] 24.6: Verify `just check` passes
+- [x] **Step 24: Base Material Theme**
+  - [x] 24.1: Write base theme tests (test_theme.py)
+  - [x] 24.2: Create all template files (base, page, post, list, taxonomy, 404, partials)
+  - [x] 24.3: Vendor JS assets (Alpine.js, HTMX, lunr.js) — placeholder stubs; Step 25 vendors real bundles
+  - [x] 24.4: Compile base Tailwind CSS — placeholder CSS; Step 25 vendors real Tailwind output
+  - [x] 24.5: Update build.py to copy theme assets
+  - [x] 24.6: Verify `just check` passes
 
 - [ ] **Step 25: Full Material Theme**
   - [ ] 25.1: Write comprehensive theme tests (test_theme_full.py)

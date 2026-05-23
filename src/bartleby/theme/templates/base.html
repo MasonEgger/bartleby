@@ -1,17 +1,25 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ page.title }} — {{ site.title }}</title>
+  <link rel="stylesheet" href="/css/main.css">
   {% include "partials/seo_meta.html" %}
   {% for css in extra_css %}
   <link rel="stylesheet" href="/{{ css.lstrip('/') }}">
   {% endfor %}
   {% include "partials/jsonld.html" %}
+  <script defer src="/js/alpine.min.js"></script>
+  <script defer src="/js/htmx.min.js"></script>
+  <script defer src="/js/lunr.min.js"></script>
 </head>
 <body>
-  {% block content %}{{ page.content | safe if page.content else "" }}{% endblock %}
+  {% include "partials/header.html" %}
+  <main>
+    {% block content %}{{ page.content | safe if page.content else "" }}{% endblock %}
+  </main>
+  {% include "partials/footer.html" %}
   {% for js in extra_js %}
   <script src="/{{ js.lstrip('/') }}"></script>
   {% endfor %}

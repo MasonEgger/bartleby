@@ -1,0 +1,51 @@
+/* ABOUTME: Base theme CSS — placeholder until Step 25 compiles full Tailwind output.
+   Provides minimal typography and layout so the rendered site is readable. */
+
+:root {
+  --color-bg: #ffffff;
+  --color-text: #1f2937;
+  --color-link: #2563eb;
+  --color-muted: #6b7280;
+}
+
+[data-theme="dark"] {
+  --color-bg: #111827;
+  --color-text: #f9fafb;
+  --color-link: #60a5fa;
+  --color-muted: #9ca3af;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.6;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+a { color: var(--color-link); }
+
+main {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+header, footer {
+  border-bottom: 1px solid var(--color-muted);
+  padding: 1rem;
+}
+
+footer {
+  border-top: 1px solid var(--color-muted);
+  border-bottom: none;
+  margin-top: 4rem;
+  font-size: 0.875rem;
+}
+
+nav ul { list-style: none; display: flex; gap: 1rem; padding: 0; }
+
+article header time { display: block; color: var(--color-muted); }
+
+.tag-list { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.tag-list li { padding: 0.25rem 0.5rem; background: var(--color-muted); color: var(--color-bg); border-radius: 4px; }

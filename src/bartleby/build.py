@@ -20,6 +20,7 @@ from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
 from bartleby.metadata import validate_all_metadata
 from bartleby.navigation import build_navigation, link_pages
 from bartleby.plugins import PluginCollection
+from bartleby.shortcodes import process_shortcodes
 from bartleby.taxonomies import AllTaxonomies, build_taxonomies, generate_taxonomy_pages
 from bartleby.templates import (
     BuildInfo,
@@ -99,7 +100,8 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
     output_dir.mkdir(parents=True)
 
     for page in all_pages:
-        source = plugins.run_event("on_page_markdown", page.raw_content, page=page, config=config)
+        source = process_shortcodes(page.raw_content, {"build": build_info, "page": page}, env)
+        source = plugins.run_event("on_page_markdown", source, page=page, config=config)
         rendered = render_markdown(source, md_renderer)
         page.rendered_content = rendered.html
 

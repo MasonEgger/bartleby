@@ -100,12 +100,12 @@
   - [x] 13.3: Wire into build.py
   - [x] 13.4: Verify `just check` passes
 
-- [ ] **Step 14: Shortcode Preprocessing**
-  - [ ] 14.1: Create shortcode fixture templates (project-root `shortcodes/` preferred)
-  - [ ] 14.2: Write shortcode tests (test_shortcodes.py) — resolve via Jinja env from Step 8
-  - [ ] 14.3: Implement process_shortcodes (shortcodes.py)
-  - [ ] 14.4: Wire into build.py (before markdown rendering)
-  - [ ] 14.5: Verify `just check` passes
+- [x] **Step 14: Shortcode Preprocessing**
+  - [x] 14.1: Create shortcode fixture templates (project-root `shortcodes/` preferred)
+  - [x] 14.2: Write shortcode tests (test_shortcodes.py) — resolve via Jinja env from Step 8
+  - [x] 14.3: Implement process_shortcodes (shortcodes.py)
+  - [x] 14.4: Wire into build.py (before markdown rendering)
+  - [x] 14.5: Verify `just check` passes
 
 - [ ] **Step 15: Static Files and Co-located Assets**
   - [ ] 15.1: Update test fixtures with static files

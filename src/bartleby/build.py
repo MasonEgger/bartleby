@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import bartleby
+from bartleby.assets import copy_colocated_assets, copy_static_files
 from bartleby.authors import load_authors
 from bartleby.config import load_config
 from bartleby.content import discover_content
@@ -68,7 +69,7 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
     authors = load_authors(authors_path)
 
     content_dir = project_dir / "content"
-    pages, _assets = discover_content(config, content_dir)
+    pages, assets = discover_content(config, content_dir)
     pages = list(plugins.run_event("on_pages", pages, config=config))
 
     if not include_drafts:
@@ -137,6 +138,9 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
         html = template.render(**context)
         html = plugins.run_event("on_post_page", html, page=page, config=config)
         _write_page(output_dir, page, html)
+
+    copy_static_files(project_dir / "static", output_dir)
+    copy_colocated_assets(assets, pages, content_dir, output_dir)
 
     duration = time.perf_counter() - started
     return BuildResult(page_count=len(all_pages), duration_seconds=duration)

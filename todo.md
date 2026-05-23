@@ -107,12 +107,12 @@
   - [x] 14.4: Wire into build.py (before markdown rendering)
   - [x] 14.5: Verify `just check` passes
 
-- [ ] **Step 15: Static Files and Co-located Assets**
-  - [ ] 15.1: Update test fixtures with static files
-  - [ ] 15.2: Write asset copying tests (test_assets.py)
-  - [ ] 15.3: Implement copy_static_files, copy_colocated_assets (assets.py)
-  - [ ] 15.4: Wire into build.py
-  - [ ] 15.5: Verify `just check` passes
+- [x] **Step 15: Static Files and Co-located Assets**
+  - [x] 15.1: Update test fixtures with static files
+  - [x] 15.2: Write asset copying tests (test_assets.py)
+  - [x] 15.3: Implement copy_static_files, copy_colocated_assets (assets.py)
+  - [x] 15.4: Wire into build.py
+  - [x] 15.5: Verify `just check` passes
 
 ## Phase 6: Generated Output
 

@@ -49,6 +49,8 @@ class Page:
     rendered_content: str = ""
     excerpt: str = ""
     readtime: int | None = None
+    previous: Page | None = None
+    next: Page | None = None
 
 
 @dataclass(slots=True)

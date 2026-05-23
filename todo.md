@@ -63,10 +63,10 @@
 
 ## Phase 4: First Working Build
 
-- [ ] **Step 9: Navigation System**
-  - [ ] 9.1: Write navigation tests (test_navigation.py)
-  - [ ] 9.2: Implement build_navigation, auto_generate_nav, link_pages (navigation.py)
-  - [ ] 9.3: Verify `just check` passes
+- [x] **Step 9: Navigation System**
+  - [x] 9.1: Write navigation tests (test_navigation.py)
+  - [x] 9.2: Implement build_navigation, auto_generate_nav, link_pages (navigation.py)
+  - [x] 9.3: Verify `just check` passes
 
 - [ ] **Step 10: Build Pipeline v1** ⭐ MVP Milestone
   - [ ] 10.1: Expand test fixture site for end-to-end testing

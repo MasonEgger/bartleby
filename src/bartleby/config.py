@@ -120,7 +120,7 @@ class BartlebyConfig:
     """Root configuration object representing a fully-parsed ``bartleby.yml``."""
 
     site: SiteConfig
-    nav: list[dict[str, str]] | None
+    nav: list[dict[str, object]] | None
     theme: ThemeConfig
     authors_file: str
     content_types: dict[str, ContentTypeConfig]
@@ -128,6 +128,8 @@ class BartlebyConfig:
     exclude_patterns: list[str]
     markdown_extensions: list[dict[str, object] | str]
     plugins: list[str]
+    extra_css: list[str]
+    extra_js: list[str]
     ai: AIConfig
     dev_server: DevServerConfig
     config_dir: Path
@@ -160,7 +162,7 @@ def load_config(config_path: Path) -> BartlebyConfig:
 def _parse_config(raw: dict[str, Any], config_dir: Path) -> BartlebyConfig:
     """Convert a raw YAML mapping into a :class:`BartlebyConfig` with defaults."""
     nav_raw = raw.get("nav")
-    nav: list[dict[str, str]] | None = nav_raw if isinstance(nav_raw, list) else None
+    nav: list[dict[str, object]] | None = nav_raw if isinstance(nav_raw, list) else None
 
     exclude_raw = raw.get("exclude_patterns")
     exclude_patterns: list[str] = (
@@ -179,6 +181,16 @@ def _parse_config(raw: dict[str, Any], config_dir: Path) -> BartlebyConfig:
         [str(name) for name in plugins_raw] if isinstance(plugins_raw, list) else []
     )
 
+    extra_css_raw = raw.get("extra_css")
+    extra_css: list[str] = (
+        [str(path) for path in extra_css_raw] if isinstance(extra_css_raw, list) else []
+    )
+
+    extra_js_raw = raw.get("extra_js")
+    extra_js: list[str] = (
+        [str(path) for path in extra_js_raw] if isinstance(extra_js_raw, list) else []
+    )
+
     return BartlebyConfig(
         site=_parse_site(raw.get("site")),
         nav=nav,
@@ -189,6 +201,8 @@ def _parse_config(raw: dict[str, Any], config_dir: Path) -> BartlebyConfig:
         exclude_patterns=exclude_patterns,
         markdown_extensions=markdown_extensions,
         plugins=plugins,
+        extra_css=extra_css,
+        extra_js=extra_js,
         ai=_parse_ai(raw.get("ai")),
         dev_server=_parse_dev_server(raw.get("dev_server")),
         config_dir=config_dir,

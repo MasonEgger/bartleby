@@ -88,11 +88,24 @@ def test_parse_args_help_exits_zero(monkeypatch: pytest.MonkeyPatch) -> None:
     assert exc.value.code == 0
 
 
-def test_serve_command_placeholder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """``bartleby serve`` is currently a placeholder that exits cleanly."""
+def test_serve_command_constructs_devserver(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``bartleby serve`` instantiates a DevServer with config-derived host/port."""
     monkeypatch.chdir(tmp_path)
     main(["new", "site", "mysite"])
     monkeypatch.chdir(tmp_path / "mysite")
-    with pytest.raises(SystemExit) as exc:
-        main(["serve"])
-    assert exc.value.code != 0  # Placeholder reports unimplemented status.
+
+    captured: dict[str, object] = {}
+
+    class FakeDevServer:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            captured["args"] = args
+            captured["kwargs"] = kwargs
+
+        def run(self) -> None:
+            captured["ran"] = True
+
+    monkeypatch.setattr("bartleby.server.DevServer", FakeDevServer)
+    main(["serve"])
+    assert captured["ran"] is True

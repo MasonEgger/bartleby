@@ -166,11 +166,11 @@
   - [x] 22.3: Update __main__.py entry point
   - [x] 22.4: Verify `just check` passes
 
-- [ ] **Step 23: Dev Server**
-  - [ ] 23.1: Write dev server tests (test_server.py)
-  - [ ] 23.2: Implement serve with HTTP, file watcher, WebSocket (server.py)
-  - [ ] 23.3: Wire into cli.py serve command
-  - [ ] 23.4: Verify `just check` passes
+- [x] **Step 23: Dev Server**
+  - [x] 23.1: Write dev server tests (test_server.py)
+  - [x] 23.2: Implement serve with HTTP, file watcher, WebSocket (server.py)
+  - [x] 23.3: Wire into cli.py serve command
+  - [x] 23.4: Verify `just check` passes
 
 ## Phase 9: Theme
 

@@ -56,6 +56,13 @@ def _build_parser() -> argparse.ArgumentParser:
     validate_parser.set_defaults(_handler=_cmd_validate)
 
     serve_parser = subparsers.add_parser("serve", help="Run the development server")
+    serve_parser.add_argument("--host", default=None, help="Bind host (default from config)")
+    serve_parser.add_argument(
+        "--port", type=int, default=None, help="Bind port (default from config)"
+    )
+    serve_parser.add_argument(
+        "--dirty", action="store_true", help="Only rebuild files that changed"
+    )
     serve_parser.set_defaults(_handler=_cmd_serve)
 
     return parser
@@ -140,10 +147,17 @@ def _cmd_validate(args: argparse.Namespace) -> None:
 
 
 def _cmd_serve(args: argparse.Namespace) -> None:
-    """Placeholder for the dev server; full implementation lands in Step 23."""
-    del args
-    print("bartleby serve: not yet implemented (Step 23)", file=sys.stderr)
-    raise SystemExit(2)
+    """Start the development server (HTTP + initial build + change-driven rebuilds)."""
+    config_path = Path.cwd() / "bartleby.yml"
+    if not config_path.exists():
+        print("error: no bartleby.yml in current directory", file=sys.stderr)
+        raise SystemExit(1)
+    from bartleby.server import DevServer
+
+    config = load_config(config_path)
+    host = args.host or config.dev_server.host
+    port = args.port if args.port is not None else config.dev_server.port
+    DevServer(config_path, host=host, port=port, dirty=args.dirty).run()
 
 
 _DEFAULT_CONFIG = """site:

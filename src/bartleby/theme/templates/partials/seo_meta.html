@@ -1,0 +1,10 @@
+{% set canonical = site.url ~ page.url if page.url and site.url else (site.url or '') %}
+<meta name="description" content="{{ page.description or site.description or '' }}">
+<link rel="canonical" href="{{ canonical }}">
+<meta property="og:title" content="{{ page.title }}">
+<meta property="og:description" content="{{ page.description or site.description or '' }}">
+<meta property="og:url" content="{{ canonical }}">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ page.title }}">
+<meta name="twitter:description" content="{{ page.description or site.description or '' }}">

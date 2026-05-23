@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ page.title }} — {{ site.title }}</title>
+  {% include "partials/seo_meta.html" %}
+  {% for css in extra_css %}
+  <link rel="stylesheet" href="/{{ css.lstrip('/') }}">
+  {% endfor %}
+  {% include "partials/jsonld.html" %}
+</head>
+<body>
+  {% block content %}{{ page.content | safe if page.content else "" }}{% endblock %}
+  {% for js in extra_js %}
+  <script src="/{{ js.lstrip('/') }}"></script>
+  {% endfor %}
+</body>
+</html>

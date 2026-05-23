@@ -51,15 +51,15 @@
   - [x] 7.3: Verify extension ordering (fence before superfences)
   - [x] 7.4: Verify `just check` passes
 
-- [ ] **Step 8: Template System (+ customization seams)**
-  - [ ] 8.1: Create test fixture templates, overrides/, partials/, data/ fixtures
-  - [ ] 8.2: Write template system tests (test_templates.py) including overrides, partials, data, extra_css/js
-  - [ ] 8.3: Implement create_jinja_env with 6-level cascade (overrides/ on top, project_dir for partials/shortcodes)
-  - [ ] 8.4: Implement load_data_files() — YAML + TOML auto-load from data/
-  - [ ] 8.5: Implement build_page_context including `data`, `extra_css`, `extra_js`
-  - [ ] 8.6: Create theme package and minimal built-in templates
-  - [ ] 8.7: Create SEO/JSON-LD partials in base template
-  - [ ] 8.8: Verify `just check` passes
+- [x] **Step 8: Template System (+ customization seams)**
+  - [x] 8.1: Create test fixture templates, overrides/, partials/, data/ fixtures
+  - [x] 8.2: Write template system tests (test_templates.py) including overrides, partials, data, extra_css/js
+  - [x] 8.3: Implement create_jinja_env with 6-level cascade (overrides/ on top, project_dir for partials/shortcodes)
+  - [x] 8.4: Implement load_data_files() — YAML + TOML auto-load from data/
+  - [x] 8.5: Implement build_page_context including `data`, `extra_css`, `extra_js`
+  - [x] 8.6: Create theme package and minimal built-in templates
+  - [x] 8.7: Create SEO/JSON-LD partials in base template
+  - [x] 8.8: Verify `just check` passes
 
 ## Phase 4: First Working Build
 

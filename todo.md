@@ -45,11 +45,11 @@
 
 ## Phase 3: Rendering Pipeline
 
-- [ ] **Step 7: Markdown Pipeline**
-  - [ ] 7.1: Write markdown pipeline tests (test_markdown_pipeline.py)
-  - [ ] 7.2: Implement create_markdown_renderer, render_markdown (markdown_pipeline.py)
-  - [ ] 7.3: Verify extension ordering (fence before superfences)
-  - [ ] 7.4: Verify `just check` passes
+- [x] **Step 7: Markdown Pipeline**
+  - [x] 7.1: Write markdown pipeline tests (test_markdown_pipeline.py)
+  - [x] 7.2: Implement create_markdown_renderer, render_markdown (markdown_pipeline.py)
+  - [x] 7.3: Verify extension ordering (fence before superfences)
+  - [x] 7.4: Verify `just check` passes
 
 - [ ] **Step 8: Template System (+ customization seams)**
   - [ ] 8.1: Create test fixture templates, overrides/, partials/, data/ fixtures

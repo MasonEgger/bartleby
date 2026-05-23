@@ -21,6 +21,7 @@ from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
 from bartleby.metadata import validate_all_metadata
 from bartleby.navigation import build_navigation, link_pages
 from bartleby.plugins import PluginCollection
+from bartleby.search import build_search_index, write_search_index
 from bartleby.shortcodes import process_shortcodes
 from bartleby.taxonomies import AllTaxonomies, build_taxonomies, generate_taxonomy_pages
 from bartleby.templates import (
@@ -141,6 +142,7 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
 
     copy_static_files(project_dir / "static", output_dir)
     copy_colocated_assets(assets, pages, content_dir, output_dir)
+    write_search_index(build_search_index(pages, config), output_dir)
 
     duration = time.perf_counter() - started
     return BuildResult(page_count=len(all_pages), duration_seconds=duration)

@@ -116,11 +116,11 @@
 
 ## Phase 6: Generated Output
 
-- [ ] **Step 16: Search Index Generation**
-  - [ ] 16.1: Write search index tests (test_search.py)
-  - [ ] 16.2: Implement build_search_index, write_search_index (search.py)
-  - [ ] 16.3: Wire into build.py
-  - [ ] 16.4: Verify `just check` passes
+- [x] **Step 16: Search Index Generation**
+  - [x] 16.1: Write search index tests (test_search.py)
+  - [x] 16.2: Implement build_search_index, write_search_index (search.py)
+  - [x] 16.3: Wire into build.py
+  - [x] 16.4: Verify `just check` passes
 
 - [ ] **Step 17: Feed Generation**
   - [ ] 17.1: Write feed tests (test_feeds.py)

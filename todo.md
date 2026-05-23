@@ -68,14 +68,14 @@
   - [x] 9.2: Implement build_navigation, auto_generate_nav, link_pages (navigation.py)
   - [x] 9.3: Verify `just check` passes
 
-- [ ] **Step 10: Build Pipeline v1** ⭐ MVP Milestone
-  - [ ] 10.1: Expand test fixture site for end-to-end testing
-  - [ ] 10.2: Write build pipeline integration tests (test_build.py)
-  - [ ] 10.3: Write excerpt and readtime unit tests
-  - [ ] 10.4: Implement build(), extract_excerpt, calculate_readtime (build.py)
-  - [ ] 10.5: Create minimal PluginCollection with run_event (plugins.py)
-  - [ ] 10.6: Add plugin hook call sites throughout build pipeline
-  - [ ] 10.7: Verify `just check` passes
+- [x] **Step 10: Build Pipeline v1** ⭐ MVP Milestone
+  - [x] 10.1: Expand test fixture site for end-to-end testing
+  - [x] 10.2: Write build pipeline integration tests (test_build.py)
+  - [x] 10.3: Write excerpt and readtime unit tests
+  - [x] 10.4: Implement build(), extract_excerpt, calculate_readtime (build.py)
+  - [x] 10.5: Create minimal PluginCollection with run_event (plugins.py)
+  - [x] 10.6: Add plugin hook call sites throughout build pipeline
+  - [x] 10.7: Verify `just check` passes
 
 ## Phase 5: Content Features
 

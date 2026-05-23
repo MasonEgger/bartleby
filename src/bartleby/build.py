@@ -1,0 +1,161 @@
+# ABOUTME: Build pipeline orchestrator wiring all components together.
+# Loads config, discovers content, renders, and writes the site/ output.
+
+from __future__ import annotations
+
+import datetime
+import re
+import shutil
+import time
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+import bartleby
+from bartleby.authors import load_authors
+from bartleby.config import load_config
+from bartleby.content import discover_content
+from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
+from bartleby.metadata import validate_all_metadata
+from bartleby.navigation import build_navigation, link_pages
+from bartleby.plugins import PluginCollection
+from bartleby.templates import (
+    BuildInfo,
+    build_page_context,
+    create_jinja_env,
+    load_data_files,
+    resolve_template_name,
+)
+from bartleby.urls import generate_all_urls
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from bartleby.content import Page
+
+
+@dataclass(slots=True)
+class BuildResult:
+    """Summary returned from :func:`build`."""
+
+    page_count: int
+    duration_seconds: float
+
+
+_WORDS_PER_MINUTE = 265
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
+    """Run the full Bartleby build pipeline against ``config_path``.
+
+    :param config_path: Path to ``bartleby.yml``.
+    :param include_drafts: When ``True``, draft pages are written to the
+        output. Defaults to ``False`` for production builds.
+    :returns: A :class:`BuildResult` carrying the page count and wall time.
+    """
+    started = time.perf_counter()
+    plugins = PluginCollection()
+
+    config = load_config(config_path)
+    config = plugins.run_event("on_config", config)
+
+    project_dir = config.config_dir
+    authors_path = project_dir / config.authors_file
+    authors = load_authors(authors_path)
+
+    content_dir = project_dir / "content"
+    pages, _assets = discover_content(config, content_dir)
+    pages = list(plugins.run_event("on_pages", pages, config=config))
+
+    if not include_drafts:
+        pages = [page for page in pages if not page.draft]
+
+    errors = validate_all_metadata(pages, config, authors)
+    if errors:
+        message = "\n".join(f"  {error.file_path}: {error.message}" for error in errors)
+        raise ValueError(f"metadata validation failed:\n{message}")
+
+    generate_all_urls(pages, config)
+    nav = build_navigation(config, pages)
+    link_pages(nav)
+
+    md_renderer = create_markdown_renderer(config)
+    env = create_jinja_env(config, project_dir)
+    env = plugins.run_event("on_env", env, config=config)
+
+    data = load_data_files(project_dir)
+    build_info = BuildInfo(date=datetime.date.today(), bartleby_version=bartleby.__version__)
+
+    output_dir = project_dir / "site"
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+    output_dir.mkdir(parents=True)
+
+    for page in pages:
+        source = plugins.run_event("on_page_markdown", page.raw_content, page=page, config=config)
+        rendered = render_markdown(source, md_renderer)
+        page.rendered_content = rendered.html
+
+        content_type = (
+            config.content_types.get(page.content_type_name) if page.content_type_name else None
+        )
+        if content_type is not None and content_type.readtime:
+            page.readtime = calculate_readtime(page.raw_content)
+        if content_type is not None and content_type.excerpt_separator:
+            page.excerpt = extract_excerpt(page.raw_content, content_type.excerpt_separator)
+
+        template_type = "post" if content_type is not None else "page"
+        template_name = resolve_template_name(page, template_type, project_dir)
+        template = env.get_template(template_name)
+        context = build_page_context(
+            page=page,
+            site_config=config.site,
+            nav=nav.items,
+            all_pages=pages,
+            taxonomy_data={},
+            config=config,
+            build_info=build_info,
+            data=data,
+        )
+        html = template.render(**context)
+        html = plugins.run_event("on_post_page", html, page=page, config=config)
+        _write_page(output_dir, page, html)
+
+    duration = time.perf_counter() - started
+    return BuildResult(page_count=len(pages), duration_seconds=duration)
+
+
+def extract_excerpt(markdown_source: str, separator: str | None) -> str:
+    """Return the excerpt portion of ``markdown_source``.
+
+    :param markdown_source: Raw markdown content.
+    :param separator: The configured excerpt separator (e.g. ``<!-- more -->``)
+        or ``None`` to fall back to the first paragraph.
+    :returns: The excerpt as raw markdown (caller decides whether to render).
+    """
+    if separator and separator in markdown_source:
+        return markdown_source.split(separator, 1)[0].strip()
+    paragraphs = [block.strip() for block in markdown_source.split("\n\n") if block.strip()]
+    return paragraphs[0] if paragraphs else ""
+
+
+def calculate_readtime(text: str) -> int:
+    """Estimate read time in minutes assuming ~265 words per minute.
+
+    :param text: Page text (markdown or HTML — tags are stripped first).
+    :returns: Integer number of minutes, always at least ``1``.
+    """
+    plain = _HTML_TAG_RE.sub(" ", text)
+    word_count = len(plain.split())
+    if word_count == 0:
+        return 1
+    minutes = max(1, round(word_count / _WORDS_PER_MINUTE))
+    return minutes
+
+
+def _write_page(output_dir: Path, page: Page, html: str) -> None:
+    """Write the rendered HTML for ``page`` to its output URL location."""
+    url = page.output_url.strip("/")
+    destination = output_dir / "index.html" if not url else output_dir / url / "index.html"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(html, encoding="utf-8")

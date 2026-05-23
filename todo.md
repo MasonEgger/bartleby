@@ -94,11 +94,11 @@
   - [x] 12.5: Wire into build.py
   - [x] 12.6: Verify `just check` passes
 
-- [ ] **Step 13: Cross-Reference Resolution**
-  - [ ] 13.1: Write cross-reference tests (test_crossrefs.py)
-  - [ ] 13.2: Implement resolve_page_crossrefs, resolve_all_crossrefs (crossrefs.py)
-  - [ ] 13.3: Wire into build.py
-  - [ ] 13.4: Verify `just check` passes
+- [x] **Step 13: Cross-Reference Resolution**
+  - [x] 13.1: Write cross-reference tests (test_crossrefs.py)
+  - [x] 13.2: Implement resolve_page_crossrefs, resolve_all_crossrefs (crossrefs.py)
+  - [x] 13.3: Wire into build.py
+  - [x] 13.4: Verify `just check` passes
 
 - [ ] **Step 14: Shortcode Preprocessing**
   - [ ] 14.1: Create shortcode fixture templates (project-root `shortcodes/` preferred)

@@ -14,6 +14,7 @@ import bartleby
 from bartleby.authors import load_authors
 from bartleby.config import load_config
 from bartleby.content import discover_content
+from bartleby.crossrefs import resolve_all_crossrefs
 from bartleby.listings import generate_listing_pages
 from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
 from bartleby.metadata import validate_all_metadata
@@ -110,6 +111,14 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
         if content_type is not None and content_type.excerpt_separator and page.raw_content:
             page.excerpt = extract_excerpt(page.raw_content, content_type.excerpt_separator)
 
+    # Cross-reference resolution needs every page rendered before any rewriting,
+    # so it lives outside the render loop above and below the template render below.
+    resolve_all_crossrefs(all_pages, content_dir)
+
+    for page in all_pages:
+        content_type = (
+            config.content_types.get(page.content_type_name) if page.content_type_name else None
+        )
         template_type = _template_type_for(page, content_type)
         template_name = resolve_template_name(page, template_type, project_dir)
         template = env.get_template(template_name)

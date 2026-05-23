@@ -16,6 +16,7 @@ from bartleby.authors import load_authors
 from bartleby.config import load_config
 from bartleby.content import discover_content
 from bartleby.crossrefs import resolve_all_crossrefs
+from bartleby.feeds import generate_feeds
 from bartleby.listings import generate_listing_pages
 from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
 from bartleby.metadata import validate_all_metadata
@@ -143,6 +144,7 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
     copy_static_files(project_dir / "static", output_dir)
     copy_colocated_assets(assets, pages, content_dir, output_dir)
     write_search_index(build_search_index(pages, config), output_dir)
+    generate_feeds(pages, config, output_dir)
 
     duration = time.perf_counter() - started
     return BuildResult(page_count=len(all_pages), duration_seconds=duration)

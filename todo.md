@@ -122,11 +122,11 @@
   - [x] 16.3: Wire into build.py
   - [x] 16.4: Verify `just check` passes
 
-- [ ] **Step 17: Feed Generation**
-  - [ ] 17.1: Write feed tests (test_feeds.py)
-  - [ ] 17.2: Implement generate_rss, generate_atom, generate_feeds (feeds.py)
-  - [ ] 17.3: Wire into build.py
-  - [ ] 17.4: Verify `just check` passes
+- [x] **Step 17: Feed Generation**
+  - [x] 17.1: Write feed tests (test_feeds.py)
+  - [x] 17.2: Implement generate_rss, generate_atom, generate_feeds (feeds.py)
+  - [x] 17.3: Wire into build.py
+  - [x] 17.4: Verify `just check` passes
 
 - [ ] **Step 18: Sitemap and Robots.txt**
   - [ ] 18.1: Write sitemap and robots tests (test_sitemap.py)

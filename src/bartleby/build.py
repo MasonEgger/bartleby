@@ -18,6 +18,11 @@ from bartleby.content import discover_content
 from bartleby.crossrefs import resolve_all_crossrefs
 from bartleby.feeds import generate_feeds
 from bartleby.listings import generate_listing_pages
+from bartleby.llm import (
+    generate_llms_full_txt,
+    generate_llms_txt,
+    write_markdown_variant,
+)
 from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
 from bartleby.metadata import validate_all_metadata
 from bartleby.navigation import build_navigation, link_pages
@@ -146,6 +151,16 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
     copy_colocated_assets(assets, pages, content_dir, output_dir)
     write_search_index(build_search_index(pages, config), output_dir)
     generate_feeds(pages, config, output_dir)
+    if config.ai.markdown_variants:
+        for page in pages:
+            if not page.draft and page.raw_content:
+                write_markdown_variant(page, output_dir)
+    if config.ai.llms_txt:
+        (output_dir / "llms.txt").write_text(generate_llms_txt(pages, config), encoding="utf-8")
+    if config.ai.llms_full_txt:
+        (output_dir / "llms-full.txt").write_text(
+            generate_llms_full_txt(pages, config), encoding="utf-8"
+        )
     write_sitemap(pages, config.site, output_dir)
     static_robots_exists = (project_dir / "static" / "robots.txt").exists()
     write_robots_txt(

@@ -140,11 +140,11 @@
   - [x] 19.3: Wire into template context and update base.html
   - [x] 19.4: Verify `just check` passes
 
-- [ ] **Step 20: LLM Output**
-  - [ ] 20.1: Write LLM output tests (test_llm.py)
-  - [ ] 20.2: Implement generate_llms_txt, generate_llms_full_txt, write_markdown_variant, generate_jsonld (llm.py)
-  - [ ] 20.3: Wire into build.py
-  - [ ] 20.4: Verify `just check` passes
+- [x] **Step 20: LLM Output**
+  - [x] 20.1: Write LLM output tests (test_llm.py)
+  - [x] 20.2: Implement generate_llms_txt, generate_llms_full_txt, write_markdown_variant, generate_jsonld (llm.py)
+  - [x] 20.3: Wire into build.py
+  - [x] 20.4: Verify `just check` passes
 
 ## Phase 7: Extensibility
 

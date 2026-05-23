@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import datetime
 import sys
 from pathlib import Path
@@ -11,7 +12,7 @@ from pathlib import Path
 from slugify import slugify
 
 from bartleby.authors import load_authors
-from bartleby.build import build
+from bartleby.build import async_build
 from bartleby.config import ConfigError, load_config
 from bartleby.content import discover_content
 from bartleby.metadata import validate_all_metadata
@@ -115,12 +116,12 @@ def _cmd_new_post(args: argparse.Namespace) -> None:
 
 
 def _cmd_build(args: argparse.Namespace) -> None:
-    """Run a full site build from ``./bartleby.yml``."""
+    """Run a full site build from ``./bartleby.yml`` via the async pipeline."""
     config_path = Path.cwd() / "bartleby.yml"
     if not config_path.exists():
         print("error: no bartleby.yml in current directory", file=sys.stderr)
         raise SystemExit(1)
-    result = build(config_path, include_drafts=args.include_drafts)
+    result = asyncio.run(async_build(config_path, include_drafts=args.include_drafts))
     print(f"Built {result.page_count} pages in {result.duration_seconds:.2f}s")
 
 

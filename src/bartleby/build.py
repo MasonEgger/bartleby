@@ -202,6 +202,21 @@ def _taxonomy_context(taxonomy_data: AllTaxonomies) -> dict[str, object]:
     }
 
 
+async def async_build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
+    """Async wrapper around :func:`build` for use with ``asyncio.run``.
+
+    The sync build does the heavy lifting; this coroutine offloads it to a
+    worker thread (so the surrounding async program — e.g. the dev server's
+    HTTP loop — can keep running) and returns the same :class:`BuildResult`.
+    Plugin hooks always execute in the calling process: by running the build
+    in a thread (not a child process) the hook registration, dispatch, and
+    Jinja2 environment never cross a process boundary.
+    """
+    import asyncio
+
+    return await asyncio.to_thread(build, config_path, include_drafts=include_drafts)
+
+
 def extract_excerpt(markdown_source: str, separator: str | None) -> str:
     """Return the excerpt portion of ``markdown_source``.
 

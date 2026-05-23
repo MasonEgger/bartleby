@@ -148,15 +148,15 @@
 
 ## Phase 7: Extensibility
 
-- [ ] **Step 21: Internal Plugin Architecture + Hooks Directory**
-  - [ ] 21.1: Write hook system tests (test_plugins.py) — file-convention discovery, no entry-points
-  - [ ] 21.2: Create hooks/ fixture files (inject_banner.py, jinja_extras.py)
-  - [ ] 21.3: Implement BasePlugin with all 16 hooks (internal use)
-  - [ ] 21.4: Implement @event_priority decorator (works on methods AND module functions)
-  - [ ] 21.5: Implement discover_hooks(project_dir) — globs hooks/*.py, registers module-level on_<event> functions
-  - [ ] 21.6: Update PluginCollection with priority ordering
-  - [ ] 21.7: Wire discover_hooks into build.py (merge with internal handlers from Step 10)
-  - [ ] 21.8: Verify `just check` passes (including negative test that entry_points discovery is NOT used)
+- [x] **Step 21: Internal Plugin Architecture + Hooks Directory**
+  - [x] 21.1: Write hook system tests (test_plugins.py) — file-convention discovery, no entry-points
+  - [x] 21.2: Create hooks/ fixture files (inject_banner.py, jinja_extras.py)
+  - [x] 21.3: Implement BasePlugin with all 16 hooks (internal use)
+  - [x] 21.4: Implement @event_priority decorator (works on methods AND module functions)
+  - [x] 21.5: Implement discover_hooks(project_dir) — globs hooks/*.py, registers module-level on_<event> functions
+  - [x] 21.6: Update PluginCollection with priority ordering
+  - [x] 21.7: Wire discover_hooks into build.py (merge with internal handlers from Step 10)
+  - [x] 21.8: Verify `just check` passes (including negative test that entry_points discovery is NOT used)
 
 ## Phase 8: CLI and Server
 

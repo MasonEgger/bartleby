@@ -26,7 +26,7 @@ from bartleby.llm import (
 from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
 from bartleby.metadata import validate_all_metadata
 from bartleby.navigation import build_navigation, link_pages
-from bartleby.plugins import PluginCollection
+from bartleby.plugins import PluginCollection, discover_hooks
 from bartleby.search import build_search_index, write_search_index
 from bartleby.shortcodes import process_shortcodes
 from bartleby.sitemap import write_robots_txt, write_sitemap
@@ -70,9 +70,9 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
     plugins = PluginCollection()
 
     config = load_config(config_path)
-    config = plugins.run_event("on_config", config)
-
     project_dir = config.config_dir
+    plugins.merge(discover_hooks(project_dir))
+    config = plugins.run_event("on_config", config)
     authors_path = project_dir / config.authors_file
     authors = load_authors(authors_path)
 

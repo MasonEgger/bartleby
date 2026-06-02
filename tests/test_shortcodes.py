@@ -64,3 +64,25 @@ def test_no_shortcodes_passthrough(env: jinja2.Environment) -> None:
     source = "# Heading\n\nJust regular markdown.\n"
     out = process_shortcodes(source, {}, env)
     assert out == source
+
+
+def test_shortcode_inside_fenced_block_is_literal(env: jinja2.Environment) -> None:
+    """Shortcode syntax inside a fenced code block is treated as literal text."""
+    source = "Example syntax:\n\n```markdown\n[% nonexistent %]\n```\n"
+    out = process_shortcodes(source, {}, env)
+    assert "[% nonexistent %]" in out
+
+
+def test_shortcode_inside_inline_code_is_literal(env: jinja2.Environment) -> None:
+    """Shortcode syntax inside an inline `code` span is treated as literal text."""
+    source = "Use `[% nonexistent %]` to invoke the shortcode.\n"
+    out = process_shortcodes(source, {}, env)
+    assert "`[% nonexistent %]`" in out
+
+
+def test_shortcode_outside_code_still_renders(env: jinja2.Environment) -> None:
+    """A real shortcode invocation still renders when fenced examples appear elsewhere."""
+    source = "```markdown\n[% nonexistent %]\n```\n\nBut this one renders: [% version %]\n"
+    out = process_shortcodes(source, {"build": {"bartleby_version": "1.2.3"}}, env)
+    assert "[% nonexistent %]" in out
+    assert "1.2.3" in out

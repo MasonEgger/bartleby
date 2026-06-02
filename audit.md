@@ -3,6 +3,44 @@
 Running record of findings from the post-implementation evaluation framework
 in [`review.md`](review.md). Each section corresponds to one numbered test.
 
+## Outstanding work — tracker
+
+All issues across this audit at a glance. Detailed notes in each test
+section below.
+
+| ID | Severity | Area | Title | Status |
+|---|---|---|---|---|
+| Bug 1 | HIGH | Templates | Author bylines empty on every blog post | ✅ FIXED 2026-06-02 |
+| Bug 2 | HIGH | Templates | Listing + taxonomy term pages render empty | ✅ FIXED 2026-06-02 |
+| Bug 3 | MEDIUM | Scaffolding | New-site config doesn't opt blog into tags | ✅ FIXED 2026-06-02 |
+| Bug 4 | LOW | Output | Sitemap omits listing + taxonomy URLs | ✅ FIXED 2026-06-02 |
+| Deferral 1 | HIGH | Theme JS | Alpine/HTMX/lunr bundles are 200-byte stubs — theme interactivity is dead | 🔴 OPEN |
+| Deferral 6 | HIGH | Dev server | `bartleby serve` has no watchdog + no WebSocket — no live reload | 🔴 OPEN |
+| Deferral 2 | MEDIUM | Theme CSS | "Tailwind" is hand-written CSS; docs/spec misrepresent the styling stack | 🟡 OPEN |
+| Deferral 3 | MEDIUM | Icons | Only 4 sample SVGs ship; `get_icon_path` returns None for everything else | 🟡 OPEN |
+| Deferral 5 | MEDIUM | Crossrefs | `--strict` flag was parsed and ignored | ✅ FIXED 2026-06-02 |
+| Deferral 7 | MEDIUM | Plugin hooks | 12 of 17 declared events never fire — user handlers silently no-op | 🟡 OPEN |
+| Deferral 4 | LOW | Async build | `async_build` is `asyncio.to_thread(build)` — no real CPU parallelism | 🟢 OPEN |
+| Deferral 8 | LOW | Working tree | Pre-existing uncommitted spec/plan + test-only diffs | 🟢 OPEN |
+| Hook config | — | Tooling | Session-scoped Stop hook re-fires on met goals and over-claims process gaps | 📝 [later.md](later.md) |
+
+**Recommended ship-0.1.0 punch list (priority order):**
+
+1. Deferral 1 — vendor real Alpine/HTMX/lunr bundles. Without them
+   every advertised theme interaction is a no-op.
+2. Deferral 6 — wire `watchdog.Observer` + `websockets` into
+   `DevServer.run()`. The README implies live reload works; it
+   doesn't.
+3. Deferral 8 — commit the safe test/fixture diffs; review the
+   spec/plan diffs and either commit them or drop the local changes.
+4. Deferral 2 — either compile real Tailwind output (standalone
+   CLI, no Node required) or reword the docs/spec to drop the
+   Tailwind framing.
+
+**0.2.0+ material:** Deferrals 3, 4, 7.
+
+---
+
 ## Test 1 — End-to-end smoke test
 
 **When**: 2026-06-02
@@ -470,28 +508,16 @@ diffs are documentation that's already true).
 
 ### Summary table
 
-| # | Severity | Area | Real impact |
-|---|----------|------|-------------|
-| 1 | HIGH | Vendor JS | Theme interactivity (search, toggle, TOC, back-to-top) is dead on arrival |
-| 6 | HIGH | Dev server | `bartleby serve` doesn't actually reload — advertised feature missing |
-| 2 | MEDIUM | Tailwind | Docs misrepresent the styling stack |
-| 3 | MEDIUM | Icons | Icon resolver returns `None` for everything except 4 sample SVGs |
-| 5 | MEDIUM | Crossrefs | Broken internal links silently shipped — **FIXED 2026-06-02** |
-| 7 | MEDIUM | Hooks | 12 of 17 declared events never fire; user handlers silently no-op |
-| 4 | LOW | Async build | API exists; CPU parallelism doesn't |
-| 8 | LOW | Working tree | Three uncommitted commits worth of safe diffs |
-
-**Release-blocking work**: deferrals 1 + 6.
-**Embarrassing but not blocking**: 2, 3, 5, 7.
-**Cleanup**: 4, 8.
-
-A realistic "ship 0.1.0" punch list would be: vendor real JS (1),
-wire watchdog + websockets into the dev server (6), commit the
-working-tree diffs (8), and either compile real Tailwind or update
-the marketing to drop the Tailwind framing (2). Defer 3 to a follow-up
-release. Wire `--strict` for crossrefs (5) as a small Saturday-afternoon
-PR. Hook coverage (7) and real async parallelism (4) are 0.2.0
-material.
+| # | Severity | Area | Real impact | Status |
+|---|----------|------|-------------|--------|
+| 1 | HIGH | Vendor JS | Theme interactivity (search, toggle, TOC, back-to-top) is dead on arrival | **OPEN** |
+| 6 | HIGH | Dev server | `bartleby serve` doesn't actually reload — advertised feature missing | **OPEN** |
+| 2 | MEDIUM | Tailwind | Docs misrepresent the styling stack | **OPEN** |
+| 3 | MEDIUM | Icons | Icon resolver returns `None` for everything except 4 sample SVGs | **OPEN** |
+| 5 | MEDIUM | Crossrefs | Broken internal links silently shipped | **FIXED 2026-06-02** |
+| 7 | MEDIUM | Hooks | 12 of 17 declared events never fire; user handlers silently no-op | **OPEN** |
+| 4 | LOW | Async build | API exists; CPU parallelism doesn't | **OPEN** |
+| 8 | LOW | Working tree | Pre-existing uncommitted spec/plan + test-only diffs from before this work | **OPEN** |
 
 ## Test 3 — Test quality vs. test count
 

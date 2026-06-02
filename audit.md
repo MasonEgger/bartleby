@@ -23,6 +23,13 @@ section below.
 | Deferral 4 | LOW | Async build | `async_build` is `asyncio.to_thread(build)` — no real CPU parallelism | 🟢 OPEN |
 | Deferral 8 | LOW | Working tree | Pre-existing uncommitted spec/plan + test-only diffs | 🟢 OPEN |
 | Hook config | — | Tooling | Session-scoped Stop hook re-fires on met goals and over-claims process gaps | 📝 [later.md](later.md) |
+| Design 1 | LOW | Content | `parse_front_matter` matches `---` without requiring newline after; misparse possible on docs starting `---foo` | 🟢 OPEN |
+| Design 2 | LOW | Content | `parse_front_matter` swallows non-dict YAML silently (no error surfaced) | 🟢 OPEN |
+| Design 3 | MEDIUM | Templates | `build_page_context` flattens `Page` into a hand-built dict — closed schema is why Bugs 1+2 happened. Pass the dataclass directly | 🟡 OPEN |
+| Design 4 | MEDIUM | Build | `on_pages` hook fires BEFORE draft filter — plugins operate on pages that will be discarded | 🟡 OPEN |
+| Design 5 | MEDIUM | Build | No per-page error isolation — one bad page aborts the whole build with a stack trace | 🟡 OPEN |
+| Design 6 | LOW | Plugins | `KNOWN_EVENTS` has 17 names; `BasePlugin` has 16 methods. `on_pages` is missing from BasePlugin | 🟢 OPEN |
+| Design 7 | LOW | Build | Magic strings (`"listing_kind"`, `"taxonomy_kind"`, `"term"`, `"index"`) should be StrEnum or constants | 🟢 OPEN |
 
 **Recommended ship-0.1.0 punch list (priority order):**
 
@@ -37,7 +44,10 @@ section below.
    CLI, no Node required) or reword the docs/spec to drop the
    Tailwind framing.
 
-**0.2.0+ material:** Deferrals 3, 4, 7.
+**0.2.0+ material:** Deferrals 3, 4, 7 + Design 3 (drop the
+`build_page_context` dict adapter) + Design 4 (move `on_pages` past
+the draft filter) + Design 5 (per-page error isolation). Design 1,
+2, 6, 7 are nice-to-have polish.
 
 ---
 
@@ -749,7 +759,249 @@ from the Test 1 smoke audit.
 
 ## Test 4 — Read the commits as a story
 
-_Pending._
+**When**: 2026-06-02
+**Method**: Walked the full v1 branch history (34 commits), then deep-dove
+the four commits flagged in `review.md` as architecturally load-bearing
+(Steps 4, 8, 10, 21). Looked for design errors that compound downstream.
+
+### Branch shape
+
+34 commits on `v1`, all linear (no merges, no reverts, no fixup squashes).
+The 27 implementation steps are bookended by 3 pre-Step-1 commits (spec
+drafts + plan), 1 housekeeping commit between Steps 1 and 2 (gitignore +
+pypi name), and 3 post-Step-27 commits (docs, audit fixes, audit
+tracker). Every "Step N" commit follows the same shape: imperative title,
+narrative body explaining the *why*, bulleted change list, and an
+"All checks pass: N/N tests green" footer. Commit hygiene is exceptional.
+
+Pre-existing modifications to `plan.md`, `spec.md`, `tests/fixtures/configs/
+full.yml`, and `tests/test_config.py` were never folded in — they persist
+as uncommitted diffs in the working tree (Deferral 8 in Test 2).
+
+### Step 4 — `parse_front_matter` (commit 05bc8b0)
+
+The bug-fix loop in the session summary was the obvious tell. The final
+implementation is clean — but a real edge case slipped through:
+
+**Issue A: Front matter detection is too loose.**
+```python
+if not text.startswith(FRONT_MATTER_DELIMITER):
+    return {}, text
+```
+This matches any document starting with `---`, even `---horizontal rule`
+or `---foo bar`. The closing-marker search will fail for most such
+documents (returning the original text unchanged), so it's silent — but
+a document starting with `---` whose body happens to contain `\n---`
+somewhere will accidentally have its body chopped and the chopped chunk
+fed to `yaml.safe_load`. Should require `text.startswith("---\n")` (or
+EOF after `---`).
+
+**Issue B: YAML parse failures are silently dropped.**
+```python
+parsed: Any = yaml.safe_load(front_matter_block)
+if parsed is None:
+    return {}, body
+if not isinstance(parsed, dict):
+    return {}, body
+```
+If `yaml.safe_load` returns a list, scalar, or anything non-dict, the
+function returns empty metadata silently. Metadata validation will then
+fire on the empty dict and complain about missing `title`, but the actual
+parse error (e.g. tab indentation, malformed YAML) never surfaces. Worth
+either logging or re-raising on non-dict YAML.
+
+Neither issue is critical; both are paper cuts.
+
+### Step 8 — Template system + 6-level cascade (commit c6978a1)
+
+**Strong**: `resolve_template_name` iterates *candidates first, then
+locations* (overrides → templates → theme). This is the correct ordering
+— it means a content-type-specific template in the theme wins over a
+generic defaults template in overrides. Inverting the loop order would
+break the override semantics. The cascade tests cover this well.
+
+**The architectural mistake that bit later**: `build_page_context`
+flattens the `Page` dataclass into a hand-built dict:
+
+```python
+page_namespace: dict[str, object] = {
+    "title": page.title,
+    "description": page.description,
+    ...
+    "authors": list(page.author_keys),   # this is the Bug 1 location
+}
+```
+
+The original commit message says this is "so templates can use
+mkdocs-style `page.title` access without adapter classes". But Jinja2
+reads dataclasses just fine — `page.title` works whether `page` is a
+dict or a `Page` dataclass. The hand-built dict has two real costs:
+
+1. **Closed schema.** Anything new on `Page` (like `slug_override` in
+   Step 6, `previous`/`next` in Step 9) silently doesn't reach
+   templates unless someone remembers to add it here. This is the
+   surface that caused Bug 1 (`authors` exposed as raw key strings) and
+   Bug 2 (`custom_metadata` not exposed at all, so listing templates
+   couldn't see their post lists). Both bugs survived to release.
+2. **Two parallel APIs.** Internal code reads `page.author_keys`,
+   `page.custom_metadata`, `page.output_url`. Templates read
+   `page.authors`, `page.custom_metadata`, `page.url`. The list template
+   even had `post.url` instead of `post.output_url` because of this
+   inconsistency.
+
+The fix in commit `d212d95` patches the symptoms by exposing
+`custom_metadata` and resolving authors. The real fix would be to drop
+the dict adapter and pass the `Page` dataclass directly. Worth a
+follow-up.
+
+**Other Step 8 notes:**
+- The "6-level cascade" is actually 7 levels — the `if template_type
+  != "page": candidates.append("page.html")` line adds an unconditional
+  bottom fallback to `page.html`. Doesn't break anything, but the
+  docstring count is off by one.
+- The fall-through return (`return candidates[-1]`) is silent. If
+  nothing on disk matches, the function returns the deepest candidate
+  name and lets Jinja2 raise `TemplateNotFound`. Honest but the error
+  could be friendlier.
+
+### Step 10 — MVP build pipeline (commit 44930e9)
+
+**`build()` is 120 lines with no internal phase boundaries marked.**
+Readable, but the logical phases (load, discover, validate, structure,
+render, output) are inline rather than extracted. A reader has to parse
+the structure mentally. Splitting into named helpers (`_load_inputs`,
+`_filter_and_validate`, `_render_all_pages`, `_emit_outputs`) would
+make the hook insertion points obvious and keep each phase under a
+screen.
+
+**Two real hook-placement issues:**
+
+1. **`on_pages` fires BEFORE draft filtering.** A plugin that wants
+   to augment the published page set sees drafts too, then build.py
+   filters them out. Order should be: discover → filter drafts →
+   on_pages. Right now it's: discover → on_pages → filter. Means
+   a plugin like "add canonical URL" runs on drafts that won't ship.
+
+2. **`on_env` fires AFTER `data = load_data_files`** but the env
+   doesn't see the data either way; data goes into the template
+   context separately. A plugin wanting to inject data via on_env
+   has nowhere to attach it. Need either an `on_data` event or a
+   way for `on_env` to mutate the data dict.
+
+**Hardcoded output path.** `output_dir = project_dir / "site"` — not
+configurable. Spec hardcodes `site/` so this is by design, but it
+removes a customization seam users will eventually ask for.
+
+**No per-page error isolation.** A single page rendering throwing
+(bad shortcode, unparseable date) aborts the whole build with a
+stack trace. Better: catch per-page, dispatch `on_build_error`, and
+in non-strict mode continue with the remaining pages. Real
+production sites need this.
+
+**`from bartleby.theme import get_theme_templates_dir as _theme_dir`
+is inside the function.** Should be a top-of-file import. Cosmetic.
+
+### Step 21 — Plugin system (commit 4aa5b4d)
+
+**Clean overall.** `register()` uses stable sort (registration order
+preserved within a priority). `event_priority` decorator works on both
+methods and module functions per the test suite. `discover_hooks`
+correctly skips `_`-prefixed files. The negative test
+(`test_no_entry_point_discovery`) is a great defensive measure — it
+locks in the "no public plugin API" design decision so a future refactor
+that re-adds entry_points will fail loudly.
+
+**Real issue: BasePlugin has 16 methods; `KNOWN_EVENTS` has 17.**
+
+```python
+KNOWN_EVENTS: tuple[str, ...] = (
+    "on_startup", "on_shutdown", "on_config", "on_pre_build",
+    "on_files", "on_nav", "on_env", "on_pre_page",
+    "on_page_read_source", "on_page_markdown", "on_page_content",
+    "on_page_context", "on_post_page", "on_post_build",
+    "on_build_error", "on_serve",
+    "on_pages",                                  # 17th, no BasePlugin method
+)
+```
+
+`on_pages` was added during Step 10 to support the build pipeline's
+page-filter hook, but never made it into BasePlugin's method list. A
+real `BasePlugin` subclass can't implement `on_pages` cleanly — they'd
+have to add the method themselves. Either remove `on_pages` from
+`KNOWN_EVENTS` and rename to something already declared, or add the
+matching no-op method to `BasePlugin`.
+
+**Minor: no cross-hook import support.** Each hook file is loaded into
+an isolated namespace via `importlib.util.spec_from_file_location`. A
+hook that does `import my_helper` where `my_helper` is a sibling in
+`hooks/` will fail because the hooks directory isn't on `sys.path`.
+Most real-world hook collections will want this. Workaround for users:
+put helpers in a package they install separately.
+
+**No reload semantics.** `discover_hooks` is single-shot. When the dev
+server lands its watchdog (Deferral 6), changing a hook file won't
+re-register its handlers without a server restart. The fixed
+`module_name = f"_bartleby_hook_{path.stem}"` would make re-loading
+overwrite the spec but might leak stale function references in the
+PluginCollection. Worth solving alongside Deferral 6.
+
+### Cross-step patterns
+
+**A: `Page` is the central god-object.** Almost every module touches
+the `Page` dataclass: discovery sets the basic fields, URL generation
+sets `output_url`, navigation sets `previous`/`next`, markdown rendering
+sets `rendered_content` and `excerpt`, taxonomy/listing generation
+creates virtual `Page` instances. The dataclass is comprehensible
+because it's flat (no nested mutation), but the *order* of who sets
+what is implicit. Refactoring `Page` to a frozen builder pattern
+(immutable handoffs between phases) would surface that ordering
+explicitly. Probably 0.2.0 work.
+
+**B: Virtual pages stuff state into `custom_metadata`.** Listing and
+taxonomy modules create virtual `Page` instances with their structured
+data buried in `custom_metadata["posts"]`, `custom_metadata["paginator"]`,
+etc. This is what caused Bug 2. A real fix would be subclassing
+`Page` (or a sibling type `VirtualPage`) with named attributes. The
+present approach gets away with it because mypy doesn't complain about
+dict accesses on `dict[str, object]` — but the contract between the
+generator and the template is untyped.
+
+**C: Magic strings.** `"taxonomy_kind"`, `"taxonomy_term"`,
+`"listing_kind"`, `"index"`, `"term"`, `"content_type"` appear in
+`listings.py`, `taxonomies.py`, and `build.py::_template_type_for`.
+A typo in any of them silently dispatches to the wrong template type.
+Should be `enum.StrEnum` or module-level constants.
+
+### Verdict
+
+The history is exceptionally well-structured for an unsupervised
+27-step push. Every commit is self-contained, tests pass at every
+boundary, and the architectural decisions are documented in the
+commit bodies. The four load-bearing commits I called out as
+high-risk:
+
+- **Step 4 (`parse_front_matter`)**: two minor edge cases (loose start
+  detection, silent YAML failure). Not currently biting.
+- **Step 8 (template cascade)**: cascade is correct; the dict-adapter
+  pattern in `build_page_context` is the architectural mistake that
+  caused Bugs 1 and 2 and will continue to be a pain point.
+- **Step 10 (build pipeline)**: hook placement for `on_pages` is wrong
+  (fires before draft filter); no per-page error isolation; long
+  function with implicit phases. None are bugs *today* but all three
+  will hurt as the pipeline accretes work.
+- **Step 21 (plugin system)**: clean overall; `on_pages` in
+  `KNOWN_EVENTS` but not `BasePlugin` is a small consistency miss;
+  no reload story for the future dev server.
+
+Plus three cross-cutting findings:
+- **`Page` is a god-object** with implicit phase ordering
+- **Virtual pages use untyped `custom_metadata`** (cause of Bug 2)
+- **Magic strings** (`"taxonomy_kind"`, `"listing_kind"`, etc.) should
+  be enums
+
+None of these block 0.1.0 shipping. All of them are reasonable
+0.2.0–0.3.0 cleanup targets — adding them to the audit tracker below
+as "Design 1-7" so they're queued alongside the existing deferrals.
 
 ## Test 5 — Lint the spec against the implementation
 

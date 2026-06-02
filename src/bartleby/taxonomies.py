@@ -200,6 +200,7 @@ def _make_taxonomy_term_page(
             "taxonomy_name": taxonomy_name,
             "taxonomy_kind": "term",
             "taxonomy_term": term_name,
+            "posts": term.pages,
         },
     )
     page.output_url = url

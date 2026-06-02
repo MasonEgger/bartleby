@@ -23,6 +23,7 @@ def _base_context(**overrides: object) -> dict[str, object]:
             "description": "Page desc",
             "previous": None,
             "next": None,
+            "custom_metadata": {"posts": [], "intro_content": "", "paginator": None},
         },
         "nav": [{"title": "Home", "url": "/"}, {"title": "Blog", "url": "/blog/"}],
         "pages": [],

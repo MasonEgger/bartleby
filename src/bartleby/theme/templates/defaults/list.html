@@ -1,13 +1,15 @@
 {% extends "base.html" %}
 {% block content %}
+{% set intro_content = page.custom_metadata.intro_content %}
+{% set paginator = page.custom_metadata.paginator %}
+{% set listed = paginator.items if paginator else page.custom_metadata.posts %}
 <section>
   <h1>{{ page.title }}</h1>
-  {% if page.intro_content %}{{ page.intro_content | safe }}{% endif %}
-  {% set listed = paginator.items if paginator else page.posts %}
+  {% if intro_content %}{{ intro_content | safe }}{% endif %}
   <ul>
     {% for post in listed %}
     <li>
-      <a href="{{ post.url }}">{{ post.title }}</a>
+      <a href="{{ post.output_url }}">{{ post.title }}</a>
       {% if post.excerpt %}<p>{{ post.excerpt | safe }}</p>{% endif %}
     </li>
     {% endfor %}

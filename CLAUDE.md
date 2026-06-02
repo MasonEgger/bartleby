@@ -46,6 +46,18 @@ uv run mypy src/           # Type check (strict mode)
 - Preserve existing code comments unless actively false
 - Do not add error handling for impossible scenarios
 
+## Module style (YAML-backed modules)
+
+Bartleby has several modules that parse YAML config or content into typed dataclasses. They all share the same skeleton — reuse it when adding new ones:
+
+- `from __future__ import annotations` at the top so type hints are strings
+- `if TYPE_CHECKING:` block for runtime-unused imports (`Path`, sibling-module types) to keep them out of the runtime import graph and silence ruff `TC003`
+- Type the YAML boundary as `Any` (because `yaml.safe_load` returns `Any`), then narrow with `isinstance` checks inside per-section parse helpers — keeps mypy strict happy without casting churn
+- Use `@dataclass(slots=True)` for the typed result objects; `field(default_factory=...)` for mutable defaults
+- Custom exception type per module (`ConfigError`, `AuthorError`, `ShortcodeError`, …) with a structured field where helpful (e.g. `ConfigError(message, key_path)`)
+
+Look at `src/bartleby/config.py` and `src/bartleby/authors.py` for the canonical patterns.
+
 ## Key Specs to Reference
 
 - `spec.md` — Complete project specification (canonical source of truth)

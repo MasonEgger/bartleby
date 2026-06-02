@@ -139,13 +139,19 @@ def build_page_context(
     config: BartlebyConfig,
     build_info: BuildInfo,
     data: dict[str, object],
+    authors: dict[str, Any] | None = None,
 ) -> dict[str, object]:
     """Build the template context dict for one page.
 
+    :param authors: Optional mapping of author key to :class:`Author` object,
+        used to resolve ``page.author_keys`` into rich objects with ``name``,
+        ``url``, ``avatar``, etc. for templates. Keys with no matching entry
+        are exposed as the raw key string.
     :returns: Mapping with the standard Bartleby context keys: ``site``,
         ``page``, ``nav``, ``pages``, ``taxonomies``, ``config``, ``build``,
-        ``data``, ``extra_css``, ``extra_js``.
+        ``data``, ``extra_css``, ``extra_js``, ``seo``.
     """
+    resolved_authors = _resolve_author_objects(page.author_keys, authors or {})
     page_namespace: dict[str, object] = {
         "title": page.title,
         "description": page.description,
@@ -154,8 +160,9 @@ def build_page_context(
         "url": page.output_url,
         "readtime": page.readtime,
         "excerpt": page.excerpt,
-        "authors": list(page.author_keys),
+        "authors": resolved_authors,
         "taxonomies": dict(page.taxonomy_values),
+        "custom_metadata": dict(page.custom_metadata),
         "toc": [],
         "previous": None,
         "next": None,
@@ -188,3 +195,16 @@ def _site_namespace(site_config: SiteConfig) -> dict[str, object]:
         "default_image": site_config.default_image,
         "twitter": site_config.twitter,
     }
+
+
+def _resolve_author_objects(author_keys: list[str], authors: dict[str, Any]) -> list[Any]:
+    """Map ``author_keys`` to :class:`Author` objects, falling back to the key itself.
+
+    Returning the bare key string for unknown authors keeps the build going —
+    metadata validation is the right place to fail on unknown keys, not here.
+    """
+    resolved: list[Any] = []
+    for key in author_keys:
+        author = authors.get(key)
+        resolved.append(author if author is not None else key)
+    return resolved

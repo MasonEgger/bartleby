@@ -26,6 +26,7 @@ def _ctx(**overrides: object) -> dict[str, object]:
             "previous": None,
             "next": None,
             "toc": [],
+            "custom_metadata": {"posts": [], "intro_content": "", "paginator": None},
         },
         "nav": [],
         "pages": [],

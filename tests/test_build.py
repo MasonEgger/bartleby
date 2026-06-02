@@ -40,6 +40,45 @@ def test_build_renders_blog_post(project: Path) -> None:
     assert (rendered_dir / "index.html").exists()
 
 
+def test_build_post_renders_author_byline(project: Path) -> None:
+    """Blog post HTML includes the resolved author name from ``.authors.yml``."""
+    build(project / "bartleby.yml")
+    rendered = (project / "site" / "blog" / "posts" / "first-post" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    # first-post.md front matter has `authors: [mason]`;
+    # .authors.yml maps `mason` to `Mason Egger`.
+    assert "Mason Egger" in rendered
+
+
+def test_build_listing_page_lists_published_posts(project: Path) -> None:
+    """The blog listing HTML contains a link to every published post."""
+    build(project / "bartleby.yml")
+    rendered = (project / "site" / "blog" / "index.html").read_text(encoding="utf-8")
+    # Two published posts in the fixture: first-post and second-post.
+    assert 'href="/blog/posts/first-post/"' in rendered
+    assert 'href="/blog/posts/second-post/"' in rendered
+    # Draft post must not appear.
+    assert 'href="/blog/posts/draft-post/"' not in rendered
+
+
+def test_build_sitemap_includes_listing_url(project: Path) -> None:
+    """``sitemap.xml`` lists the navigable ``/blog/`` listing URL."""
+    build(project / "bartleby.yml")
+    sitemap = (project / "site" / "sitemap.xml").read_text(encoding="utf-8")
+    assert "https://sample.example.com/blog/" in sitemap
+
+
+def test_build_taxonomy_term_page_lists_tagged_posts(project: Path) -> None:
+    """A ``/tags/python/`` term page links to every post tagged ``python``."""
+    build(project / "bartleby.yml")
+    target = project / "site" / "tags" / "python" / "index.html"
+    assert target.exists(), "taxonomy term page should be generated for `python`"
+    rendered = target.read_text(encoding="utf-8")
+    assert 'href="/blog/posts/first-post/"' in rendered
+    assert 'href="/blog/posts/second-post/"' in rendered
+
+
 def test_build_html_is_valid_structure(project: Path) -> None:
     """Rendered pages include the standard HTML5 scaffolding."""
     build(project / "bartleby.yml")
@@ -113,3 +152,30 @@ def test_calculate_readtime() -> None:
 def test_calculate_readtime_short_text() -> None:
     """Very short text still returns at least 1 minute."""
     assert calculate_readtime("hello world") == 1
+
+
+def test_build_strict_fails_on_broken_crossref(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """In strict mode, an unresolved ``.md`` link aborts the build."""
+    post_path = project / "content" / "blog" / "posts" / "first-post.md"
+    text = post_path.read_text(encoding="utf-8")
+    post_path.write_text(text + "\nSee [missing page](missing-target.md).\n", encoding="utf-8")
+    with pytest.raises(ValueError) as exc:
+        build(project / "bartleby.yml", strict=True)
+    assert "strict" in str(exc.value).lower()
+    captured = capsys.readouterr()
+    assert "missing-target.md" in captured.err
+
+
+def test_build_non_strict_warns_on_broken_crossref(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Without strict mode, broken cross-references print to stderr but do not abort."""
+    post_path = project / "content" / "blog" / "posts" / "first-post.md"
+    text = post_path.read_text(encoding="utf-8")
+    post_path.write_text(text + "\nSee [missing page](missing-target.md).\n", encoding="utf-8")
+    result = build(project / "bartleby.yml")
+    assert result.page_count > 0
+    captured = capsys.readouterr()
+    assert "missing-target.md" in captured.err

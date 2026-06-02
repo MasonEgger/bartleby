@@ -6,6 +6,7 @@ from __future__ import annotations
 import datetime
 import re
 import shutil
+import sys
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -59,13 +60,18 @@ _WORDS_PER_MINUTE = 265
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 
-def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
+def build(config_path: Path, *, include_drafts: bool = False, strict: bool = False) -> BuildResult:
     """Run the full Bartleby build pipeline against ``config_path``.
 
     :param config_path: Path to ``bartleby.yml``.
     :param include_drafts: When ``True``, draft pages are written to the
         output. Defaults to ``False`` for production builds.
+    :param strict: When ``True``, broken cross-references abort the build.
+        Cross-reference errors are always printed to stderr; ``strict`` only
+        controls whether they are fatal.
     :returns: A :class:`BuildResult` carrying the page count and wall time.
+    :raises ValueError: When metadata validation fails, or when ``strict``
+        is on and any cross-reference cannot be resolved.
     """
     started = time.perf_counter()
     plugins = PluginCollection()
@@ -125,7 +131,15 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
 
     # Cross-reference resolution needs every page rendered before any rewriting,
     # so it lives outside the render loop above and below the template render below.
-    resolve_all_crossrefs(all_pages, content_dir)
+    crossref_errors = resolve_all_crossrefs(all_pages, content_dir)
+    if crossref_errors:
+        for error in crossref_errors:
+            print(
+                f"crossref: {error.source_path} -> {error.target_path}: {error.message}",
+                file=sys.stderr,
+            )
+        if strict:
+            raise ValueError(f"strict mode: {len(crossref_errors)} unresolved cross-reference(s)")
 
     for page in all_pages:
         content_type = (
@@ -143,6 +157,7 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
             config=config,
             build_info=build_info,
             data=data,
+            authors=authors,
         )
         html = template.render(**context)
         html = plugins.run_event("on_post_page", html, page=page, config=config)
@@ -172,7 +187,7 @@ def build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
         (output_dir / "llms-full.txt").write_text(
             generate_llms_full_txt(pages, config), encoding="utf-8"
         )
-    write_sitemap(pages, config.site, output_dir)
+    write_sitemap(all_pages, config.site, output_dir)
     static_robots_exists = (project_dir / "static" / "robots.txt").exists()
     write_robots_txt(
         config.site, config.ai, output_dir, static_override_exists=static_robots_exists
@@ -202,7 +217,9 @@ def _taxonomy_context(taxonomy_data: AllTaxonomies) -> dict[str, object]:
     }
 
 
-async def async_build(config_path: Path, *, include_drafts: bool = False) -> BuildResult:
+async def async_build(
+    config_path: Path, *, include_drafts: bool = False, strict: bool = False
+) -> BuildResult:
     """Async wrapper around :func:`build` for use with ``asyncio.run``.
 
     The sync build does the heavy lifting; this coroutine offloads it to a
@@ -214,7 +231,9 @@ async def async_build(config_path: Path, *, include_drafts: bool = False) -> Bui
     """
     import asyncio
 
-    return await asyncio.to_thread(build, config_path, include_drafts=include_drafts)
+    return await asyncio.to_thread(
+        build, config_path, include_drafts=include_drafts, strict=strict
+    )
 
 
 def extract_excerpt(markdown_source: str, separator: str | None) -> str:

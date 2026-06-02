@@ -121,7 +121,9 @@ def _cmd_build(args: argparse.Namespace) -> None:
     if not config_path.exists():
         print("error: no bartleby.yml in current directory", file=sys.stderr)
         raise SystemExit(1)
-    result = asyncio.run(async_build(config_path, include_drafts=args.include_drafts))
+    result = asyncio.run(
+        async_build(config_path, include_drafts=args.include_drafts, strict=args.strict)
+    )
     print(f"Built {result.page_count} pages in {result.duration_seconds:.2f}s")
 
 
@@ -171,6 +173,8 @@ content_types:
     path: blog/posts
     readtime: true
     excerpt_separator: "<!-- more -->"
+    taxonomies:
+      - tags
 
 taxonomies:
   tags:

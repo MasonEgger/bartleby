@@ -35,6 +35,18 @@ def test_new_site_valid_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     assert config.site.title
 
 
+def test_new_site_blog_opted_into_tags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The scaffolded blog content type opts into the tags taxonomy.
+
+    Without this, a fresh user writing ``tags:`` in a post's front matter
+    sees no /tags/ pages generated and has no obvious way to discover why.
+    """
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    config = load_config(tmp_path / "mysite" / "bartleby.yml")
+    assert "tags" in config.content_types["blog"].taxonomies
+
+
 def test_new_site_directory_exists_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Re-scaffolding into an existing site directory errors out."""
     monkeypatch.chdir(tmp_path)

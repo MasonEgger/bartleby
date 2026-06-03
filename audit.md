@@ -30,6 +30,17 @@ section below.
 | Design 5 | MEDIUM | Build | No per-page error isolation — one bad page aborts the whole build with a stack trace | 🟡 OPEN |
 | Design 6 | LOW | Plugins | `KNOWN_EVENTS` has 17 names; `BasePlugin` has 16 methods. `on_pages` is missing from BasePlugin | 🟢 OPEN |
 | Design 7 | LOW | Build | Magic strings (`"listing_kind"`, `"taxonomy_kind"`, `"term"`, `"index"`) should be StrEnum or constants | 🟢 OPEN |
+| Design 8 | LOW | Templates | `resolve_template_name` docstring says "6-level cascade"; implementation has 7 (adds unconditional `page.html` fallback) | 🟢 OPEN |
+| Design 9 | LOW | Templates | `resolve_template_name` silent fall-through (`return candidates[-1]`) — Jinja2 raises `TemplateNotFound` but the error could name the candidate list | 🟢 OPEN |
+| Design 10 | LOW | Build | Output path hardcoded to `project_dir / "site"` — no config knob for users who want a different location | 🟢 OPEN |
+| Design 11 | LOW | Build | `from bartleby.theme import get_theme_templates_dir as _theme_dir` lives inside `build()` instead of module-top — cosmetic | 🟢 OPEN |
+| Design 12 | LOW | Plugins | Hook files can't import sibling modules from `hooks/` (directory not on `sys.path`). User workaround: install helpers as a package | 🟢 OPEN |
+| Design 13 | MEDIUM | Plugins | No hook-reload story. When Deferral 6 lands the watchdog, changing a hook file won't re-register handlers; stale references could leak in `PluginCollection` | 🟡 OPEN |
+| TestGap 1 | MEDIUM | Tests | `test_listings.py` verifies the virtual Page dataclass shape but never renders the list template — Bug 2 shipped despite a "passing" test suite | 🟡 OPEN |
+| TestGap 2 | LOW | Tests | `test_theme.py` and `test_theme_full.py` string-match against raw CSS file contents (`".admonition" in css`) instead of rendering + inspecting HTML | 🟢 OPEN |
+| TestGap 3 | LOW | Tests | `test_server.py` never exercises `DevServer.run()` (the only method end users hit via `bartleby serve`). Honest given Deferral 6 means there's nothing real to test | 🟢 OPEN |
+| TestGap 4 | LOW | Tests | `test_async_build.py` is tautological given `async_build = asyncio.to_thread(build)` — would pass identically if async_build were replaced with a sync function | 🟢 OPEN |
+| TestGap 5 | LOW | Tests | No CI smoke test mimicking manual Test 1 (`new site && new post && build && grep rendered output`). ~20 lines; would catch every Test 1 bug class | 🟢 OPEN |
 
 **Recommended ship-0.1.0 punch list (priority order):**
 
@@ -46,8 +57,15 @@ section below.
 
 **0.2.0+ material:** Deferrals 3, 4, 7 + Design 3 (drop the
 `build_page_context` dict adapter) + Design 4 (move `on_pages` past
-the draft filter) + Design 5 (per-page error isolation). Design 1,
-2, 6, 7 are nice-to-have polish.
+the draft filter) + Design 5 (per-page error isolation) + Design 13
+(hook-reload story alongside Deferral 6) + TestGap 1 (render
+listings/taxonomy templates in their unit tests). Design 1, 2, 6, 7,
+8-12 + TestGap 2-5 are nice-to-have polish.
+
+**Totals as of 2026-06-02:**
+- **5 fixed** (Bugs 1–4 + Deferral 5)
+- **26 open** (Deferrals 1–4, 6–8 + Hook config + Design 1–13 + TestGap 1–5)
+- **Release-blocking subset (2):** Deferral 1, Deferral 6.
 
 ---
 

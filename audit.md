@@ -41,6 +41,10 @@ section below.
 | TestGap 3 | LOW | Tests | `test_server.py` never exercises `DevServer.run()` (the only method end users hit via `bartleby serve`). Honest given Deferral 6 means there's nothing real to test | 🟢 OPEN |
 | TestGap 4 | LOW | Tests | `test_async_build.py` is tautological given `async_build = asyncio.to_thread(build)` — would pass identically if async_build were replaced with a sync function | 🟢 OPEN |
 | TestGap 5 | LOW | Tests | No CI smoke test mimicking manual Test 1 (`new site && new post && build && grep rendered output`). ~20 lines; would catch every Test 1 bug class | 🟢 OPEN |
+| Spec 1 | HIGH | Spec parity | Spec promises Phase 5 Agent Integration as v1: 9 CLI commands (render/lint/content/schema/generate-skill/export), 5 modules, `ai.skills` + `ai.agent_context` config blocks, and pipeline step 25. None implemented | 🔴 OPEN |
+| Spec 2 | MEDIUM | Theme | `theme.features` config is parsed but never consulted by any template — listing or omitting an entry has no effect on rendered HTML | 🟡 OPEN |
+| Spec 3 | LOW | Theme | `theme/templates/404.html` exists but no build step renders a standalone `/404.html` in the output — only the web server's 404 fallback | 🟢 OPEN |
+| Spec 4 | LOW | Spec parity | Spec's "Deferred Features (v2+)" lists "Data files — load YAML/JSON/CSV as template context" but they were implemented in Step 8 as a customization seam. Stale spec text | 🟢 OPEN |
 
 **Recommended ship-0.1.0 punch list (priority order):**
 
@@ -64,8 +68,9 @@ listings/taxonomy templates in their unit tests). Design 1, 2, 6, 7,
 
 **Totals as of 2026-06-02:**
 - **5 fixed** (Bugs 1–4 + Deferral 5)
-- **26 open** (Deferrals 1–4, 6–8 + Hook config + Design 1–13 + TestGap 1–5)
-- **Release-blocking subset (2):** Deferral 1, Deferral 6.
+- **30 open** (Deferrals 1–4, 6–8 + Hook config + Design 1–13 + TestGap 1–5 + Spec 1–4)
+- **Release-blocking subset (3):** Deferral 1, Deferral 6, Spec 1
+  (decide: ship Phase 5 or reword spec.md to mark it as future work).
 
 ---
 
@@ -1023,7 +1028,230 @@ as "Design 1-7" so they're queued alongside the existing deferrals.
 
 ## Test 5 — Lint the spec against the implementation
 
-_Pending._
+**When**: 2026-06-02
+**Method**: Walked `spec.md` section by section against the actual code.
+Compared the spec's component list (27 components), CLI command catalogue
+(14 commands), build pipeline (30-step order of operations), AI config
+schema, and theme features against what's in `src/bartleby/`.
+
+Note: `spec.md` has uncommitted refinements (Deferral 8) so I compared
+against the working-tree version since that represents the actual intent.
+
+### Gap Category A — Phase 5 "Agent Integration" never implemented
+
+This is the largest gap by surface area. The spec devotes entire sections
+to features that don't exist in the codebase. The 27-step
+implementation plan deliberately scoped these out, but the spec still
+describes them as v1 deliverables.
+
+**Missing CLI commands (9 of 14):**
+
+| Command | Spec describes | Implementation |
+|---|---|---|
+| `bartleby render <path>` | Single-page render to stdout | ❌ Not present |
+| `bartleby lint` | Content quality checks (broken links, orphans, missing alt text, duplicate titles, unused terms) | ❌ Not present |
+| `bartleby content list` | List content with filters/sort/fields | ❌ Not present |
+| `bartleby content get <path>` | Fetch one piece of content as structured data | ❌ Not present |
+| `bartleby schema <content-type>` | Export content type's metadata schema | ❌ Not present |
+| `bartleby schema authors` | Export author definitions | ❌ Not present |
+| `bartleby schema taxonomies` | Export taxonomy definitions + current term values | ❌ Not present |
+| `bartleby generate-skill` | Generate agent skill files from config + content analysis | ❌ Not present |
+| `bartleby export` | Serialize site to JSONL/JSON/CSV | ❌ Not present |
+
+5 of 14 commands are implemented: `new site`, `new post`, `build`,
+`validate`, `serve`.
+
+**Missing src modules (5 of 27 components):**
+
+The spec's Component Boundaries section enumerates 27 components. The
+codebase has 24 source modules; missing:
+
+- `content_query.py` (Component 23) — for `content list` / `content get`
+- `schema_introspection.py` (Component 24) — for `schema` commands
+- `linting.py` (Component 25) — for `lint`
+- `skills.py` (Component 26) — for `generate-skill`
+- `export.py` (Component 27) — for `export`
+
+`output.py` (mentioned in plan.md for structured `--output json`) is
+also missing; there is no `--output json` flag wired anywhere.
+
+**Missing config blocks:**
+
+Spec describes a full `ai.skills` configuration block:
+```yaml
+ai:
+  skills:
+    output_dir: .claude/skills
+    analyze_content: true
+    include_examples: 3
+    style_guide: null
+    regenerate_on_build: false
+```
+
+And an `ai.agent_context` block:
+```yaml
+ai:
+  agent_context:
+    voice: null
+    audience: null
+    constraints: []
+```
+
+Both are completely absent from `AIConfig` in `src/bartleby/config.py`.
+The `AIConfig` dataclass has only `llms_txt`, `llms_full_txt`,
+`markdown_variants`, and `robots` — the LLM output toggles. Everything
+else `ai.*` describes is unbuilt.
+
+**Missing build pipeline step:**
+
+Spec pipeline step 25 — "Regenerate skills — if `ai.skills.
+regenerate_on_build` is enabled, regenerate agent skill files from
+current content" — is not in `build()`. There's no skills module to
+regenerate from anyway.
+
+### Gap Category B — Build pipeline coverage
+
+Spec promises a 30-step "Order of Operations". The implementation
+covers 22 of 30:
+
+| Step | Coverage |
+|---|---|
+| 1–2 | ⚠️ Spec says "Discover plugins from pip packages and `plugins/` directory" — Step 21 implementation drops both in favour of `hooks/*.py`. Spec text is now stale. |
+| 3 (`on_startup`) | ❌ Reserved (Deferral 7) |
+| 4 (`on_config`) | ✅ |
+| 5 (`on_pre_build`) | ❌ Reserved |
+| 6 (discover content) | ✅ |
+| 7 (`on_files`) | ❌ Reserved |
+| 8 (validate metadata) | ✅ |
+| 9 (resolve nav) | ✅ |
+| 10 (`on_nav`) | ❌ Reserved |
+| 11–14 (taxonomies + listings + link pages) | ✅ |
+| 15 (`on_env`) | ✅ |
+| 16a (`on_pre_page`) | ❌ Reserved |
+| 16b (`on_page_read_source`) | ❌ Reserved |
+| 16c (shortcodes) | ✅ |
+| 16d (`on_page_markdown`) | ✅ |
+| 16e (render markdown) | ✅ |
+| 16f (`on_page_content`) | ❌ Reserved |
+| 16g (crossrefs) | ✅ (since d212d95 errors print + `--strict` honors them) |
+| 16h–j (readtime, template lookup, context build) | ✅ |
+| 16k (`on_page_context`) | ❌ Reserved |
+| 16l (render template) | ✅ |
+| 16m (`on_post_page`) | ✅ |
+| 16n (write to site) | ✅ |
+| 16o (copy colocated) | ✅ |
+| 17 (markdown variants) | ✅ |
+| 18 (tree-shake icons) | ✅ |
+| 19 (search index) | ✅ |
+| 20 (feeds) | ✅ |
+| 21 (sitemap) | ✅ |
+| 22 (robots.txt) | ✅ |
+| 23 (llms.txt) | ✅ |
+| 24 (llms-full.txt) | ✅ |
+| 25 (regenerate skills) | ❌ Not implemented |
+| 26 (render static templates 404.html etc.) | ⚠️ Theme has `404.html` template but build never renders it as a standalone `/404.html` in output |
+| 27 (copy static assets) | ✅ |
+| 28 (copy theme assets) | ✅ |
+| 29 (`on_post_build`) | ❌ Reserved |
+| 30 (`on_shutdown`) | ❌ Reserved |
+
+8 reserved hooks + 1 missing skills step + 1 missing 404 emission =
+**8 of 30 steps fully missing, 1 partial** beyond what's in the
+existing Deferral 7. The 404 gap is the only genuinely new finding
+here (the rest are already tracked as Deferral 7 or Gap A).
+
+### Gap Category C — Theme features advertised but dead
+
+Spec's "Theme Feature Toggles" section and `theme.features` config
+list claim:
+
+```yaml
+theme:
+  features:
+    - search                    # Search modal with lunr.js
+    - navigation.tabs           # Top-level nav as tabs
+    - navigation.top            # Back-to-top button
+    - navigation.sections       # Sidebar with collapsible sections
+    - navigation.expand         # Expand-all default for sections
+    - content.code.copy         # Copy button on code blocks
+    - content.tabs.link         # Tab clicks update URL
+    - toc.follow                # Sidebar TOC follows scroll
+    - announce.dismiss          # Dismissible announcement bar
+```
+
+The `ThemeConfig` dataclass accepts `features: list[str]`, but the
+bundled theme templates do not consult that list. Every "feature" the
+template hard-codes (search modal markup, dark-mode toggle, back-to-top
+button, TOC sidebar) is always emitted regardless of `theme.features`.
+And per Deferral 1, the JS that would activate any of them is a stub.
+
+This is technically two gaps stacked:
+1. **`theme.features` is a dead config value** — listing or omitting an
+   entry has no effect on the rendered HTML.
+2. **Even when markup is emitted, no JS runs** (Deferral 1).
+
+### Gap Category D — Smaller gaps
+
+**Deferred Features (v2+) section is honest.** Spec explicitly defers
+archive pages, social card generation, i18n, asset pipeline, page
+feedback widget, and migration tool. None of these are claimed as v1.
+The `data:` template seam (Step 8) does provide YAML+TOML data files —
+which the deferred list says is "deferred to v2", an inconsistency.
+The implementation actually has data files (Step 8); the deferred list
+is stale.
+
+**Spec mentions a "Future: MCP Server" section.** Explicitly future
+work; not a gap.
+
+**Spec doesn't document `extra_css` / `extra_js`** in the
+`bartleby.yml` reference but the implementation supports them
+(matches the docs/ site I wrote). The spec.md uncommitted-diff
+includes this (Deferral 8). When the spec changes are committed
+this gap closes.
+
+**Spec calls extension load order "do_markdown.fence preprocessor
+(priority 40) BEFORE pymdownx.superfences (priority 25)".** Code
+relies on Python-Markdown's natural priority ordering — there's no
+explicit re-ordering in `markdown_pipeline.py`. This works only
+because the loaded extensions self-declare those priorities. Worth a
+defensive comment or test that locks in the assertion. (Step 7 does
+have a behavioural test for this — so it is verified, just not
+documented in the code.)
+
+### What's in the code but not (yet) in spec
+
+- `extra_css` / `extra_js` config keys (working-tree spec adds these)
+- The 6-level template cascade (working-tree spec widens from 5)
+- Customization Seams enumerated as a discrete section (working-tree spec)
+- Step 21 plugin redesign (drop entry_points + `plugins/` subclass) — working-tree spec
+- `--strict` build flag (added 2026-06-02; spec doesn't mention)
+- The `--include-drafts` build flag (impl-only)
+
+When the Deferral 8 working-tree spec/plan diff lands, the first four
+of these close. The last two should be added to spec.md as a small
+follow-up.
+
+### Verdict + tracker additions
+
+The "spec vs. implementation" picture is clearer than I expected:
+
+- **Phase 5 Agent Integration is the giant missing piece.** 9 CLI
+  commands, 5 modules, 2 config blocks, 1 pipeline step. This was
+  explicitly scoped out of the 27-step plan, but the spec still
+  promises it. Anyone reading spec.md as "what Bartleby 0.1 does" is
+  going to be confused.
+- **Theme feature config is dead** — the `theme.features` list is
+  declared and parsed but nothing reads it.
+- **The 404 template is shipped but never rendered as a standalone
+  output file.**
+
+Most other gaps are already tracked (Deferral 7 reserved hooks,
+Deferral 1 dead JS, Deferral 8 working-tree spec diffs).
+
+Adding four new tracker entries — Spec 1 (Phase 5 wholesale missing),
+Spec 2 (`theme.features` is dead config), Spec 3 (404.html never
+rendered as output), Spec 4 (spec describes data files as "deferred
+to v2" but they're implemented).
 
 ## Test 6 — Run /ultrareview on the branch
 

@@ -1263,4 +1263,97 @@ to v2" but they're implemented).
 
 ## Test 6 — Run /ultrareview on the branch
 
-_Pending (user-triggered)._
+_Pending (user-triggered, billed). Out of scope for the agent;
+worth running as an independent cross-check on this audit's
+findings before acting on them._
+
+---
+
+## Next session — paths
+
+Tests 1–5 closed; tracker has 37 open items. The four reasonable
+ways to spend the next session:
+
+### Path A — Tackle the top of the punch list (release-blockers)
+
+Get the 3 release-blocking items off the tracker:
+
+1. **Deferral 1** — vendor real `alpine.min.js`, `htmx.min.js`,
+   `lunr.min.js` bundles into `src/bartleby/theme/static/js/`.
+   These are tiny (~40 KB combined gzipped), no build chain
+   needed. The CDN-served bundles can be checked in directly with
+   their license headers preserved.
+2. **Deferral 6** — wire `watchdog.Observer` and `websockets`
+   into `DevServer.run()`. The change-classification logic
+   (`classify_change`) and rebuild dispatcher (`handle_change`)
+   already exist from Step 23; just need the actual file watcher
+   and the WebSocket reload broadcast.
+3. **Spec 1** — either ship Phase 5 (large) or reword `spec.md`
+   to mark the agent-integration sections as Roadmap (cheap).
+   The "MCP Server" section already has the right shape to copy.
+
+Effort: 1–3 days for #1 and #3; #2 is the big-ticket item
+(~1 week including good live-reload UX). After this Bartleby is
+genuinely shippable.
+
+### Path B — Quick wins (small high-leverage fixes)
+
+Pick off the LOW-severity items that have small surface area but
+real impact:
+
+- **Design 14** — wrap `_cmd_build` with a clean exception
+  handler so users see "metadata validation failed: …" instead
+  of a Python traceback. ~15 lines.
+- **Design 17** — extend `bartleby validate` to also dry-run
+  URL generation, check template existence, and report crossref
+  errors. ~30 lines.
+- **Meta 1** — pick a license (MIT? Apache-2.0?), add it to
+  `pyproject.toml`, drop a `LICENSE` file at the repo root,
+  update README.
+- **Meta 2** — add a `CHANGELOG.md` seeded from the existing
+  Step 1–27 commit messages. The session summaries already
+  describe each step.
+- **Deferral 8** — review the working-tree spec/plan diffs and
+  either commit them (closes Spec 4 + closes the extra_css/js
+  drift) or revert.
+
+Effort: one focused afternoon. Closes 5 tracker items with no
+architectural risk.
+
+### Path C — Run `/ultrareview` first
+
+Before acting on any of the above, run `/ultrareview` as an
+independent cross-check on this audit. Different reviewer model,
+different prompt, different blind spots. The audit's findings are
+self-consistent but I'm the same agent that built most of this —
+worth knowing whether a fresh perspective surfaces things I
+papered over. User-triggered and billed; not something the agent
+can spawn.
+
+### Path D — Pivot to feature work
+
+The audit found 37 open items but the code in `main..v1` is a
+working SSG. If shipping isn't the immediate goal, the next
+logical feature step from the original plan was Step 28
+(structured `--output json` for every CLI command) — that's the
+foundation for everything in Phase 5 Agent Integration.
+
+`spec.md` describes the JSON output shape in the "Structured CLI
+for Agents" section. The infrastructure module would be
+`output.py` (plan.md mentions it). Each existing CLI command
+would gain an `--output {text|json}` flag and a result dataclass
+that serialises both ways.
+
+Effort: ~2–3 days. Doesn't close any audit items directly but
+unlocks Phase 5 work without committing to all of it.
+
+### Recommendation
+
+If shipping 0.1.0 matters: **Path B first (one afternoon),
+then Path A** — quick wins clear the smaller stuff so the bigger
+work isn't drag-burdened by accumulated debt. Run `/ultrareview`
+(Path C) at any point before merging the Path A work.
+
+If shipping isn't immediate: **Path D** — feature work keeps
+momentum and the tracker stays a known backlog rather than a
+blocker.

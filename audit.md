@@ -45,6 +45,12 @@ section below.
 | Spec 2 | MEDIUM | Theme | `theme.features` config is parsed but never consulted by any template — listing or omitting an entry has no effect on rendered HTML | 🟡 OPEN |
 | Spec 3 | LOW | Theme | `theme/templates/404.html` exists but no build step renders a standalone `/404.html` in the output — only the web server's 404 fallback | 🟢 OPEN |
 | Spec 4 | LOW | Spec parity | Spec's "Deferred Features (v2+)" lists "Data files — load YAML/JSON/CSV as template context" but they were implemented in Step 8 as a customization seam. Stale spec text | 🟢 OPEN |
+| Design 14 | MEDIUM | CLI error handling | `_cmd_build` has no exception handler — any error from `build()` (metadata validation, strict-mode crossref failure, missing extension import, etc.) surfaces as a raw Python traceback. `_cmd_validate` only catches `ConfigError`. Need a top-level wrap that prints clean error + exits 1 | 🟡 OPEN |
+| Design 15 | LOW | Observability | No `logging.getLogger()` anywhere in `src/`. Every output goes through `print()` (15 call sites). Hard to silence non-essential output or route to log files | 🟢 OPEN |
+| Design 16 | LOW | Build readability | `build()` is a 120-line function with no marked phase boundaries (noted in Test 4 Step 10 prose). Split into named helpers (`_load_inputs`, `_filter_and_validate`, `_render_all_pages`, `_emit_outputs`) | 🟢 OPEN |
+| Design 17 | LOW | Validate scope | `bartleby validate` only checks config + metadata + author keys. Missing: URL generation dry-run (catches bad `url_format`), template-existence check (catches dangling `template:` front-matter overrides), crossref check (catches broken `.md` links). Run these the way `--strict` does in build | 🟢 OPEN |
+| Meta 1 | LOW | Packaging | `README.md` says "License: TBD" and `pyproject.toml` has no `license` field. Blocks PyPI publication and ambiguates downstream use | 🟢 OPEN |
+| Meta 2 | LOW | Packaging | No `CHANGELOG.md`. With 27 step commits + ongoing fixes there's already enough history to warrant one | 🟢 OPEN |
 
 **Recommended ship-0.1.0 punch list (priority order):**
 
@@ -68,9 +74,11 @@ listings/taxonomy templates in their unit tests). Design 1, 2, 6, 7,
 
 **Totals as of 2026-06-02:**
 - **5 fixed** (Bugs 1–4 + Deferral 5)
-- **30 open** (Deferrals 1–4, 6–8 + Hook config + Design 1–13 + TestGap 1–5 + Spec 1–4)
+- **37 open** (Deferrals 1–4, 6–8 + Hook config + Design 1–17 + TestGap 1–5 + Spec 1–4 + Meta 1–2)
 - **Release-blocking subset (3):** Deferral 1, Deferral 6, Spec 1
   (decide: ship Phase 5 or reword spec.md to mark it as future work).
+- **Ship blockers for PyPI specifically:** Meta 1 (no license) +
+  Deferral 1 + Deferral 6.
 
 ---
 

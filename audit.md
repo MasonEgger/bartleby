@@ -3,6 +3,12 @@
 Running record of findings from the post-implementation evaluation framework
 in [`review.md`](review.md). Each section corresponds to one numbered test.
 
+> **Reading this cold?** Start with the **"Fix-it playbook for the next agent"**
+> section right after the tracker. It has project orientation, conventions,
+> verification recipes, dependencies between items, and a recommended item
+> order. Each tracker row links to the deeper test section that explains the
+> finding in full.
+
 ## Outstanding work — tracker
 
 All issues across this audit at a glance. Detailed notes in each test
@@ -79,6 +85,332 @@ listings/taxonomy templates in their unit tests). Design 1, 2, 6, 7,
   (decide: ship Phase 5 or reword spec.md to mark it as future work).
 - **Ship blockers for PyPI specifically:** Meta 1 (no license) +
   Deferral 1 + Deferral 6.
+
+---
+
+## Fix-it playbook for the next agent
+
+This section gives a fresh agent everything it needs to work through
+the tracker. Read it once, then use the tracker as your work queue.
+
+### 0 — Snapshot at handoff (2026-06-02)
+
+When this playbook was written:
+
+- **Branch**: `v1`, pushed to `origin/v1`. Do not merge to `main`
+  — that's Mason's call.
+- **Last commit**: `853ab2c` ("Add 'Next session — paths' closeout
+  to audit.md").
+- **Tests**: 282/282 pass. `ruff check`, `ruff format --check`,
+  and `mypy --strict` are all clean.
+- **Working tree has 4 uncommitted files** (this is Deferral 8):
+  `plan.md`, `spec.md`, `tests/fixtures/configs/full.yml`,
+  `tests/test_config.py`. They predate the post-implementation
+  audit work and are real refinements — review their diffs and
+  decide whether to commit them. Do NOT just blindly add them to
+  a fix commit; they deserve their own commit with a clear message.
+- **Open punch list**: 37 items in the tracker above (Deferrals,
+  Designs, TestGaps, Specs, Metas). Each links to a Test section
+  with full detail.
+
+### 1 — Project orientation (10-minute read)
+
+**What Bartleby is**: a batteries-included Python static site
+generator. The full architecture is in `spec.md`; the 27-step
+implementation roadmap that produced this codebase is in `plan.md`.
+A working sample build is in `tests/fixtures/site/`.
+
+**Tech stack**:
+
+| Layer | Tool |
+|---|---|
+| Language | Python 3.14+ |
+| Package manager | uv (`uv sync`, `uv run`) |
+| Lint + format | ruff (configured in `pyproject.toml`) |
+| Type check | mypy in strict mode (`uv run mypy src/`) |
+| Tests | pytest (`uv run pytest`) |
+| Task runner | just (`Justfile` has `check`, `lint`, `typecheck`, `test`, `format`) |
+| Templates | Jinja2 |
+| Markdown | Python-Markdown + pymdownx + do-markdown |
+
+**Where things live**:
+
+```
+src/bartleby/
+├── *.py                   # 24 source modules (spec promises 27; 5 missing — Spec 1)
+└── theme/
+    ├── templates/         # Bundled Jinja2 theme (base.html, partials/, defaults/)
+    ├── static/{css,js}/   # Theme assets (Deferral 1: js/ are stubs)
+    └── icons/             # Icon SVGs (Deferral 3: only 4 sample files)
+
+tests/
+├── test_*.py              # 27 test files, 282 tests
+├── conftest.py            # Shared fixtures (`sample_site_path`, `sample_config`)
+└── fixtures/
+    ├── site/              # Sample Bartleby project (used by integration tests)
+    ├── configs/           # Config YAML fixtures
+    ├── authors/           # .authors.yml fixtures
+    ├── templates/         # Custom template fixtures
+    └── hooks_site/        # Hook discovery fixtures
+
+docs/                      # The Bartleby docs ARE a Bartleby site
+                           # `cd docs && uv run bartleby build` produces docs/site/
+```
+
+**Specs and supporting docs**:
+
+- `spec.md` — canonical product spec (some sections describe
+  unbuilt features; see Spec 1 in tracker).
+- `plan.md` — 27-step TDD implementation roadmap (all checked off).
+- `todo.md` — original implementation checklist (all checked off).
+- `CLAUDE.md` — project-specific Claude Code instructions
+  including a **"Module style (YAML-backed modules)"** section
+  that's load-bearing for any new YAML-parsing module.
+- `README.md` — project README. Note: "License: TBD" (Meta 1).
+- `later.md` — out-of-band note about the session-scoped Stop hook
+  misbehaviour. Not in scope for the next agent.
+- `review.md` — the original 6-test audit framework.
+- `.ai-sessions/` — durable session summaries + `lessons.md` +
+  `lessons-pruned.md`. New sessions should add their own summary
+  via `/bpe:session-summary`.
+
+### 2 — Conventions you must follow
+
+**Code style** (also in `CLAUDE.md`):
+
+- Every `.py` file starts with a two-line comment, first line
+  prefixed `ABOUTME:` (grep-friendly).
+- mypy strict, no `Any` escape hatches except at YAML boundaries
+  (then narrow with `isinstance`).
+- ruff for lint + format. ~99 char line length.
+- Test-driven development: RED → GREEN → REFACTOR. Write the
+  failing test first.
+- Single responsibility per function/module.
+- Names must be evergreen — never `improved_X`, `new_X`,
+  `enhanced_X`. Just name the thing.
+- Preserve existing code comments unless actively false.
+- Do not add error handling for impossible scenarios. Validate at
+  boundaries, trust internal code.
+- **Module style for YAML-backed modules** is documented in
+  `CLAUDE.md`. Reuse the skeleton from `src/bartleby/config.py`
+  and `src/bartleby/authors.py` when adding new ones.
+
+**Verification command** — run after every code change:
+
+```bash
+just check    # ruff lint + format-check + mypy strict + pytest
+```
+
+This must be green before you commit. If any step fails, fix
+before moving on.
+
+**Commit hygiene**:
+
+- Stay on branch `v1`. Do NOT merge to `main` (Mason's job).
+- Sign every commit (`-S`). The pre-commit hook will enforce this.
+- The pre-commit hook also requires a new `.ai-sessions/session-*`
+  summary file each commit. Use `/bpe:session-summary` or write
+  one by hand following the pattern in existing summaries.
+- Title is imperative, ~70 chars max. Body explains the *why*.
+- Footer states `All checks pass: ruff lint + format, mypy strict,
+  N/N tests green.`
+- Use the BPE workflow per `~/.claude/rules/git-workflow.md`:
+  `/bpe:session-summary` → `/bpe:commit-message` → commit using
+  `git commit -S -F commit-msg.md` → `git push`.
+- `commit-msg.md` is gitignored — never stage it.
+
+**Per-fix workflow**:
+
+1. Read the tracker row + its Test section.
+2. Re-verify the finding is still open (audit was written
+   2026-06-02; another agent may have fixed it).
+3. Add a failing test (RED).
+4. Implement the fix.
+5. Run `just check` — must be green.
+6. Mark the row as `✅ FIXED YYYY-MM-DD` in the tracker.
+7. Commit + push (see "Commit hygiene").
+8. Move to the next item.
+
+### 3 — Items the agent must NOT decide alone
+
+A handful of items require a human choice. Surface them to Mason
+rather than picking arbitrarily:
+
+| Item | Decision needed |
+|---|---|
+| **Meta 1** | Which license? (MIT, Apache-2.0, BSD-3-Clause are the defaults for an SSG.) |
+| **Spec 1** | Ship Phase 5 wholesale (~weeks of work) OR reword `spec.md` to mark Phase 5 as Roadmap. The cheap fix is the rewording. |
+| **Deferral 8** | Some of the working-tree spec/plan diffs may be stale relative to fixes the next agent introduces. Review diff per file before committing. |
+| **TestGap 5** | What CI provider? GitHub Actions is the safe default since the repo is on github.com/MasonEgger. |
+
+If Mason isn't reachable, default to the conservative option
+(reword for Spec 1; MIT for Meta 1; GitHub Actions for TestGap 5;
+commit the diffs verbatim for Deferral 8 if `just check` still
+passes).
+
+### 4 — Item dependencies
+
+Some items are linked. Address them together to avoid rework:
+
+- **Deferral 6** (dev server live reload) ⇄ **Design 13** (hook
+  reload story). The watchdog wiring needs to know how to refresh
+  the `PluginCollection` when a `hooks/*.py` file changes.
+- **Deferral 1** (vendor real Alpine/HTMX/lunr) ⇄ **Spec 2**
+  (`theme.features` is dead config). Wiring real JS without
+  consulting `theme.features` means every site emits the same
+  interactivity regardless of config. Either fix both together
+  or wire `theme.features` first so the JS additions can honor it.
+- **Bug 2 fix already shipped** ⇄ **TestGap 1** (`test_listings.py`
+  never renders the list template). The integration tests I
+  added in `test_build.py` catch the bug end-to-end, but the
+  unit-level gap remains. Worth closing alongside any Page →
+  template architecture work.
+- **Design 3** (drop `build_page_context` dict adapter) ⇄ **Bug 1
+  fix already shipped** ⇄ **Bug 2 fix already shipped**. The
+  patched-symptom fixes papered over the root cause. The
+  *architectural* fix (pass `Page` dataclass directly) closes
+  Design 3 and prevents future bugs of the same family. Worth
+  doing instead of leaving the patches in.
+- **Design 14** (CLI error handling) ⇄ **Design 17** (validate
+  scope). Both touch `cli.py::_cmd_build` and `_cmd_validate`.
+  Do them in one commit.
+- **Spec 1** ⇄ all of Phase 5 (Components 23–27). The decision
+  to ship vs. reword unblocks the rest.
+
+### 5 — Recommended fix order
+
+Path B → Path A → re-audit (per the closeout below). Within
+those paths, this order minimizes rework:
+
+**Path B — quick wins (one afternoon)**:
+
+1. **Deferral 8** — review diffs, commit working-tree changes (or
+   revert). Closes 1 tracker item; unblocks Spec 4.
+2. **Meta 1** — pick a license, add `LICENSE` file, update
+   `README.md` and `pyproject.toml`. Closes 1 item.
+3. **Meta 2** — write `CHANGELOG.md` seeded from existing
+   commits. Closes 1 item.
+4. **Design 14 + Design 17 together** — wrap `_cmd_build` and
+   extend `_cmd_validate`. ~50 lines + tests. Closes 2 items.
+
+That's 4 commits, 5 items closed, no architectural risk.
+
+**Path A — release-blockers**:
+
+5. **Spec 1 (lightweight)** — reword `spec.md` to mark Phase 5
+   sections as Roadmap (unless Mason wants to ship Phase 5).
+   Updates also clear Spec 4 (data files spec drift). 1 commit.
+6. **Deferral 1** — vendor real Alpine, HTMX, lunr bundles into
+   `src/bartleby/theme/static/js/`. Total ~40 KB gzipped. Include
+   license headers. 1 commit.
+7. **Spec 2** — wire `theme.features` config into the templates.
+   Adds `{% if "search" in config.theme.features %}` guards around
+   the search modal, dark-mode toggle, back-to-top, etc. Best done
+   right after Deferral 1 so the gating matches what actually
+   works. 1 commit.
+8. **Deferral 6 + Design 13 together** — add `watchdog.Observer`
+   and `websockets` to `DevServer`. Re-glob `hooks/*.py` on
+   change. Inject a small WebSocket-reload `<script>` into served
+   HTML. ~150 lines + tests. 1 commit, possibly 2 (watchdog
+   first, then WebSocket).
+
+After Path A, the source is genuinely shippable as 0.1.0.
+
+**Remaining items** (work through in tracker order):
+
+9. Bug-family architectural fixes: **Design 3** (Page dict
+   adapter) + **TestGap 1** (render listings in unit tests). 1
+   commit each.
+10. **Design 4** — move `on_pages` hook past the draft filter. 1
+    small commit + 1 new test.
+11. **Design 5** — per-page error isolation in the render loop.
+12. **Designs 1, 2, 6, 7, 8–12, 15, 16** — small polish items.
+13. **TestGaps 2–5** — render-and-inspect theme tests, exercise
+    `DevServer.run()`, smoke test in CI.
+14. **Deferral 7** — wire remaining 12 hook events. Big mechanical
+    commit.
+15. **Deferral 3** — bulk-vendor real icon packs.
+16. **Deferral 4** — real `ProcessPoolExecutor`-based async build.
+    Decide whether to keep `asyncio.to_thread` or fully replace.
+
+### 6 — How to verify the audit findings are still real
+
+Before fixing any item, **verify it's still open**. The audit was
+written 2026-06-02; another agent or a follow-up commit may have
+addressed it. Quick checks per category:
+
+**Bug-like (already FIXED but worth re-verifying)**:
+```bash
+# Bugs 1 + 2 — smoke test
+rm -rf /tmp/bartleby-smoke && mkdir -p /tmp/bartleby-smoke
+cd /tmp/bartleby-smoke && uv run --project <path-to-repo> bartleby new site demo
+cd demo && cat > content/blog/posts/hello.md << 'EOF'
+---
+title: Hello
+date: 2026-06-02
+draft: false
+authors: [default]
+---
+Body.
+EOF
+uv run --project <path-to-repo> bartleby build
+grep -q "By" site/blog/posts/hello/index.html && echo "Bug 1 OK"
+grep -q 'href="/blog/posts/hello/"' site/blog/index.html && echo "Bug 2 OK"
+```
+
+**Deferrals**: each tracker row names the location. Check it
+directly:
+
+| Item | One-liner to verify still open |
+|---|---|
+| Deferral 1 | `cat src/bartleby/theme/static/js/alpine.min.js` — if it's a 200-byte stub, still open |
+| Deferral 6 | `grep -q "watchdog\|websockets" src/bartleby/server.py` — if nothing, still open |
+| Deferral 7 | `grep -c 'run_event(' src/bartleby/build.py` — if < 12, still open |
+| Meta 1 | `grep license pyproject.toml` — if no `license = ` line, still open |
+| Meta 2 | `test -f CHANGELOG.md` — if absent, still open |
+
+**Spec items**: read the spec section vs. the implementation.
+
+For the rest, read the tracker row's linked Test section and
+re-derive the check.
+
+### 7 — How to know you're done
+
+The agent is done when:
+
+- Every tracker row that wasn't blocked on a human decision is
+  marked `✅ FIXED YYYY-MM-DD`.
+- The "Totals" line at the top of the tracker is updated.
+- `just check` is still green.
+- The branch is pushed to `origin/v1`.
+- A summary report in a new `.ai-sessions/session-*.md` covers
+  what was fixed, what was skipped (with reason), and any
+  surprises.
+
+Then Mason will run another audit pass against the result.
+
+### 8 — Things explicitly out of scope
+
+Do NOT:
+
+- Merge to `main`.
+- Change `--no-verify` or skip the pre-commit hook.
+- Edit the BPE plugin or any file under `~/.claude/`.
+- Touch `later.md` — that's an out-of-band note about a separate
+  tool issue.
+- Pivot to Phase 5 feature work without explicit approval (Spec 1
+  requires Mason's decision).
+- Delete or move existing session summaries.
+- Bump the package version yet — that happens once Mason approves
+  shipping.
+
+### 9 — When in doubt
+
+- Read the linked Test section in this file.
+- Read `spec.md` for "what was supposed to happen".
+- Read the relevant src module for "what actually happens".
+- If still stuck, surface the question in your session summary
+  with a `<CLAUDE_HELP>...</CLAUDE_HELP>` block so Mason sees it.
 
 ---
 

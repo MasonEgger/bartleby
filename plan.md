@@ -619,55 +619,94 @@ Users override extension config via markdown_extensions in bartleby.yml.
 ```text
 Step 8: Template System. Steps 1-7 complete (config through markdown rendering).
 
-Refer to spec.md "Template System" section. Jinja2 templates with 5-level lookup:
+Refer to spec.md "Template System" section and "Customization & Extensibility > Customization Seams". Jinja2 templates with a 6-level lookup:
 1. Page front matter template override
-2. templates/{content_type}/post.html or list.html
-3. templates/{content_type}/base.html
-4. templates/defaults/post.html or list.html
-5. Theme fallback (built-in)
+2. overrides/{template_name} at project root (theme template overrides)
+3. templates/{content_type}/post.html or list.html
+4. templates/{content_type}/base.html
+5. templates/defaults/post.html or list.html
+6. Theme fallback (built-in)
 
 Also refer to spec.md "SEO" and "LLM Friendliness > JSON-LD" sections for
 meta tags that go in the base template.
+
+This step also wires four other customization seams: overrides/, extra_css /
+extra_js (config-driven asset injection), partials/ (Jinja include directory),
+and data/ (YAML/TOML files auto-loaded into the template context as `data.*`).
 
 1. RED: Write template system tests:
    - Create tests/fixtures/templates/custom_override.html:
      A simple template: "CUSTOM:{{ page.title }}"
    - Create tests/fixtures/templates/blog/post.html:
      "BLOG_POST:{{ page.title }}"
+   - Create tests/fixtures/site_with_overrides/overrides/base.html:
+     "OVERRIDE:{{ page.title }}"
+   - Create tests/fixtures/site_with_partials/partials/banner.html:
+     "<aside>Promo</aside>"
+   - Create tests/fixtures/site_with_data/data/schedule.yaml:
+     days: [Friday, Saturday]
+   - Create tests/fixtures/site_with_data/data/contacts.toml:
+     [primary]
+     name = "Mason"
 
    - Create tests/test_templates.py:
      - ABOUTME: Tests for Jinja2 template environment, lookup cascade, and context building.
      - test_theme_fallback_resolves: with no user templates, resolves to built-in theme template
      - test_page_template_override: page with template_override="custom_override.html"
        resolves to user template
+     - test_overrides_take_precedence: a template under overrides/base.html
+       wins over the same name from the built-in theme
+     - test_overrides_above_templates: overrides/ beats templates/ when both define
+       the same template (overrides is for theme replacement, templates for layout)
      - test_content_type_template: blog post resolves to templates/blog/post.html
        when it exists in user templates dir
      - test_defaults_template: non-blog page without specific template falls back
        to templates/defaults/post.html or page.html
      - test_user_overrides_theme: user template with same name as theme template
        takes precedence
+     - test_partials_are_resolvable: {% include "partials/banner.html" %} resolves
+       a file from the project's partials/ directory
      - test_context_has_required_keys: built context contains:
-       site, page, nav, pages, taxonomies, config, build
+       site, page, nav, pages, taxonomies, config, build, data
      - test_context_page_fields: page in context has title, content, url, authors,
        readtime, toc, date, description, previous, next
      - test_context_build_metadata: build has date and bartleby_version
+     - test_context_data_loaded: data.schedule.days == ["Friday", "Saturday"]
+       (from data/schedule.yaml) and data.contacts.primary.name == "Mason"
+       (from data/contacts.toml)
+     - test_data_missing_directory_is_ok: site without data/ produces an empty
+       data namespace, not an error
      - test_taxonomy_template_lookup: taxonomy page looks for
        templates/{content_type}/taxonomy/{name}.html first
      - test_jinja_env_has_correct_search_paths: environment searches
-       user templates/, then theme templates/
+       overrides/, templates/, project root (for partials/, shortcodes/),
+       then theme templates/
+     - test_extra_css_paths_in_context: when bartleby.yml has extra_css: [extra.css],
+       the build context exposes the list (template will render <link> tags)
+     - test_extra_js_paths_in_context: same for extra_js
 
 2. GREEN: Create src/bartleby/templates.py:
    - ABOUTME: Jinja2 template environment, lookup cascade, and context building.
    - create_jinja_env(config: BartlebyConfig, project_dir: Path) -> jinja2.Environment:
-     - Template search paths: [project_dir/templates, theme_templates_dir]
+     - Template search paths (in order):
+       [project_dir/overrides, project_dir/templates, project_dir,
+        theme_templates_dir]
+     - project_dir is included so that `{% include "partials/foo.html" %}` and
+       shortcode template lookups (`shortcodes/{name}.html`) resolve via
+       canonical relative paths.
      - Enable autoescape for HTML
    - resolve_template_name(page: Page, template_type: str) -> str:
-     - Implement 5-level lookup cascade
+     - Implement the 6-level lookup cascade documented above
      - template_type is "post", "list", "page", "taxonomy", "taxonomy_index"
      - Return template name string (not the template itself — let Jinja2 resolve)
+   - load_data_files(project_dir: Path) -> dict[str, object]:
+     - Glob project_dir/data/*.yaml and project_dir/data/*.toml
+     - For each file, key by Path.stem and value by parsed contents
+     - Missing data/ directory returns {}
    - build_page_context(page, site_config, nav, all_pages, taxonomy_data,
-       config, build_info) -> dict[str, object]:
-     - Build the context dict with all required keys
+       config, build_info, data) -> dict[str, object]:
+     - Build the context dict with all required keys, including `data` and
+       the config-derived `extra_css` / `extra_js` lists
 
    Create minimal built-in theme templates (functional, not styled):
    - src/bartleby/theme/__init__.py:
@@ -1043,11 +1082,16 @@ Relative paths resolved from current file's location within content/.
 ```text
 Step 14: Shortcode Preprocessing. Steps 1-13 complete (through cross-references).
 
-Refer to spec.md "Template System > Shortcodes" section.
+Refer to spec.md "Template System > Shortcodes" section and
+"Customization & Extensibility > Customization Seams" (seam 7).
 Shortcodes use [% ... %] syntax (not {% %} to avoid Jinja2 collision).
 Block: [% note %]content[% /note %]. Inline: [% version %].
 Resolved during markdown preprocessing, before markdown engine runs.
-Template fragments at templates/shortcodes/{name}.html.
+Template fragments are resolved from `shortcodes/{name}.html` at the
+project root (preferred) or `templates/shortcodes/{name}.html`
+(alternative). Both locations must be in the Jinja2 search path —
+this should already be the case if Step 8 added `shortcodes/` (or it
+is co-equal with `partials/`).
 
 1. RED: Write shortcode tests:
    - Create tests/fixtures/templates/shortcodes/note.html:
@@ -1401,23 +1445,41 @@ Refer to spec.md "LLM Friendliness" section.
 
 ## Phase 7: Extensibility
 
-### Step 21: Plugin System
+### Step 21: Internal Plugin Architecture + Hooks Directory
 
-**Context**: Steps 1-20 complete. Build pipeline has PluginCollection with run_event() call sites throughout (from Step 10), but no actual plugin support — events dict is always empty.
+**Context**: Steps 1-20 complete. Build pipeline has PluginCollection with run_event() call sites throughout (from Step 10), but no actual hook support — events dict is always empty.
 
-**Goal**: Implement BasePlugin with all 16 hooks, @event_priority decorator, plugin discovery (entry points + local plugins/ directory), and verify plugins can hook into the build pipeline.
+**Goal**: Implement the internal hook system (BasePlugin, 16 hooks, @event_priority decorator) AND the user-facing `hooks/*.py` file-convention discovery. **Drop entry-points discovery and the `plugins/` directory subclass convention** — Bartleby does not expose a public plugin API. See spec.md "Customization & Extensibility" and "Internal Plugin Architecture".
 
 ```text
-Step 21: Plugin System. Steps 1-20 complete. PluginCollection exists in plugins.py
-with run_event() already called throughout build.py, but no BasePlugin or discovery.
+Step 21: Internal Plugin Architecture + Hooks Directory. Steps 1-20 complete.
+PluginCollection exists in plugins.py with run_event() already called
+throughout build.py, but no BasePlugin, hook discovery, or user hooks yet.
 
-Refer to spec.md "Plugin System" section. 16 hooks across lifecycle, config,
-build, per-page, and post-build phases. Plugins from pip entry points or
-local plugins/ directory. @event_priority for ordering.
+Refer to spec.md "Internal Plugin Architecture" and "Customization &
+Extensibility > Customization Seams". 16 hook events. Internal modules
+register handlers programmatically. User hooks live in hooks/*.py at the
+project root — module-level functions named on_<event> are auto-registered.
+NO entry-points discovery. NO BasePlugin subclassing required for users.
+@event_priority for ordering across handler chains.
 
-1. RED: Write plugin system tests:
+1. RED: Write hook system tests:
+   - Create tests/fixtures/hooks_site/hooks/inject_banner.py:
+     ```python
+     def on_page_markdown(markdown, page, config):
+         if page.url == "/":
+             return f"# Banner!\n\n{markdown}"
+         return markdown
+     ```
+   - Create tests/fixtures/hooks_site/hooks/jinja_extras.py:
+     ```python
+     def on_env(env, config):
+         env.filters["shout"] = lambda text: text.upper() + "!"
+         return env
+     ```
+
    - Create tests/test_plugins.py:
-     - ABOUTME: Tests for plugin base class, hook dispatch, priority, and discovery.
+     - ABOUTME: Tests for the internal hook system and hooks/*.py discovery.
      - test_base_plugin_hooks_are_noop: BasePlugin instance, all hook methods
        return None by default
      - test_plugin_collection_registers_hooks: adding a plugin with on_config
@@ -1425,19 +1487,27 @@ local plugins/ directory. @event_priority for ordering.
      - test_run_event_calls_handler: registered handler called with correct args
      - test_run_event_none_keeps_value: handler returning None preserves item
      - test_run_event_new_value_replaces: handler returning new value replaces item
-     - test_event_priority_ordering: two plugins with different priorities
+     - test_event_priority_ordering: two handlers with different priorities
        called in priority order (higher first)
      - test_event_priority_default: unprioritized handlers get priority 0
-     - test_multiple_plugins_chained: three plugins modifying same event,
+     - test_multiple_handlers_chained: three handlers modifying same event,
        changes chain correctly
-     - test_discover_entry_point_plugins: mock entry points discovery
-     - test_discover_local_plugins: plugin .py file in plugins/ directory
-       discovered and loaded
-     - test_plugin_config_loaded: plugin with config class gets config validated
-     - test_build_with_plugin: end-to-end test — plugin that modifies
-       on_page_markdown (e.g., adds a banner) produces expected output
+     - test_discover_hooks_directory: hooks_site/hooks/*.py discovered;
+       on_page_markdown from inject_banner.py is registered
+     - test_discover_hooks_module_level_functions: only module-level
+       functions named on_<event> are registered; helpers are not
+     - test_discover_hooks_missing_directory_is_ok: site without hooks/
+       returns an empty PluginCollection, not an error
+     - test_no_entry_point_discovery: importlib.metadata.entry_points
+       is NOT called by discover_hooks (negative test — ensures we did
+       not silently re-add the public plugin API)
+     - test_build_with_hook: end-to-end test — hooks_site/hooks/inject_banner.py
+       prepends a banner to the homepage markdown
+     - test_hook_can_extend_jinja_env: on_env handler registers a filter
+       that is then usable in templates
 
-   All 16 hooks from spec (test they can be overridden):
+   All 16 hooks (test they dispatch and can be implemented as module
+   functions OR BasePlugin methods):
      - test_lifecycle_hooks: on_startup, on_shutdown
      - test_config_hooks: on_config
      - test_build_hooks: on_pre_build, on_files, on_nav, on_env
@@ -1448,35 +1518,41 @@ local plugins/ directory. @event_priority for ordering.
 
 2. GREEN: Extend src/bartleby/plugins.py:
    - Keep existing PluginCollection.run_event()
-   - Add BasePlugin class with all 16 hook methods (default return None):
+   - Add BasePlugin class with all 16 hook methods (default return None).
+     This class is INTERNAL — used by Bartleby's own feature modules to group
+     related handlers. Not exported as a public extension surface. Same hook
+     signatures as before:
      - on_startup(command: str) -> None
      - on_shutdown() -> None
      - on_config(config: BartlebyConfig) -> BartlebyConfig | None
      - on_pre_build(config: BartlebyConfig) -> None
-     - on_files(files: tuple[list[Page], list[ColocatedAsset]],
-         config: BartlebyConfig) -> tuple | None
-     - on_nav(nav: Navigation, config: BartlebyConfig) -> Navigation | None
-     - on_env(env: jinja2.Environment, config: BartlebyConfig) -> jinja2.Environment | None
-     - on_pre_page(page: Page, config: BartlebyConfig) -> Page | None
-     - on_page_read_source(page: Page, config: BartlebyConfig) -> str | None
-     - on_page_markdown(markdown: str, page: Page, config: BartlebyConfig) -> str | None
-     - on_page_content(html: str, page: Page, config: BartlebyConfig) -> str | None
-     - on_page_context(context: dict, page: Page, config: BartlebyConfig) -> dict | None
-     - on_post_page(output: str, page: Page, config: BartlebyConfig) -> str | None
-     - on_post_build(config: BartlebyConfig) -> None
-     - on_build_error(error: Exception) -> None
-     - on_serve(server: object, config: BartlebyConfig) -> None
-   - Add @event_priority(n) decorator
-   - Add discover_plugins(config: BartlebyConfig, project_dir: Path) -> PluginCollection:
-     - Load from entry_points(group="bartleby.plugins")
-     - Load from plugins/ directory .py files
-     - Register all hooks from discovered plugins
+     - on_files(files, config) -> tuple | None
+     - on_nav(nav, config) -> Navigation | None
+     - on_env(env, config) -> jinja2.Environment | None
+     - on_pre_page(page, config) -> Page | None
+     - on_page_read_source(page, config) -> str | None
+     - on_page_markdown(markdown, page, config) -> str | None
+     - on_page_content(html, page, config) -> str | None
+     - on_page_context(context, page, config) -> dict | None
+     - on_post_page(output, page, config) -> str | None
+     - on_post_build(config) -> None
+     - on_build_error(error) -> None
+     - on_serve(server, config) -> None
+   - Add @event_priority(n) decorator (works on both methods and module functions)
+   - Add discover_hooks(project_dir: Path) -> PluginCollection:
+     - Glob project_dir/hooks/*.py (skip __init__.py and files starting with _)
+     - importlib.util.spec_from_file_location for each file
+     - After import, inspect the module for module-level callables whose
+       names match a known hook event (on_<event>)
+     - Register each as a handler against that event in the returned PluginCollection
+     - NO entry_points lookup. NO BasePlugin subclass scanning.
    - Update PluginCollection to support priority ordering in run_event
 
 3. Wire into build.py:
-   - Call discover_plugins() at pipeline start
+   - Call discover_hooks(project_dir) at pipeline start, merge into the
+     PluginCollection that already exists from Step 10
    - The run_event() calls already exist from Step 10 — ensure they pass
-     the correct arguments matching the BasePlugin signatures
+     the correct arguments matching the hook signatures
 
 4. Verify: `just check` passes.
 ```

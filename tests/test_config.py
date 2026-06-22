@@ -65,6 +65,16 @@ def test_default_values_applied() -> None:
     assert config.dev_server.port == 8000
     assert config.ai.llms_txt is True
     assert config.ai.markdown_variants is True
+    assert config.extra_css == []
+    assert config.extra_js == []
+
+
+def test_extra_css_and_js_parsed() -> None:
+    """extra_css and extra_js lists are parsed into the config."""
+    config = load_config(FIXTURES / "full.yml")
+    assert "extra.css" in config.extra_css
+    assert "stylesheets/print.css" in config.extra_css
+    assert "js/site.js" in config.extra_js
 
 
 def test_content_type_pagination_defaults() -> None:

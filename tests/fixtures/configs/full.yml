@@ -95,6 +95,13 @@ plugins:
   - search
   - rss
 
+extra_css:
+  - extra.css
+  - stylesheets/print.css
+
+extra_js:
+  - js/site.js
+
 ai:
   llms_txt: true
   llms_full_txt: true

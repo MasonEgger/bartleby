@@ -20,7 +20,7 @@ Bartleby draws architectural ideas from Hugo (content types, taxonomies, templat
 3. **Content architecture first** — multiple content types with their own metadata schemas, URL patterns, pagination, and taxonomies. Build-time validation catches errors before deployment, not after.
 4. **Extensible by design** — Tailwind utility classes and Alpine.js directives are visible in templates. Override a partial and you can see and modify both styles and behavior. No opaque CSS class names or hidden JS component trees.
 5. **Material is the theme** — no theme marketplace, no separate theme package. Material Design is built in, reimplemented with Tailwind CSS for clean customization. Override templates and add `extra_css` if you want a different look.
-6. **Plugin-friendly** — extend via pip packages or local Python files in a `plugins/` directory.
+6. **Honest extension seams** — customization happens through eight documented seams (template overrides, hooks, data files, shortcodes, partials, extra CSS/JS, palette). The build-hook seam has two delivery forms: local Python files in `hooks/` and installable plugin packages discovered via entry points — both expose the same event surface (see "Customization & Extensibility").
 
 ---
 
@@ -38,6 +38,12 @@ site:
   author: "Mason Egger"
   default_image: /images/default-social.png  # Fallback Open Graph image
   twitter: "@maboroshi"                       # Twitter handle for cards
+  feed:                          # Site-wide aggregate feed (the homepage firehose)
+    enabled: true               # default true
+    formats: [rss, atom]        # default [rss, atom]
+    include: []                 # empty = every content type with feeds enabled; list names to restrict
+    limit: 50                   # max items in the aggregate
+    title: "Mason Egger"        # default: site.title
 
 nav:
   - Home: index.md
@@ -150,9 +156,10 @@ ai:
   robots:                    # AI-specific robots.txt directives
     allow: [GPTBot, ClaudeBot, PerplexityBot]
     # disallow: [GPTBot]     # ← block specific AI crawlers
+  agent_surface: true        # Generate schema.json + content-index.json at the site root
   skills:
     output_dir: .claude/skills   # Where to write generated skills
-    analyze_content: true        # Extract voice/patterns from existing content
+    # analyze_content — RESERVED, not supported in v1 (deferred; setting it is a validation error)
     include_examples: 3          # Example posts per content type to include in skills
     style_guide: null            # Optional: path to explicit style rules (e.g., content/style-guide.md)
     regenerate_on_build: false   # Auto-regenerate skills on `bartleby build`
@@ -161,6 +168,13 @@ ai:
     audience: null               # e.g., "Python developers with 2+ years experience"
     constraints: []              # e.g., ["All code examples must be runnable", "Include prerequisites section in tutorials"]
 
+extra_css:
+  - extra.css
+  - stylesheets/print.css
+
+extra_js:
+  - js/site.js
+
 dev_server:
   host: "127.0.0.1"
   port: 8000
@@ -168,7 +182,7 @@ dev_server:
 
 ### Configuration Sections
 
-- **site**: Global site metadata (title, URL, description, author) and SEO defaults (default_image, twitter handle).
+- **site**: Global site metadata (title, URL, description, author), SEO defaults (default_image, twitter handle), and the `feed` block for the site-wide aggregate feed (see "Feed Generation").
 - **nav**: MkDocs-style navigation definition. Ordered list of nav items. Supports nesting. Omit to auto-generate from directory structure.
 - **theme**: Material theme configuration (palette, color mode, features, icon packs, logo, favicon, fonts).
 - **authors_file**: Path to the authors definition file (default: `.authors.yml`).
@@ -176,8 +190,10 @@ dev_server:
 - **taxonomies**: Site-wide taxonomy definitions with slugification options. Content types opt in via their `taxonomies` list.
 - **exclude_patterns**: Gitignore-style patterns to exclude files from content discovery.
 - **markdown_extensions**: Configure Python-Markdown extension options. All default extensions (do-markdown, pymdownx, standard) are loaded automatically — this section is for overriding their configuration or adding new extensions.
-- **plugins**: List of enabled plugins. Pip-installed packages and local `plugins/` files are both valid.
-- **ai**: AI and agent integration settings — control `llms.txt`, `llms-full.txt`, markdown variant generation, AI crawler directives in `robots.txt`, skill generation configuration, and agent context (voice, audience, constraints).
+- **plugins**: Feature-module and plugin control. Built-in feature modules (e.g. `search`, `rss`, `redirects`) are enabled by default; this section disables them or supplies per-feature configuration. Installed third-party plugins (entry-point discovered) register automatically; list one here as `<name>: false` to disable it without uninstalling. See "Internal Plugin Architecture".
+- **extra_css**: List of CSS files (relative to the project root) to copy into the build output and link from every page's `<head>`. See "Customization & Extensibility > Customization Seams".
+- **extra_js**: List of JavaScript files (relative to the project root) to copy into the build output and inject as `<script>` tags. See "Customization & Extensibility > Customization Seams".
+- **ai**: AI and agent integration settings — control `llms.txt`, `llms-full.txt`, markdown variant generation, the static agent surface (`schema.json` + `content-index.json`), AI crawler directives in `robots.txt`, skill generation configuration, and agent context (voice, audience, constraints).
 - **dev_server**: Development server configuration (host, port).
 
 ### Config Validation
@@ -188,7 +204,7 @@ Bartleby validates `bartleby.yml` at load time:
 - Content type paths must exist under `content/`
 - Taxonomy names referenced in content types must be defined in `taxonomies`
 - Markdown extension names must be importable
-- Plugin names must be discoverable (entry points or `plugins/` directory)
+- `theme.features` entries must be known feature names (unknown names are validation errors)
 - Invalid config produces clear error messages with the offending key path
 
 ---
@@ -267,8 +283,8 @@ my-site/
 │       └── posts/
 │           ├── pycon-2025.md
 │           └── pycon-2025-slides.pdf  # Co-located asset, copied to output
-├── templates/               # User template overrides
-├── plugins/                 # Local plugin files
+├── templates/               # User templates
+├── hooks/                   # Local build hooks (hooks/*.py)
 ├── static/                  # Site-wide static assets (logo, favicon, etc.)
 └── site/                    # Build output (generated)
 ```
@@ -1188,12 +1204,13 @@ Bartleby uses Jinja2 for all template rendering. The Material theme's templates 
 When rendering a page, Bartleby resolves the template using this cascade (first match wins):
 
 1. **Page-specific** — front matter specifies `template: custom.html`
-2. **Content type + layout** — `templates/{content_type}/post.html` (for single posts) or `templates/{content_type}/list.html` (for listing pages)
-3. **Content type default** — `templates/{content_type}/base.html`
-4. **Base defaults** — `templates/defaults/post.html`, `templates/defaults/list.html`
-5. **Theme fallback** — Bartleby's built-in Material theme templates
+2. **Project overrides** — matching template under `overrides/` at the project root (see "Customization & Extensibility > Customization Seams")
+3. **Content type + layout** — `templates/{content_type}/post.html` (for single posts) or `templates/{content_type}/list.html` (for listing pages)
+4. **Content type default** — `templates/{content_type}/base.html`
+5. **Base defaults** — `templates/defaults/post.html`, `templates/defaults/list.html`
+6. **Theme fallback** — Bartleby's built-in Material theme templates
 
-At each level, user project templates (in `templates/`) take precedence over theme templates.
+At every level, user project templates (under `overrides/` and `templates/`) take precedence over theme templates. Project templates may extend theme templates via `{% extends "base.html" %}` and override `{% block %}` definitions — this is the recommended way to make targeted theme customizations without forking the whole theme.
 
 For taxonomy pages, the lookup order is:
 
@@ -1257,9 +1274,73 @@ This action cannot be undone.
 
 Shortcodes are resolved during markdown preprocessing, before the markdown engine runs. They are rendered as Jinja2 template fragments with access to the full page context.
 
-**Shortcode template location:** `templates/shortcodes/{name}.html` (user) or built-in theme shortcodes.
+**Shortcode template location:** `shortcodes/{name}.html` at the project root (preferred, see "Customization & Extensibility > Customization Seams"), `templates/shortcodes/{name}.html` (alternative location), or built-in theme shortcodes.
 
 **Note:** Many common embed use cases (YouTube, CodePen, Twitter, Instagram) are already handled by do-markdown extensions using their own syntax (e.g., `[youtube dQw4w9WgXcQ]`). Shortcodes are for custom reusable components beyond what do-markdown provides.
+
+---
+
+## Customization & Extensibility
+
+### Philosophy: Batteries Included, Narrow Seams
+
+Bartleby is opinionated and ships features in the core distribution rather than relying on a third-party plugin ecosystem. Search, RSS, social cards, redirects, sitemap, SEO, LLM output, and the Material theme are all built in — none of them require external packages.
+
+Customization happens through a small set of well-defined seams that cover the realistic needs of personal sites, conference sites, technical blogs, and project documentation. Anything that cannot be expressed through these seams is a candidate for inclusion in core or for a new seam, decided case by case.
+
+**There is a public plugin API, and it is deliberately small (decided 2026-06-12).** Third-party plugins are supported in v1 through two delivery forms of the *same* event surface: local `hooks/*.py` files and pip-installable packages discovered via entry points (`pip install bartleby-plugin-*`). A plugin is just a module of `on_<event>` handlers — the 16 hook events documented under "Internal Plugin Architecture" — whether it lives in the project's `hooks/` directory or in an installed package. There is no separate, larger plugin class hierarchy to learn or maintain.
+
+Two guardrails keep this from becoming the governance liability that plugin ecosystems historically become: **batteries stay included** (search, feeds, taxonomies, SEO, the agent surface all ship in core — plugins are never required for table-stakes functionality), and **the event surface is provisional during 0.x** (see "Versioning & Release Policy") — plugin authors are on notice that hook signatures may change between 0.x versions while the API hardens against real-world use.
+
+### Customization Seams
+
+Bartleby supports exactly these forms of project-level customization:
+
+1. **Theme template overrides** — drop Jinja2 templates in `overrides/` at the project root. Templates here `{% extends %}` and override `{% block %}`s in the bundled theme. Identical mental model to Material for MkDocs' `theme.custom_dir`.
+2. **Additional CSS** — `extra_css:` in `bartleby.yml` lists paths (resolved relative to the project root) that are copied to the output and linked into every page's `<head>`.
+3. **Additional JavaScript** — `extra_js:` in `bartleby.yml` lists paths copied to the output and linked as `<script>` tags.
+4. **Theme palette and CSS variables** — declared in `theme.palette` and (optionally) `theme.css_vars` in the config. Bartleby emits these as CSS custom properties on `:root` and per color scheme.
+5. **Build hooks** — module-level functions named after Bartleby's hook events (`on_pre_build`, `on_page_markdown`, `on_page_context`, `on_post_build`, etc.), delivered either as Python files in `hooks/` at the project root (auto-discovered, no installation step) or as pip-installed plugin packages registered via the `bartleby.plugins` entry-point group. Same events, same signatures, two delivery forms.
+6. **Data files** — YAML and TOML files under `data/` are auto-loaded and exposed to all templates as `data.{filename_stem}`. PyTexas-style "build the schedule from a YAML file" works without a hook.
+7. **Custom shortcodes** — drop a Jinja2 template under `shortcodes/` at the project root. Bartleby invokes it for `[% shortcode_name %]` references in markdown. No Python required.
+8. **Custom partials** — drop a Jinja2 template under `partials/` at the project root. Reference from any template via `{% include "partials/foo.html" %}`.
+
+Project root layout:
+
+```
+my-site/
+├── bartleby.yml
+├── content/                  # markdown content (per content_types config)
+├── static/                   # static files copied to site root
+├── overrides/                # ← seam 1: theme template overrides
+├── extra.css                 # ← seam 2: referenced from extra_css
+├── extra.js                  # ← seam 3: referenced from extra_js
+├── hooks/                    # ← seam 5: hooks/*.py auto-discovered
+│   └── schedule.py
+├── data/                     # ← seam 6: data/*.yaml, data/*.toml
+│   └── schedule.yaml
+├── shortcodes/               # ← seam 7: shortcodes/*.html
+│   └── callout.html
+└── partials/                 # ← seam 8: partials/*.html
+    └── newsletter-signup.html
+```
+
+### What Is NOT a Public Extension Surface
+
+These are internal to Bartleby and may change between versions without notice:
+
+- The `BasePlugin` convenience class and Bartleby's *internal* handler registration mechanics (the 16 hook events themselves are the public plugin surface — provisional during 0.x, see "Versioning & Release Policy")
+- The build pipeline order and the names of internal phases
+- The internal Page, ContentType, Navigation, Site dataclass shapes
+- The cross-reference resolver and its rewriting passes
+- The default Python-Markdown extension set (users may add extensions via `markdown_extensions` in config; the defaults themselves are fixed)
+- The *implementation* of the agent-ready output layer (`llms.txt`, `.md` variants, JSON-LD, `schema.json`, `content-index.json`, skill generation). The published *formats* of these artifacts are a stable contract for consuming agents; the Python code that produces them is not.
+
+If a use case cannot be served by one of the eight seams (including a plugin against the hook events), the resolution is to ship the feature in core, extend the hook surface, or add a new seam — decided case by case with a bias toward core.
+
+### Theme Swapping
+
+Bartleby v1 ships exactly one theme: the bundled Material theme. The template system is designed to accommodate alternative themes in the future (themes live as Python packages under `bartleby/themes/{name}/` and are selected via `theme.name` in config), but no public theme registry or community theme ecosystem is supported in v1. Project-level theming happens through the `overrides/` seam.
 
 ---
 
@@ -1326,13 +1407,26 @@ Configurable via `bartleby.yml` `theme` section:
   - `search.share` — shareable search links
   - `toc.follow` — TOC follows scroll position
 
-### Theme Asset Pipeline
+**Feature toggle enforcement:** every feature listed above is a real conditional — enabling it adds the corresponding markup/behavior to rendered output, disabling it removes that markup entirely (not just visually hides it). Templates consult `theme.features` through a single `feature(name)` template helper so the gating is testable. An unknown feature name in config is a **validation error** at build time (fail fast, consistent with config validation), never silently ignored.
 
-During Bartleby **development**: Tailwind standalone CLI compiles CSS from template classes. No Node dependency.
+### Theme Asset Pipeline (Hybrid Tailwind — decided 2026-06-12)
 
-In the **shipped package**: Compiled CSS, Alpine.js, HTMX, and lunr.js are vendored. Users never need Tailwind, Node, or npm.
+Tailwind generates CSS by scanning templates for used classes, so *when* compilation runs determines what users can style. Bartleby uses a hybrid model:
 
-For **user template overrides**: The shipped CSS includes comprehensive Tailwind utility classes covering common customization needs. Users needing additional styles add `extra_css` files — same workflow as mkdocs-material today.
+**Default path (zero dependencies):** The wheel ships CSS **compiled by the real Tailwind standalone CLI at package build time** from the bundled theme's templates, plus a curated safelist of common utilities. Alpine.js, HTMX, and lunr.js are vendored as real, pinned, minified bundles (exact versions recorded in `THIRD-PARTY-NOTICES`). Users who don't customize never need Tailwind, Node, npm, or a network connection — `bartleby build` is pure Python.
+
+**Customizer path (`bartleby theme compile`):** Users who add Tailwind utility classes in `overrides/`, `partials/`, or `shortcodes/` templates run `bartleby theme compile`. This:
+
+1. Downloads the platform-appropriate Tailwind standalone binary **on demand** (pinned version, SHA-256 checksum verified, cached in the platform cache dir — e.g. `~/.cache/bartleby/`), or uses a `tailwindcss` binary already on `PATH`.
+2. Compiles theme + project templates into `<project>/.bartleby/theme.css`, which the build prefers over the shipped CSS when present.
+3. Is **idempotent and offline after first run** — the cached binary is reused; `--refresh` forces re-download.
+
+The dev server detects when project templates contain classes missing from the active CSS and auto-triggers a recompile **if** the binary is already cached; otherwise it prints a one-line hint to run `bartleby theme compile`. The binary download never happens implicitly — only the explicit command downloads.
+
+**Testable components:**
+- Binary resolver: PATH binary → cached binary → explicit download, with checksum verification failure aborting cleanly
+- Compiled-CSS preference: `.bartleby/theme.css` wins over shipped CSS when present and newer than the template tree
+- Dev-server recompile trigger fires only when the binary is cached
 
 ---
 
@@ -1441,9 +1535,11 @@ Term pages with many posts are paginated using the same pagination system as con
 
 ## Feed Generation
 
-### RSS and Atom
+Bartleby produces feeds at two levels: one per content type, and one site-wide aggregate.
 
-Feeds are generated per content type based on configuration:
+### Per-content-type feeds
+
+Each content type opts in through its own config:
 
 ```yaml
 content_types:
@@ -1454,13 +1550,42 @@ content_types:
 - Feeds include title, description, date, author, excerpt, and full content
 - Feed URLs follow standard conventions (`/blog/feed.xml`, `/blog/atom.xml`)
 - Feeds validate against their respective specifications
-- Feed `<link>` tags are included in the HTML `<head>` for auto-discovery
+
+### Site-wide aggregate feed (decided 2026-06-21)
+
+Configured under `site.feed`, this is the homepage firehose: one feed that merges items across content types.
+
+```yaml
+site:
+  feed:
+    enabled: true            # default true
+    formats: [rss, atom]     # default [rss, atom]
+    include: []              # see scope rule below
+    limit: 50                # max items
+    title: "Mason Egger"     # default: site.title
+```
+
+- **Scope rule:** an empty `include: []` means every content type that has `feeds` enabled. A non-empty list restricts the aggregate to exactly those content types. A type listed in `include` but lacking its own `feeds` is a config validation error (you cannot aggregate a feed that is not generated).
+- Items are merged across the included types, sorted by date descending, and capped at `limit`.
+- Each item carries a `<category>` naming its source content type, so a reader can filter within the single subscription.
+- Output paths are at the site root: `/feed.xml` (RSS) and `/atom.xml` (Atom), per `formats`.
+- A static `pages`-style content type with no `feeds` stays out of the aggregate automatically.
+
+### Auto-discovery `<link>` tags
+
+The `<link rel="alternate">` advertised in a page's `<head>` is contextual, which is what makes section-level subscription work in browsers and reader extensions:
+
+- The homepage and any non-content-type page advertise the aggregate feed (`/feed.xml`).
+- A content type's listing page and its individual posts advertise that type's feed as the primary alternate, with the aggregate feed listed second so it stays discoverable.
 
 ### Testable Components
 
 - Feed builder: generates valid RSS 2.0 and Atom 1.0 XML
 - Content extraction: pulls correct metadata and content for feed items
 - URL generation: produces correct absolute URLs for feed items
+- Aggregate scope: empty `include` covers all feed-enabled types; non-empty restricts to the listed set; a listed type without its own feed fails validation
+- Aggregate ordering and cap: merged items are date-descending and truncated to `limit`
+- Contextual auto-discovery: homepage advertises the aggregate; content-type pages advertise the type feed first, aggregate second
 
 ---
 
@@ -1509,7 +1634,7 @@ Bartleby is designed for equal drivability by humans and AI agents. This covers 
 1. **Every operation has a structured interface** — All CLI commands produce JSON output via `--output json`. An agent never needs to parse human-readable text.
 2. **Self-describing schemas** — Agents can discover what's valid (content types, metadata fields, taxonomies, authors) via introspection commands, without reading config files directly.
 3. **Non-interactive by default** — Every command is fully operable via flags. Interactive prompts are a convenience for humans, never a requirement.
-4. **Skill generation** — Bartleby generates agent skills from site content, teaching AI agents the site's voice, structure, and conventions.
+4. **Skill generation** — Bartleby generates agent skills from site config and schemas, teaching AI agents the site's content types, metadata rules, and conventions. (Voice/structure inference from content is deferred — see "Deferred Features.")
 5. **Content as data** — Content is queryable, exportable, and importable in structured formats.
 
 ---
@@ -1539,6 +1664,8 @@ Auto-generated `llms.txt` at the site root following the [llmstxt.org](https://l
 ```
 
 Links point to the `.md` variants so LLMs receive markdown, not HTML. Content is organized by content type. Descriptions come from the `description` front matter field.
+
+`llms.txt` is the **discovery root** for the entire machine-readable surface: there is no web convention for finding arbitrary JSON manifests, but llmstxt.org *is* an emerging convention agents already probe for (like `robots.txt`). The file therefore opens with a "Machine-readable" section linking by absolute URL to `schema.json` and `content-index.json` (below), so an agent that finds llms.txt finds everything. `robots.txt` also carries a comment line pointing at `/llms.txt` for belt-and-suspenders discoverability.
 
 Controlled by `ai.llms_txt` config (default: `true`).
 
@@ -1582,6 +1709,26 @@ site/about/index.md
 ```
 
 Visiting `/blog/2026/03/01/my-post/index.md` on any static host returns the raw markdown. LLMs and tools that prefer markdown over HTML can append `.md` to any page URL.
+
+For per-page discoverability, every rendered HTML page includes `<link rel="alternate" type="text/markdown" href="...index.md">` in its `<head>` — an agent that lands on any page (not just the site root) can find the clean markdown variant without guessing paths.
+
+#### Static Agent Surface: schema.json and content-index.json (decided 2026-06-12)
+
+Bartleby publishes the site's full machine-readable description as **static build artifacts** — no server, no auth, no API. Because drafts are excluded at build time, the built output *is* the publication boundary: nothing unpublished can leak, by construction. Any agent fetches these over plain HTTPS from any static host.
+
+**`/schema.json`** — the site manifest. The static equivalent of `bartleby schema`, describing:
+
+- Site identity: title, description, base URL, language
+- Content types: name, URL format, and full metadata schema (required/optional fields, types, valid choices)
+- Taxonomies: names and the complete list of terms in use (with counts)
+- Authors: public author data (name, URL, bio — never email-style private fields)
+- Feed locations (per-type and the site-wide aggregate), sitemap, llms.txt, and the content-index URL
+
+**`/content-index.json`** — the content index. The static equivalent of `bartleby content list`: one entry per **published** page with its URL, `.md` variant URL, and curated front matter.
+
+**Field curation rule:** front matter splits into two classes. **Semantic fields are included** — title, description, date, updated, content type, taxonomy terms, authors, and all custom metadata-schema fields (e.g. `difficulty: intermediate`); these describe the content and are exactly what agents want, and because the schema manifest documents those custom fields, index and schema stay self-consistent. **Mechanical fields are excluded** — `template`, `draft`, URL overrides, TOC/render toggles; these configure the build, not describe the content. The test for any future field: *does it describe the content, or configure the build?* Describers go in, configurers stay out.
+
+Both artifacts are emitted at the site root (the build owns the output tree; a user content file that would collide with a generated artifact path is a **build error** with a clear message). Controlled by `ai.agent_surface` config (default: `true`).
 
 #### JSON-LD Structured Data
 
@@ -1638,11 +1785,15 @@ If neither `allow` nor `disallow` is set, no AI-specific directives are added (d
 
 Bartleby can generate agent skills — structured prompt files that teach AI coding agents how to create, review, and manage content for a specific site. This is Bartleby's core agent-first feature: the SSG that teaches AI how to write for your site.
 
-#### How It Works
+#### How It Works (v1: deterministic templating — decided 2026-06-12)
 
-`bartleby generate-skill` reads the site configuration and (optionally) analyzes existing content to produce skill files. These skills are standard markdown files with frontmatter that agent systems (like Claude Code's skill system) can consume.
+`bartleby generate-skill` performs **deterministic templating, not content analysis**. It renders bundled skill templates filled in with the site's actual shape — content types and their metadata schemas, taxonomies and existing terms, authors, available shortcodes, and the correct CLI invocations — the same data that backs `schema.json`. No NLP, no heuristics, no LLM calls, no network. Same inputs, same output, every time.
 
-The generated skills are written to `ai.skills.output_dir` (default: `.claude/skills/`).
+The resulting skill is immediately site-specific in the way that matters: the agent learns "this site has `tutorials` with a required `difficulty` field choosing from beginner/intermediate/advanced," not just generic Bartleby usage.
+
+The generated skills are written to `ai.skills.output_dir` (default: `.claude/skills/`). These skills are standard markdown files with frontmatter that agent systems (like Claude Code's skill system) can consume.
+
+**Voice/tone content analysis is deferred** — see "Deferred Features." v1 skills carry explicit `ai.agent_context` config verbatim (below) but never inferred style patterns.
 
 #### Generated Skills
 
@@ -1652,8 +1803,7 @@ Teaches an agent to create new content for the site. Includes:
 
 - Exact metadata schema for each content type (required fields, types, valid choices)
 - Available authors, taxonomies, and existing taxonomy terms
-- Voice and tone patterns (extracted from content analysis or explicit `ai.agent_context` config)
-- Structural conventions (heading patterns, section ordering, code-to-prose ratio)
+- Explicit voice/audience/constraints from `ai.agent_context` config, included verbatim when set
 - Example posts (configurable count per content type via `ai.skills.include_examples`)
 - The correct CLI command to create posts (`bartleby new post ... --output json`)
 
@@ -1661,11 +1811,10 @@ Teaches an agent to create new content for the site. Includes:
 
 Teaches an agent to review and improve existing content. Includes:
 
-- Site-specific quality criteria derived from content patterns
-- Metadata completeness checks
+- Metadata completeness checks against the site's actual schemas
 - Cross-reference validation expectations
-- Taxonomy consistency rules (e.g., "use existing tags when possible")
-- Style conformance guidelines from `ai.agent_context` or analyzed patterns
+- Taxonomy consistency rules (e.g., "use existing tags when possible" — with the actual term list)
+- Style conformance guidelines from `ai.agent_context` and the configured style guide
 - The correct CLI command to validate (`bartleby validate --output json`)
 
 **`bartleby-ops.md`** — Site operations skill
@@ -1678,24 +1827,13 @@ Teaches an agent to operate the site. Includes:
 - Export commands for data extraction
 - Schema introspection commands for self-discovery
 
-#### Content Analysis
+#### Content Analysis (deferred from v1)
 
-When `ai.skills.analyze_content` is `true` (default), the skill generator performs heuristic analysis of existing content to extract patterns:
-
-| Pattern | How Extracted | Example Output |
-|---|---|---|
-| Voice/tone | Sentence length distribution, person (1st/2nd/3rd), formality markers | "Second person, technical but approachable, avg sentence 15 words" |
-| Structure | Heading frequency, common section titles, section ordering | "H2 every ~300 words; tutorials use: Prerequisites → Steps → Conclusion" |
-| Code density | Code block frequency relative to prose | "Code block every ~200 words, mostly Python" |
-| Length | Word count distribution per content type | "Blog posts: 800-1500 words. Tutorials: 1500-3000 words." |
-| Taxonomy usage | Tag/category frequency histogram | "Top tags: python (15), temporal (4), web (8). Prefer existing tags." |
-| Front matter patterns | Which optional fields are typically populated | "89% of blog posts include 'image'. All tutorials set 'difficulty'." |
-
-The analysis is heuristic — no LLM calls, no network requests. It uses basic NLP metrics (word counts, sentence splitting, regex patterns) to extract these patterns deterministically.
+Heuristic content analysis — inferring voice/tone, structural conventions, code density, length norms, and front-matter habits from the existing corpus and baking them into generated skills — is **deferred from v1** and tracked in "Deferred Features." It is also the flagged candidate for a future sponsorware/insiders feature: it is additive (gating it never removes anything from free users), high-value, and embodies accumulated heuristics that are hard to knock off. The `ai.skills.analyze_content` config key is **reserved** but rejected by v1 config validation with a clear "not yet supported" error.
 
 #### Explicit Agent Context
 
-The `ai.agent_context` config provides explicit overrides that take precedence over analyzed patterns:
+The `ai.agent_context` config provides explicit voice/audience/constraint declarations that are included verbatim in generated skills:
 
 ```yaml
 ai:
@@ -1709,7 +1847,7 @@ ai:
       - "Code blocks must specify the language for syntax highlighting"
 ```
 
-When both analysis and explicit context exist, explicit context wins. Analyzed patterns fill gaps that explicit context doesn't cover.
+In v1, explicit context is the only source of voice/style information in generated skills. (When deferred content analysis ships, explicit context will take precedence over analyzed patterns, with analysis filling gaps.)
 
 #### Skill Regeneration
 
@@ -1783,22 +1921,29 @@ Each step gives the agent structured data to inform the next step. No guessing, 
 
 ---
 
-### Future: MCP Server
+### No MCP Server (decided 2026-06-12)
 
-A future version of Bartleby may expose an MCP (Model Context Protocol) server as a plugin or built-in command (`bartleby mcp`). This would expose site content as resources and build operations as tools over the MCP protocol, enabling deeper integration with MCP-compatible agent systems. The structured CLI and schema introspection commands are designed to map cleanly onto an MCP interface when this is implemented.
+Bartleby will **not** ship an MCP (Model Context Protocol) server. The decision, for the record:
+
+- **For site consumption** (third-party agents reading a deployed site), a live MCP server is the wrong shape for a *static* site generator: it reintroduces a runtime process, hosting requirements, authentication, and an unpublished-content leak surface — everything the static architecture exists to avoid. The static agent surface (`llms.txt` discovery root → `schema.json` + `content-index.json` + `.md` variants + JSON-LD) serves the same need with zero infrastructure: drafts never reach the build output, so there is nothing to authenticate, and any agent fetches over plain HTTPS from any static host.
+- **For authoring** (the site owner's own agent, locally), the structured CLI with `--output json` plus generated skills already serve local agents — there is no auth problem locally, and no MCP value-add over the JSON CLI contract.
+
+The CLI's JSON output schemas are specified as a stable contract, so if genuine demand for a thin local MCP wrapper ever materializes, third parties (or a future Bartleby) can build one *on top of* the CLI without Bartleby owning protocol surface. This is not a roadmap item.
 
 ---
 
 ### Testable Components
 
-- llms.txt generator: produces valid llmstxt.org format from site content
+- llms.txt generator: produces valid llmstxt.org format from site content, with the machine-readable section linking schema.json and content-index.json by absolute URL
 - llms-full.txt generator: inlines full markdown content
 - Markdown variant writer: strips front matter, writes correct paths
+- Alternate-link injection: every rendered page's `<head>` carries `<link rel="alternate" type="text/markdown">` to its `.md` variant
+- schema.json generator: emits site identity, content-type schemas, taxonomy terms, public author data; never private fields
+- content-index.json generator: one entry per published page; semantic fields included, mechanical fields excluded; drafts never appear
+- Artifact collision detection: user content that would occupy a generated artifact path fails the build with a clear message
 - JSON-LD generator: produces valid Schema.org markup for Article and WebPage types
-- Robots.txt AI directives: correctly merges crawler policy into robots.txt
-- Skill generator: produces valid skill files from config and content analysis
-- Content analyzer: extracts correct patterns from corpus (voice, structure, length, taxonomy usage)
-- Agent context merger: explicit config overrides analyzed patterns correctly
+- Robots.txt AI directives: correctly merges crawler policy into robots.txt; includes llms.txt pointer comment
+- Skill generator: deterministic — identical config/schema inputs produce identical skill files; agent_context included verbatim when set
 - JSON output formatter: all commands produce valid, correctly-structured JSON
 - Schema introspection: correct schema derivation from bartleby.yml for each content type
 
@@ -1870,18 +2015,27 @@ Bartleby generates Schema.org JSON-LD in the base template for every page. See t
 
 ---
 
-## Plugin System
+## Internal Plugin Architecture
+
+### Purpose
+
+Bartleby uses a hook-based architecture internally to organize its own modular features — search index generation, RSS, social cards, SEO, sitemap, LLM output, etc. — each lives in a module that registers handlers against build-pipeline events. This pattern keeps the codebase composable and the build pipeline readable.
+
+**The same pattern is the public plugin surface (decided 2026-06-12).** The 16 hook events below are what internal feature modules, project `hooks/*.py` files, and installed plugin packages all register against — one event surface, three handler sources. The events and their argument shapes are the public plugin API, **provisional during 0.x**: signatures may change between 0.x versions (changelogged) while the API hardens against real-world plugins. There is deliberately no richer plugin framework — no required class hierarchy, no plugin lifecycle beyond the events, no plugin-to-plugin dependency mechanism.
 
 ### Architecture
 
-Plugins use a hook-based system. Bartleby emits events at various stages of the build process, and plugins register handlers for the events they care about. Handlers are called in registration order, with an `@event_priority()` decorator available for explicit ordering.
+Bartleby emits events at various stages of the build process, and registered handlers run in priority order (`@event_priority()` decorator) and then registration order. Handlers may return `None` (preserve the event's current value) or a new value (replace the current value for downstream handlers).
 
-### Plugin Sources
+### Handler Sources
 
-1. **Pip-installable packages** — distributed as Python packages, installed with `pip install bartleby-plugin-name`
-2. **Local files** — Python files in the project's `plugins/` directory
+1. **Internal modules** — Bartleby's own feature modules register handlers at load time.
+2. **Project `hooks/*.py`** — user code at the project root; module-level functions named `on_<event>` are auto-registered. No installation step.
+3. **Installed plugin packages** — pip-installed distributions exposing the `bartleby.plugins` entry-point group. Each entry point names a module; its module-level `on_<event>` functions are registered exactly like a hooks file. Discovered automatically at startup; a specific installed plugin can be disabled by name via the `plugins:` config section.
 
-### Plugin API Hooks
+Handler execution order is identical regardless of source: priority (`@event_priority`), then registration order (internal → installed plugins alphabetically → project hooks, so project-local code always gets the last word at equal priority).
+
+### Hook Events
 
 **Lifecycle hooks** (once per invocation):
 
@@ -1917,34 +2071,51 @@ Plugins use a hook-based system. Bartleby emits events at various stages of the 
 
 - `on_serve(server, config)` — runs when dev server starts. Can add watched paths or modify server behavior.
 
-### Plugin Registration
+### Handler Registration
 
-Pip packages use Python entry points:
+Bartleby's internal modules register handlers programmatically at load time (no decorator-based class registry is required, but `BasePlugin` is available as a convenience for grouping related handlers).
 
-```toml
-[project.entry-points."bartleby.plugins"]
-my-plugin = "my_plugin:MyPlugin"
+User-level handlers in `hooks/*.py` are discovered by scanning the project's `hooks/` directory. Each `.py` file is imported once; module-level functions whose names match a hook event (e.g. `on_pre_build`, `on_page_markdown`) are registered as handlers for that event. Example:
+
+```python
+# hooks/inject_announcement.py
+from bartleby.types import Page, BartlebyConfig
+
+
+def on_page_markdown(markdown: str, page: Page, config: BartlebyConfig) -> str:
+    """Prepend an announcement banner to the homepage."""
+    if page.url == "/":
+        return f"!!! info \"Announcement\"\n    The 2026 schedule is live!\n\n{markdown}"
+    return markdown
 ```
 
-Local plugins are auto-discovered from the `plugins/` directory. Each `.py` file should define a class that inherits from `bartleby.plugins.BasePlugin`.
+For the `hooks/` form: no subclassing, no entry points, no installation step. An installable plugin is the same module shape published as a package with a `bartleby.plugins` entry point.
 
-### Template Extensions
+### Template Extensions via Hooks
 
-Plugins can register (via the `on_env` hook):
+User hooks can register custom Jinja2 filters, globals, and variables by handling the `on_env` event:
 
-- Custom Jinja2 filters
-- Custom Jinja2 global functions
-- Custom template variables
+```python
+# hooks/jinja_extras.py
+import jinja2
+
+
+def on_env(env: jinja2.Environment, config) -> jinja2.Environment:
+    env.filters["shout"] = lambda text: text.upper() + "!"
+    return env
+```
 
 ### Markdown Extensions
 
-Plugins can register additional Python-Markdown extensions (via the `on_config` hook) to be included in the rendering pipeline.
+Additional Python-Markdown extensions can be enabled per project via `markdown_extensions:` in `bartleby.yml`. Hooks may also register extensions dynamically via `on_config`.
 
 ### Testable Components
 
-- Plugin loader: discovers and loads plugins from both sources
-- Hook dispatcher: calls plugin hooks in correct order with correct arguments
-- Plugin isolation: plugins don't interfere with each other
+- Hook discovery: scans `hooks/*.py` and registers module-level handlers
+- Plugin discovery: registers `on_<event>` handlers from `bartleby.plugins` entry-point modules; `plugins: {<name>: false}` config disables a named plugin
+- Internal handler registration: feature modules register their own handlers
+- Hook dispatcher: calls handlers in priority then registration order (internal → installed plugins → project hooks) with correct arguments
+- Handler isolation: handlers do not interfere with each other
 
 ---
 
@@ -1961,6 +2132,8 @@ All commands support these flags:
 
 When `--output json` is specified, all output is valid JSON written to stdout. Errors are JSON objects with an `"error"` key. Exit codes remain meaningful: 0 for success, 1 for errors, 2 for usage errors.
 
+**Error contract (all commands):** failures never surface as raw Python tracebacks. Every error prints a clean, single-purpose message — file path and line where known, cause, stable error code — to stderr in text mode, or a structured error object to stdout in JSON mode, then exits 1 (or 2 for usage errors). `BARTLEBY_DEBUG=1` re-enables full tracebacks for development. The JSON output schemas of all commands are a **stable contract** for agent consumers — changes to them are breaking changes under the versioning policy.
+
 ### Commands
 
 ```bash
@@ -1972,6 +2145,7 @@ bartleby new post <title>      # Create a new content file with front matter
 bartleby build                 # Build site to site/ directory
 bartleby serve                 # Start dev server with live reload
 bartleby render <path>         # Render a single page (fast feedback)
+bartleby theme compile         # Recompile theme CSS including project overrides (Tailwind)
 
 # Validation and linting
 bartleby validate              # Validate config and content (metadata schemas, etc.)
@@ -2001,8 +2175,8 @@ Creates a new project directory with:
 ├── .authors.yml          # Default authors file
 ├── content/
 │   └── index.md          # Default homepage
-├── templates/            # Empty, for user overrides
-├── plugins/              # Empty, for local plugins
+├── templates/            # Empty, for user templates
+├── hooks/                # Empty, for hooks/*.py build hooks
 └── static/               # Empty, for static assets
 ```
 
@@ -2045,11 +2219,12 @@ JSON output:
 ### `bartleby serve`
 
 - Starts a local development server (configurable host/port, default `127.0.0.1:8000`)
-- Watches for file changes and rebuilds automatically
+- Watches for file changes and triggers a **full rebuild** (incremental rebuilds are deferred — see "Development Server")
 - Live reload via WebSocket (browser refreshes on change)
 - Shows draft content
-- Displays build errors in the terminal
-- Supports `--dirty` flag for faster rebuilds (only rebuilds changed files)
+- On rebuild failure: keeps serving the **last good build** and surfaces the error in both the terminal and the browser
+- Restarts the pipeline (re-registering hooks) when `bartleby.yml` or `hooks/*.py` change
+- Auto-triggers `bartleby theme compile` when override templates use classes missing from the active CSS and the Tailwind binary is already cached
 
 Additional flags:
 - `--events` — Emit structured JSON events to stdout (one JSON object per line): file changes, rebuild results, errors. Useful for agents monitoring the dev server.
@@ -2058,6 +2233,23 @@ Event format:
 ```json
 {"event": "rebuild", "trigger": "content/blog/posts/foo.md", "status": "success", "duration_ms": 340, "pages_rebuilt": 3}
 {"event": "error", "trigger": "content/blog/posts/foo.md", "message": "required field 'date' missing", "file": "content/blog/posts/foo.md", "line": 1}
+```
+
+### `bartleby theme compile`
+
+Recompiles the theme CSS with the real Tailwind standalone CLI, scanning bundled theme templates **plus** project `overrides/`, `partials/`, and `shortcodes/` so user-added utility classes work. See "Theme Asset Pipeline" for the full design.
+
+Flags:
+- `--refresh` — Force re-download of the Tailwind binary (otherwise the cached, checksum-verified binary is reused)
+
+Behavior:
+- Resolves the binary: `tailwindcss` on `PATH` → cached binary → explicit download (pinned version, SHA-256 verified)
+- Writes compiled CSS to `<project>/.bartleby/theme.css`; subsequent builds prefer it over the shipped CSS
+- Never runs implicitly during `bartleby build`; the dev server may auto-trigger it only when the binary is already cached
+
+JSON output:
+```json
+{"status": "success", "css_path": ".bartleby/theme.css", "binary": "cached", "duration_ms": 410, "classes_scanned": 1842}
 ```
 
 ### `bartleby build`
@@ -2217,11 +2409,10 @@ JSON output:
 
 ### `bartleby generate-skill`
 
-Generates agent skills from site configuration and content analysis. See the **AI & Agent Integration > Skill Generation** section for full details.
+Generates agent skills by deterministic templating from site configuration and schemas. See the **AI & Agent Integration > Skill Generation** section for full details. (Content analysis is deferred — see "Deferred Features.")
 
 Flags:
 - `--type <skill-type>` — Generate only a specific skill: `write`, `review`, `ops` (default: all)
-- `--analyze-content` — Perform deep content analysis for voice/pattern extraction (default: uses `ai.skills.analyze_content` config)
 - `--dry-run` — Show what would be generated without writing
 - `--force` — Overwrite existing skill files
 
@@ -2274,7 +2465,7 @@ JSONL output (one object per line):
 ### Order of Operations
 
 1. **Load configuration** — parse `bartleby.yml`, validate
-2. **Discover plugins** — load from pip packages and `plugins/` directory
+2. **Discover hooks and plugins** — register internal feature-module handlers, discover installed plugin packages via the `bartleby.plugins` entry-point group, then scan project `hooks/*.py` for module-level `on_<event>` functions (see "Internal Plugin Architecture")
 3. **Fire `on_startup`** — one-time plugin initialization
 4. **Fire `on_config`** — plugins can modify config
 5. **Fire `on_pre_build`** — plugins can set up resources
@@ -2307,11 +2498,12 @@ JSONL output (one object per line):
 17. **Write markdown variants** — for each page, write stripped markdown to `.md` file alongside HTML (if `ai.markdown_variants` enabled)
 18. **Tree-shake icons** — scan rendered HTML for icon references, copy only used SVGs to `site/`
 19. **Generate search index** — build lunr.js JSON index from all rendered pages
-20. **Generate feeds** — RSS/Atom for configured content types
+20. **Generate feeds** — per-content-type RSS/Atom, then the site-wide aggregate feed at the root
 21. **Generate sitemap** — sitemap.xml and sitemap.xml.gz
 22. **Generate robots.txt** — include AI crawler directives from config, unless overridden by static/robots.txt
-23. **Generate llms.txt** — site overview with links to `.md` variants (if `ai.llms_txt` enabled)
+23. **Generate llms.txt** — site overview with machine-readable links to schema.json/content-index.json and links to `.md` variants (if `ai.llms_txt` enabled)
 24. **Generate llms-full.txt** — full site content in markdown (if `ai.llms_full_txt` enabled)
+24a. **Generate static agent surface** — schema.json and content-index.json at the site root (if `ai.agent_surface` enabled)
 25. **Regenerate skills** — if `ai.skills.regenerate_on_build` is enabled, regenerate agent skill files from current content
 26. **Render static templates** — 404.html and other static templates
 27. **Copy static assets** — copy `static/` to `site/`
@@ -2321,33 +2513,34 @@ JSONL output (one object per line):
 
 On build error at any stage, `on_build_error` is fired before `on_shutdown`.
 
-### Async Build Architecture
+### Build Failure Semantics (decided 2026-06-12)
 
-Bartleby uses asyncio to maximize build performance. The build pipeline is an async orchestrator that parallelizes I/O-bound work (file reads, file writes) using `aiofiles`, while CPU-bound work (markdown rendering, template rendering) is dispatched to a `ProcessPoolExecutor` via `asyncio.run_in_executor()`.
+**Fail-fast, amended: collect everything, ship nothing partial.**
 
-**Critical design constraint**: All plugin hooks run in the main process. Only the pure rendering work (markdown→HTML, template→output) is dispatched to worker processes. This keeps the plugin API simple — plugin authors never deal with serialization, pickling, or cross-process state. The main process orchestrates: fire pre-hooks → dispatch render to pool → collect result → fire post-hooks → async write to disk.
+- A page-level error (broken front matter, bad shortcode, Jinja error, broken cross-reference in strict mode) does **not** abort on first occurrence: the build continues collecting page-level errors across the **entire** render pass, then fails once with the complete list. Migrating 200 posts yields one build run with all errors, not 200 sequential failures.
+- **`site/` is only written on full success.** A failed build never produces a deployable-but-incomplete artifact — output is staged and committed atomically (render to a working area, swap in on success). A "successful" build silently missing pages is worse than a failed one.
+- Errors are reported cleanly: file path, line where known, cause, and a stable error code — **never a raw Python traceback**. In `--output json` mode, errors are structured objects. Exit code 1. (`BARTLEBY_DEBUG=1` re-enables tracebacks for development.)
+- Errors that precede page rendering (invalid config, missing authors file) fail immediately — there is nothing to collect.
+- `on_build_error` fires once with the collected error list before `on_shutdown`.
 
-The build phases that benefit from parallelism:
+**Testable components:**
+- Multiple bad pages produce one failure listing all of them
+- Failed build leaves a previous `site/` untouched and writes no partial output
+- Error objects carry file/line/code; JSON mode emits them structured; exit codes correct
+- Config-stage errors fail fast without a render pass
 
-- **Step 6 (content discovery)**: Async directory scanning and concurrent front matter parsing
-- **Step 16e (markdown rendering)**: The CPU-bound `markdown.convert()` call is dispatched to a process pool. Steps 16a-d (plugin hooks, shortcodes) and 16f-o (post-render hooks, template rendering, file/asset writing) run in the main process with async I/O.
-- **Steps 17-18 (markdown variants, icon tree-shaking)**: Can run concurrently after all pages are rendered
-- **Steps 19-24 (search index, feeds, sitemap, robots.txt, llms.txt, llms-full.txt)**: Generated concurrently
-- **Step 25 (skill regeneration)**: Runs only if configured; can run concurrently with asset copying
-- **Steps 27-28 (asset copying)**: Async file copy operations
+### Build Execution Model (revised 2026-06-12)
 
-Sequential phases (config loading, navigation building, taxonomy resolution) remain synchronous as they build shared state needed by later stages.
+**The v1 build is synchronous.** Real-world Bartleby sites build in well under a second; parallelism is not a v1 problem. The spec previously promised an asyncio + `ProcessPoolExecutor` architecture — that is now explicitly **deferred** (see "Deferred Features") so the implementation and the spec say the same thing.
 
-The dev server uses an async HTTP server with WebSocket support for live reload, following patterns from uvicorn/starlette.
+What v1 ships:
 
-### Dirty Build Mode
+- `build()` — the canonical synchronous pipeline implementing the order of operations above.
+- `async_build()` — a thin `asyncio.to_thread(build, ...)` wrapper so embedding applications (and the dev server) can await a build without blocking an event loop. It provides **concurrency for callers, not parallelism for the build** — and is documented as exactly that.
 
-When using `bartleby serve --dirty` or `bartleby build --dirty`:
+The deferred parallel architecture (when build times justify it) keeps the already-specified design constraint: all hooks run in the main process; only pure rendering work is dispatched to workers.
 
-- Only files modified since the last build are re-rendered
-- Modification detected via file system timestamps
-- Config, template, or taxonomy changes trigger a full rebuild
-- Navigation links may be stale (acceptable for dev)
+The dev server uses an async HTTP server with WebSocket support for live reload.
 
 ### Testable Components
 
@@ -2409,37 +2602,52 @@ Same pagination UI as mkdocs-material — numbered pages with next/previous link
 
 ## Development Server
 
-### Live Reload
+### Live Reload (revised 2026-06-12)
 
-- File watcher monitors `content/`, `templates/`, `static/`, `plugins/`, `.authors.yml`, and `bartleby.yml`
-- On change: rebuild affected pages (incremental if `--dirty`, full rebuild if config/template changes)
-- WebSocket connection pushes reload signal to browser
+- File watcher (watchdog) monitors `content/`, `templates/`, `overrides/`, `static/`, `hooks/`, `data/`, `shortcodes/`, `partials/`, `.authors.yml`, and `bartleby.yml`
+- **Every change triggers a full rebuild.** Bartleby builds are sub-second at realistic site sizes; incremental rebuilds are premature optimization and explicitly deferred (see "Deferred Features")
+- `bartleby.yml` or `hooks/*.py` changes restart the build pipeline so configuration and hook handlers re-register — editing a hook file takes effect without restarting the server process
+- A WebSocket connection pushes the reload signal to the browser; the reload snippet is injected into served pages **only in serve mode**, never into `bartleby build` output
+- **Failure behavior:** when a rebuild fails, the server keeps serving the last good build and displays the collected build errors in the browser (and terminal) instead of a dead site
 - Draft content is included in dev server builds
 
 ### Testable Components
 
-- File watcher detects changes in correct directories
-- Incremental rebuild correctly identifies affected pages
-- Full rebuild triggered on config/template/taxonomy changes
-- WebSocket server sends reload signals
+- File watcher detects changes in all watched directories
+- Full rebuild triggered on any watched change; config/hook changes re-register handlers
+- WebSocket server sends reload signals; reload snippet absent from non-serve builds
+- Failed rebuild preserves and serves the previous good output with error reporting
 
 ---
 
-## Deferred Features (v2+)
+## Deferred Features
 
-The following features are explicitly out of scope for v1 but should be considered in the architecture:
+The following features are explicitly out of scope for v1 but should be considered in the architecture. Deferral is demand-driven: items graduate when real usage asks for them, not on a schedule.
+
+**Ecosystem (staged deliberately):**
+
+- **Public theme API + additional themes** — themes as installable packages, plus first-party ReadTheDocs-style and minimal themes. v1 ships exactly the Material theme; the internal theme interface must survive real-world use before it becomes a public contract. (Entry-point *plugin* discovery, by contrast, ships in v1 — revised 2026-06-12 per review.)
+- **Voice/tone content analysis for skill generation** — heuristic inference of voice, structure, and conventions from the existing corpus, baked into generated skills. *Flagged as the primary candidate for a future sponsorware/insiders feature*: additive (gating it never removes anything from free users), high-value, hard to replicate.
+
+**Performance (deferred until build times justify it):**
+
+- **Incremental rebuilds** — `--dirty` mode rebuilding only changed pages. Full rebuilds are sub-second at realistic site sizes.
+- **Parallel build architecture** — asyncio orchestrator + `ProcessPoolExecutor` for markdown rendering, `aiofiles` for async I/O. Design constraint preserved: hooks stay in the main process.
+
+**Features:**
 
 - **Archive pages** — auto-generated date-based archives (e.g., `/blog/archive/2025/`)
-- **Social card generation** — auto-generate Open Graph images (plugin)
+- **Social card generation** — auto-generate Open Graph images
 - **Internationalization (i18n)** — multilingual site support
-- **Data files** — load YAML/JSON/CSV as template context data
 - **Asset pipeline** — SCSS compilation, fingerprinting, minification
 - **Page feedback widget** — thumbs up/down or rating on pages (requires server-side endpoint via HTMX)
-- **Migration tool** — `bartleby migrate` command to convert `mkdocs.yml` → `bartleby.yml` and `docs/` → `content/` for users coming from MkDocs
+- **Migration tool** — `bartleby migrate` command to convert `mkdocs.yml` → `bartleby.yml` and `docs/` → `content/` for users coming from MkDocs. High-leverage for adoption; first candidate to graduate.
 
 ---
 
-## License
+## License, Funding, and Versioning
+
+### License
 
 Bartleby is licensed under the **MIT License**.
 
@@ -2453,6 +2661,20 @@ Bundled third-party assets have their own licenses, documented in a `THIRD-PARTY
 - **HTMX** — BSD 2-Clause
 - **lunr.js** — MIT
 
+### Funding & Governance (decided 2026-06-12)
+
+- **The core is free, forever.** Everything documented in this spec ships MIT-licensed with no paid tier.
+- **Paid themes / open-core are permanently ruled out.** Gating existing or table-stakes functionality behind payment recreates the exact governance dynamic (mkdocs-material → Zensical) cited in this spec's Motivation as a problem Bartleby exists to solve.
+- **Sponsorware (insiders-style early access) is the eventual funding mechanism if the project earns traction.** Sponsors get new *additive* features early; everything flows to the free release eventually. Nothing is withheld permanently. The deferred voice/tone content-analysis feature is the flagged first candidate.
+- **Owner-operated.** No VC, no foundation, no governance handoff is planned. Decisions rest with the maintainer.
+
+### Versioning & Release Policy (decided 2026-06-12)
+
+- **The first public release is 0.1.0.** The project may remain on 0.x minor versions for an extended period — 0.x does not mean broken; it means the stability contract has not been declared yet.
+- **Promotion to 1.0.0 happens only by explicit maintainer decision.** It is never triggered automatically by feature completeness, time elapsed, or adoption metrics.
+- The release bar at every version is **"works as advertised"**: every feature this spec describes as shipped must function — no stub assets, no inert config keys, no advertised-but-absent behavior. Anything not ready moves to "Deferred Features" rather than shipping broken.
+- Within 0.x: breaking changes to config, CLI, JSON output schemas, the static agent surface, or template context are allowed but documented in the changelog. The hook-event surface — shared by `hooks/` files and installed plugins — is **provisional** and may change between any 0.x versions (see "Internal Plugin Architecture"); declaring 1.0 freezes it.
+
 ---
 
 ## Technical Stack
@@ -2464,7 +2686,7 @@ Bundled third-party assets have their own licenses, documented in a `THIRD-PARTY
 - **Syntax highlighting**: Pygments (via pymdownx.highlight)
 - **Search**: lunr.js (client-side), JSON index (build-time)
 - **Dev server**: Built-in (async HTTP server + WebSocket for live reload)
-- **Async**: asyncio + ProcessPoolExecutor for parallel builds, aiofiles for async I/O
+- **Build execution**: synchronous pipeline; `async_build()` thread wrapper for event-loop callers (parallel architecture deferred — see "Deferred Features")
 - **CLI**: argparse (stdlib)
 - **Testing**: pytest
 - **Linting**: ruff
@@ -2484,7 +2706,6 @@ Bundled third-party assets have their own licenses, documented in a `THIRD-PARTY
 - `watchdog` — file system monitoring for dev server
 - `websockets` — live reload WebSocket server
 - `python-slugify` — URL slug generation
-- `aiofiles` — async file I/O for build parallelism
 
 ### Bundled (vendored, not pip dependencies)
 - `alpine.js` — theme interactivity
@@ -2504,7 +2725,9 @@ Bundled third-party assets have their own licenses, documented in a `THIRD-PARTY
 
 ### Bundled Icons
 
-All four icon packs ship with the Bartleby Python package:
+All four icon packs ship **complete** inside the Bartleby wheel (decided 2026-06-12: full vendoring over on-demand download or pip extras — a content feature must never fail on network, and the ~10MB compressed wheel cost is acceptable; mkdocs-material ships the same way). Tree-shaking keeps built sites lean regardless of package size.
+
+The packs:
 
 - **Material Design Icons** — `material-*`
 - **FontAwesome** — `fontawesome-brands-*`, `fontawesome-solid-*`, `fontawesome-regular-*`
@@ -2547,7 +2770,7 @@ The following components should be implemented and tested independently:
 11. **Listings** — generate content type listing pages with optional index.md content
 12. **Pagination** — split content into pages, generate paginator context
 13. **Search** — build JSON index from rendered content
-14. **Feeds** — generate RSS/Atom XML
+14. **Feeds** — generate per-type and site-wide aggregate RSS/Atom XML
 15. **SEO** — generate Open Graph, Twitter Card, and canonical URL meta tags
 16. **Sitemap** — generate sitemap.xml and sitemap.xml.gz
 17. **Icons** — resolve icon references, tree-shake unused icons from output

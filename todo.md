@@ -128,13 +128,13 @@ prompts and `audit.md` for the findings each step closes. 6 of 18 steps done.
 
 ## Phase 7 — Release readiness
 
-- [ ] **Step 17: Smoke test and test-quality hardening** (TestGap 1-5)
-  - [ ] 17.1: RED — e2e smoke (scaffold/post/build, grep title + byline + listing)
-  - [ ] 17.2: RED — render list + taxonomy templates and assert posts appear
-  - [ ] 17.3: RED — theme tests render-and-inspect HTML, not raw CSS strings
-  - [ ] 17.4: RED — DevServer.run() integration test
-  - [ ] 17.5: GREEN — fix underlying code, not the tests
-  - [ ] 17.6: Add smoke test to CI; run `just check`
+- [x] **Step 17: Smoke test and test-quality hardening** (TestGap 1-5)
+  - [x] 17.1: RED — e2e smoke (scaffold/post/build, grep title + byline + listing)
+  - [x] 17.2: RED — render list + taxonomy templates and assert posts appear
+  - [x] 17.3: RED — theme tests render-and-inspect HTML, not raw CSS strings
+  - [x] 17.4: RED — DevServer.run() integration test
+  - [x] 17.5: GREEN — fix underlying code, not the tests
+  - [x] 17.6: Add smoke test to CI; run `just check`
 
 - [ ] **Step 18: Packaging and polish** (Meta 1-2, Design 1, 2, 7-12, 16, 17)
   - [ ] 18.1: RED — front-matter newline (Design 1) + non-dict YAML error (Design 2) + configurable output dir (Design 10) + expanded validate (Design 17)

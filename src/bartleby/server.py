@@ -247,14 +247,22 @@ class DevServer:
             self.emit_event({"type": "rebuild", "status": "ok"})
         return errors
 
-    def run(self) -> None:  # pragma: no cover — exercised only via the CLI
-        """Start the HTTP server until interrupted."""
+    def run(self, *, ready: Callable[[socketserver.TCPServer], None] | None = None) -> None:
+        """Start the HTTP server, serving the built site until interrupted.
+
+        :param ready: Optional callback fired once the socket is bound and
+            listening, receiving the live ``TCPServer``. Tests use it to learn
+            the ephemeral port and to call :meth:`~socketserver.BaseServer.shutdown`
+            from another thread; in normal CLI use it is ``None``.
+        """
         self.build_once()
         site_dir = self.config_path.parent / "site"
         handler = _site_request_handler(site_dir)
         with socketserver.TCPServer((self.host, self.port), handler) as httpd:
             self.dispatch_on_serve(httpd)
             print(f"Serving at http://{self.host}:{httpd.server_address[1]}/")
+            if ready is not None:
+                ready(httpd)
             with contextlib.suppress(KeyboardInterrupt):
                 httpd.serve_forever()
 

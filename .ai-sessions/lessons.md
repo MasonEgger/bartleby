@@ -3,6 +3,8 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- To integration-test a blocking `serve_forever()` server (`DevServer.run`), add an optional `ready` callback fired right after the socket binds, passing the live `TCPServer`; the test runs `run` in a daemon thread, learns the ephemeral port and calls `shutdown()` from the callback handle, then joins. This exercises the previously `# pragma: no cover` path with zero behavior change when `ready=None` (2026-06-23)
+- `pytest` imported at a test module's top trips ruff `TC002` when it is only used for the `pytest.MonkeyPatch` type annotation (no `pytest.fixture`/`pytest.raises`/`capsys` at runtime); move it into the `if TYPE_CHECKING:` block. Files that use a pytest runtime symbol still import it at top (2026-06-23)
 - Adding a second loop over the same collection inside one function and reusing the prior loop's variable name trips mypy: the first `for _, content_type in config.content_types.items()` types `content_type` non-optional, so `content_type = config.content_types.get(name)` (which is `... | None`) is an incompatible-assignment error. Pick a fresh variable name for the new loop (2026-06-23)
 - Widening a function's return type to a union (adding `dry_run` so `build()` returns `BuildResult | DryRunResult`) breaks existing callers that assumed the narrow type; mypy flagged `asyncio.to_thread(build, ...)` in `async_build`. Grep call sites and add a narrowing `assert isinstance(result, BuildResult)` where the caller never exercises the new branch (2026-06-23)
 - Stdlib response attributes are typed `Any` under mypy strict: `http.client.HTTPResponse.status` from `urllib.request.urlopen` triggers `no-any-return` when compared and returned directly; cast with `int(response.status)` before the bool comparison (2026-06-23)
@@ -11,8 +13,6 @@
 - For the `bartleby schema` agent surface, derive "in-use" taxonomy terms by calling the existing `build_taxonomies` collector instead of re-walking `page.taxonomy_values`; the schema's notion of a term then matches exactly what the build indexes, and the same derivation function is reusable by the static `schema.json` step (2026-06-22)
 - For dev-server hot reload of `hooks/*.py`, read the source text and `compile`/`exec` it into a fresh module each rebuild; `importlib.util.spec_from_file_location` + `exec_module` serves a STALE hook on sub-second edits because `SourceFileLoader`'s bytecode cache is keyed on mtime, and the file's mtime is unchanged within the same second the server last loaded it (2026-06-22)
 - A value-threading hook dispatch (`run_event`: item-first, non-None return replaces) does not fit every spec hook. Query hooks whose first positional is real data (`on_page_read_source(page, config)`) need a kwargs-only first-non-None dispatch; zero-arg lifecycle hooks (`on_shutdown()`) need a no-item dispatch. Forcing them through `run_event` collides on the threaded item (2026-06-22)
-- When a new render helper forwards args into an existing context builder, copy that builder's param types verbatim (`list[Any]`, `dict[str, Any]`); mypy strict treats `dict`/`list` as invariant, so a "tighter" `list[object]`/`Sequence` annotation breaks the forward (`list[NavItem]` is not a `list[object]`) (2026-06-22)
-- When gating existing template markup behind a Jinja global (e.g. a `feature()` helper), grep `tests/` for every assertion string on that markup first — multiple test files build their own bare `jinja2.Environment` and each needs the global registered, or pre-existing assertions on the now-gated markup go red (2026-06-22)
 
 ## Architecture
 
@@ -29,6 +29,9 @@
 
 ## Testing
 
+- To integration-test a blocking `serve_forever()` server (`DevServer.run`), add an optional `ready` callback fired right after the socket binds, passing the live `TCPServer`; the test runs `run` in a daemon thread, learns the ephemeral port and calls `shutdown()` from the callback handle, then joins. This exercises the previously `# pragma: no cover` path with zero behavior change when `ready=None` (2026-06-23)
+- `pytest` imported at a test module's top trips ruff `TC002` when it is only used for the `pytest.MonkeyPatch` type annotation (no `pytest.fixture`/`pytest.raises`/`capsys` at runtime); move it into the `if TYPE_CHECKING:` block. Files that use a pytest runtime symbol still import it at top (2026-06-23)
+- Test-quality hardening for static-site templates: a virtual `Page` dataclass carrying the right `custom_metadata["posts"]` does NOT prove the template renders them. Render the actual theme template (`defaults/list.html`, `taxonomy.html`) and grep the produced HTML for each post's `href`/title; same for CSS — render an admonition/`.grid.cards`/`.md-button` through the markdown pipeline and assert the class the stylesheet styles appears in real output, instead of substring-matching the `.css` file (2026-06-23)
 - `bartleby new post` scaffolds with `draft: true`, so a CLI test that creates a post and asserts it appears in `content list` (which excludes drafts by default) will silently fail; in published-listing tests write a `draft: false` post directly instead of relying on the scaffold default (2026-06-22)
 - When gating existing template markup behind a Jinja global (e.g. a `feature()` helper), grep `tests/` for every assertion string on that markup first — multiple test files build their own bare `jinja2.Environment` and each needs the global registered, or pre-existing assertions on the now-gated markup go red (2026-06-22)
 

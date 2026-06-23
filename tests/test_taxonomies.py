@@ -6,6 +6,8 @@ from __future__ import annotations
 import datetime
 from pathlib import Path
 
+import jinja2
+
 from bartleby.config import (
     AIConfig,
     BartlebyConfig,
@@ -24,6 +26,35 @@ from bartleby.taxonomies import (
     build_taxonomies,
     generate_taxonomy_pages,
 )
+from bartleby.theme import get_theme_templates_dir
+
+
+def _render(page: Page, template_name: str) -> str:
+    """Render a generated taxonomy page through the real theme template.
+
+    Returns the HTML so tests can grep the actual output rather than only checking
+    the virtual :class:`Page` dataclass shape.
+    """
+    from bartleby.config import KNOWN_FEATURES
+    from bartleby.templates import make_feature_checker
+
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader([str(get_theme_templates_dir())]),
+        autoescape=True,
+    )
+    env.globals["feature"] = make_feature_checker(list(KNOWN_FEATURES))
+    context: dict[str, object] = {
+        "site": {"title": "Site", "url": "https://example.com", "description": "Desc"},
+        "page": page,
+        "nav": [],
+        "pages": [],
+        "build": {"date": "2026-05-23", "bartleby_version": "0.1.0"},
+        "config": {"theme": {"color_mode": {"toggle": True}}},
+        "extra_css": [],
+        "extra_js": [],
+        "seo": None,
+    }
+    return env.get_template(template_name).render(**context)
 
 
 def _page(
@@ -194,3 +225,35 @@ def test_alltaxonomies_dataclass_shapes() -> None:
     assert isinstance(result, AllTaxonomies)
     assert isinstance(result.global_taxonomies["tags"], TaxonomyData)
     assert isinstance(result.global_taxonomies["tags"].terms["python"], TaxonomyTerm)
+
+
+def test_rendered_taxonomy_term_html_links_tagged_posts() -> None:
+    """Rendering the taxonomy template emits a link + title for each tagged post.
+
+    Grep the real HTML, not just the ``custom_metadata`` dataclass: a term page
+    can carry the right pages while the template still fails to list them.
+    """
+    first = _page(source="blog/posts/a.md", title="First Tagged", tags=["python"])
+    second = _page(source="blog/posts/b.md", title="Second Tagged", tags=["python"])
+    first.output_url = "/blog/posts/a/"
+    second.output_url = "/blog/posts/b/"
+    result = build_taxonomies([first, second], _config(blog_taxonomies=["tags"]))
+    generated = generate_taxonomy_pages(result, _config(blog_taxonomies=["tags"]))
+    term_page = next(page for page in generated if page.output_url == "/tags/python/")
+
+    html = _render(term_page, "taxonomy.html")
+    assert 'href="/blog/posts/a/"' in html
+    assert 'href="/blog/posts/b/"' in html
+    assert "First Tagged" in html
+    assert "Second Tagged" in html
+
+
+def test_rendered_taxonomy_index_html_shows_taxonomy_title() -> None:
+    """The taxonomy index template renders the taxonomy's heading."""
+    page = _page(source="blog/posts/a.md", title="A", tags=["python"])
+    result = build_taxonomies([page], _config(blog_taxonomies=["tags"]))
+    generated = generate_taxonomy_pages(result, _config(blog_taxonomies=["tags"]))
+    index_page = next(page for page in generated if page.output_url == "/tags/")
+
+    html = _render(index_page, "taxonomy_index.html")
+    assert "Tags" in html

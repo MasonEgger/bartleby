@@ -6,6 +6,7 @@ from __future__ import annotations
 import datetime
 from pathlib import Path
 
+import jinja2
 import pytest
 
 from bartleby.config import (
@@ -20,6 +21,36 @@ from bartleby.config import (
 )
 from bartleby.content import Page
 from bartleby.listings import generate_listing_pages
+from bartleby.theme import get_theme_templates_dir
+
+
+def _render(page: Page, template_name: str) -> str:
+    """Render a generated listing/taxonomy page through the real theme template.
+
+    Builds a minimal but valid base context so the template's chrome renders, then
+    returns the HTML so tests can grep the actual output rather than only checking
+    the virtual :class:`Page` dataclass shape.
+    """
+    from bartleby.config import KNOWN_FEATURES
+    from bartleby.templates import make_feature_checker
+
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader([str(get_theme_templates_dir())]),
+        autoescape=True,
+    )
+    env.globals["feature"] = make_feature_checker(list(KNOWN_FEATURES))
+    context: dict[str, object] = {
+        "site": {"title": "Site", "url": "https://example.com", "description": "Desc"},
+        "page": page,
+        "nav": [],
+        "pages": [],
+        "build": {"date": "2026-05-23", "bartleby_version": "0.1.0"},
+        "config": {"theme": {"color_mode": {"toggle": True}}},
+        "extra_css": [],
+        "extra_js": [],
+        "seo": None,
+    }
+    return env.get_template(template_name).render(**context)
 
 
 def _post(*, source: str, title: str, date: datetime.date, draft: bool = False) -> Page:
@@ -151,3 +182,47 @@ def test_listing_excludes_drafts(content_dir: Path) -> None:
     titles = {post.title for post in listing.custom_metadata["posts"] if isinstance(post, Page)}
     assert "Published" in titles
     assert "Draft" not in titles
+
+
+def test_rendered_listing_html_links_each_post(content_dir: Path) -> None:
+    """Rendering the list template emits a link and title for every listed post.
+
+    This is the regression guard the audit was missing: the dataclass can carry
+    the right ``posts`` while the template still fails to render them. Grep the
+    actual HTML.
+    """
+    older = _post(source="blog/posts/o.md", title="Older Post", date=datetime.date(2026, 1, 1))
+    newer = _post(source="blog/posts/n.md", title="Newer Post", date=datetime.date(2026, 4, 1))
+    older.output_url = "/blog/posts/o/"
+    newer.output_url = "/blog/posts/n/"
+    listings = generate_listing_pages([older, newer], _config(), content_dir)
+    listing = next(page for page in listings if page.output_url == "/blog/")
+
+    html = _render(listing, "defaults/list.html")
+    assert 'href="/blog/posts/n/"' in html
+    assert 'href="/blog/posts/o/"' in html
+    assert "Newer Post" in html
+    assert "Older Post" in html
+    # Newest-first order is preserved in the rendered markup, not just the data.
+    assert html.index("Newer Post") < html.index("Older Post")
+
+
+def test_rendered_listing_html_omits_drafts(content_dir: Path) -> None:
+    """A draft post never appears in the rendered listing HTML."""
+    published = _post(
+        source="blog/posts/pub.md", title="Published Post", date=datetime.date(2026, 3, 1)
+    )
+    published.output_url = "/blog/posts/pub/"
+    draft = _post(
+        source="blog/posts/draft.md",
+        title="Draft Post",
+        date=datetime.date(2026, 3, 2),
+        draft=True,
+    )
+    draft.output_url = "/blog/posts/draft/"
+    listings = generate_listing_pages([published, draft], _config(), content_dir)
+    listing = next(page for page in listings if page.output_url == "/blog/")
+
+    html = _render(listing, "defaults/list.html")
+    assert "Published Post" in html
+    assert "Draft Post" not in html

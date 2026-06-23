@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import json
 import shutil
+import threading
+import urllib.request
 from typing import TYPE_CHECKING
 
 import pytest
@@ -238,6 +240,41 @@ def test_events_stream_emits_error_object_on_failed_rebuild(
     error_events = [event for event in events if event["type"] == "error"]
     assert error_events
     assert error_events[0]["errors"]
+
+
+def test_run_builds_and_serves_pages_over_http(project: Path) -> None:
+    """``DevServer.run`` builds the site and serves it over a real HTTP socket.
+
+    The server binds an ephemeral port and runs in a worker thread. The ``ready``
+    callback fires once the socket is listening, handing back the live server so
+    the test can learn the bound port, issue a real request, and shut the server
+    down cleanly. This exercises the previously untested ``run`` path end to end.
+    """
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    bound: dict[str, object] = {}
+    listening = threading.Event()
+
+    def on_ready(httpd: object) -> None:
+        bound["port"] = httpd.server_address[1]  # type: ignore[attr-defined]
+        bound["httpd"] = httpd
+        listening.set()
+
+    worker = threading.Thread(target=lambda: server.run(ready=on_ready), daemon=True)
+    worker.start()
+    try:
+        assert listening.wait(timeout=10), "server never started listening"
+        port = bound["port"]
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=10) as response:
+            assert response.status == 200
+            body = response.read().decode("utf-8")
+        # The built index page was served, not a directory listing.
+        assert "Welcome" in body
+    finally:
+        bound["httpd"].shutdown()  # type: ignore[attr-defined]
+        worker.join(timeout=10)
+    assert not worker.is_alive()
+    # The build the server ran on startup wrote the output tree.
+    assert (project / "site" / "index.html").exists()
 
 
 def test_maybe_recompile_theme_prints_hint_when_no_binary_cached(

@@ -2,7 +2,7 @@
 
 default: check
 
-check: lint typecheck test
+check: lint typecheck test smoke
 
 lint:
     uv run ruff check src/ tests/ && uv run ruff format --check src/ tests/
@@ -12,6 +12,12 @@ typecheck:
 
 test:
     uv run pytest
+
+# End-to-end smoke gate: scaffold a site, add a post, build, and grep the
+# rendered output. Run explicitly in CI so a regression in the full
+# scaffold->build path fails the build even if narrower unit tests stay green.
+smoke:
+    uv run pytest tests/test_smoke.py
 
 format:
     uv run ruff format src/ tests/

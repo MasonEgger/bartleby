@@ -85,11 +85,11 @@ prompts and `audit.md` for the findings each step closes. 6 of 18 steps done.
 
 ## Phase 5 — Agent surface and CLI (Spec 1)
 
-- [ ] **Step 11: Schema introspection**
-  - [ ] 11.1: RED — schema for type/authors/taxonomies; public author fields only
-  - [ ] 11.2: GREEN — schema_introspection.py + `bartleby schema` command
-  - [ ] 11.3: RED — json matches the manifest field shape
-  - [ ] 11.4: REFACTOR — reusable schema derivation; run `just check`
+- [x] **Step 11: Schema introspection**
+  - [x] 11.1: RED — schema for type/authors/taxonomies; public author fields only
+  - [x] 11.2: GREEN — schema_introspection.py + `bartleby schema` command
+  - [x] 11.3: RED — json matches the manifest field shape
+  - [x] 11.4: REFACTOR — reusable schema derivation; run `just check`
 
 - [ ] **Step 12: Content query**
   - [ ] 12.1: RED — content list (filter/sort), content get, drafts excluded

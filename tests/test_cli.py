@@ -342,3 +342,63 @@ def test_new_post_missing_type_json_is_usage_error(
     captured = capsys.readouterr()
     payload = _last_json(captured.out)
     assert payload["code"] == "usage_error"
+
+
+def test_schema_content_type_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby schema blog --output json`` emits the content type's field schema."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    monkeypatch.chdir(tmp_path / "mysite")
+
+    main(["schema", "blog", "--output", "json"])
+    payload = _last_json(capsys.readouterr().out)
+    assert payload["content_type"] == "blog"
+    assert "required_fields" in payload
+    assert "optional_fields" in payload
+
+
+def test_schema_authors_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby schema authors --output json`` lists configured authors."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    monkeypatch.chdir(tmp_path / "mysite")
+
+    main(["schema", "authors", "--output", "json"])
+    payload = _last_json(capsys.readouterr().out)
+    listed = payload["authors"]
+    assert isinstance(listed, list)
+    assert any(entry["name"] for entry in listed)
+
+
+def test_schema_taxonomies_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby schema taxonomies --output json`` lists taxonomies and in-use terms."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    monkeypatch.chdir(tmp_path / "mysite")
+
+    main(["schema", "taxonomies", "--output", "json"])
+    payload = _last_json(capsys.readouterr().out)
+    taxonomies = payload["taxonomies"]
+    assert isinstance(taxonomies, list)
+    assert any(tax["name"] == "tags" for tax in taxonomies)
+
+
+def test_schema_unknown_content_type_is_usage_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby schema nope`` for an undefined content type fails as a usage error."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    monkeypatch.chdir(tmp_path / "mysite")
+
+    with pytest.raises(SystemExit) as exc:
+        main(["schema", "nope", "--output", "json"])
+    assert exc.value.code == 2
+    payload = _last_json(capsys.readouterr().out)
+    assert payload["code"] == "usage_error"

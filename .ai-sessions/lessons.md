@@ -3,6 +3,7 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- For the `bartleby schema` agent surface, derive "in-use" taxonomy terms by calling the existing `build_taxonomies` collector instead of re-walking `page.taxonomy_values`; the schema's notion of a term then matches exactly what the build indexes, and the same derivation function is reusable by the static `schema.json` step (2026-06-22)
 - For dev-server hot reload of `hooks/*.py`, read the source text and `compile`/`exec` it into a fresh module each rebuild; `importlib.util.spec_from_file_location` + `exec_module` serves a STALE hook on sub-second edits because `SourceFileLoader`'s bytecode cache is keyed on mtime, and the file's mtime is unchanged within the same second the server last loaded it (2026-06-22)
 - A value-threading hook dispatch (`run_event`: item-first, non-None return replaces) does not fit every spec hook. Query hooks whose first positional is real data (`on_page_read_source(page, config)`) need a kwargs-only first-non-None dispatch; zero-arg lifecycle hooks (`on_shutdown()`) need a no-item dispatch. Forcing them through `run_event` collides on the threaded item (2026-06-22)
 - When a new render helper forwards args into an existing context builder, copy that builder's param types verbatim (`list[Any]`, `dict[str, Any]`); mypy strict treats `dict`/`list` as invariant, so a "tighter" `list[object]`/`Sequence` annotation breaks the forward (`list[NavItem]` is not a `list[object]`) (2026-06-22)
@@ -12,7 +13,11 @@
 - In CLI tests, a scaffolding helper (`new site`) that now prints its own structured result pollutes `capsys` stdout ahead of the command under test; clear capsys after setup, or parse only the last non-empty stdout line, before `json.loads` (2026-06-22)
 - When migrating output from `print(..., file=sys.stderr)` to `logging.getLogger`, rewrite the asserting tests from `capsys` to `caplog` (with `caplog.at_level("WARNING", logger="bartleby")`) in the same dispatch — the suite otherwise goes red because capsys can no longer see logger output (2026-06-22)
 - When a plan splits RED and GREEN into separate sub-items, an autonomous one-commit-per-dispatch BPE executor must bundle the matching RED+GREEN pair in one dispatch, because the never-commit-a-red-suite rule forbids ending a dispatch on the RED-only sub-item (2026-06-22)
-- Launch long-lived local servers (`/bpe:review`, preview HTTP) with `setsid <cmd> > log 2>&1 < /dev/null &` — a plain background job gets reaped on shell teardown and a separately-run server gets killed by the background-task timeout; setsid in its own session survives both (2026-06-21)
+
+## Architecture
+
+- For the `bartleby schema` agent surface, derive "in-use" taxonomy terms by calling the existing `build_taxonomies` collector instead of re-walking `page.taxonomy_values`; the schema's notion of a term then matches exactly what the build indexes, and the same derivation function is reusable by the static `schema.json` step (2026-06-22)
+- CLI command results plug into the shared `output.render()` path for free by implementing the `output.Result` protocol (`exit_code`/`to_dict`/`to_text`); a new command needs no formatter changes and inherits sorted-key byte-stable JSON (2026-06-22)
 
 ## Typing
 

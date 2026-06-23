@@ -28,6 +28,12 @@ from bartleby.output import (
     ValidationError,
     render,
 )
+from bartleby.schema_introspection import (
+    SchemaError,
+    derive_authors_schema,
+    derive_content_type_schema,
+    derive_taxonomies_schema,
+)
 from bartleby.theme_compile import ThemeCompileError, ThemeCompileResult, compile_theme_css
 
 # Stable, machine-recognizable error codes per failure type. These strings are
@@ -216,6 +222,17 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     serve_parser.set_defaults(_handler=_cmd_serve)
 
+    schema_parser = subparsers.add_parser(
+        "schema",
+        help="Introspect content-type, author, and taxonomy schemas for agents",
+        parents=[flags],
+    )
+    schema_parser.add_argument(
+        "target",
+        help="A content type name, or 'authors', or 'taxonomies'",
+    )
+    schema_parser.set_defaults(_handler=_cmd_schema)
+
     theme_parser = subparsers.add_parser("theme", help="Theme asset commands")
     theme_sub = theme_parser.add_subparsers(dest="theme_command")
     theme_compile = theme_sub.add_parser(
@@ -315,6 +332,29 @@ def _cmd_validate(args: argparse.Namespace) -> ValidateOutput:
             for error in errors
         ],
     )
+
+
+def _cmd_schema(args: argparse.Namespace) -> Result:
+    """Introspect a schema: ``schema <content-type|authors|taxonomies>``.
+
+    The positional ``target`` selects the schema. ``authors`` and ``taxonomies``
+    are reserved names; anything else is treated as a content type name.
+
+    :raises UsageError: When ``target`` names an undefined content type.
+    """
+    config_path = _resolve_config_path(args)
+    config = load_config(config_path)
+    target: str = args.target
+    if target == "authors":
+        authors = load_authors(config.config_dir / config.authors_file)
+        return derive_authors_schema(authors)
+    if target == "taxonomies":
+        pages, _assets = discover_content(config, config.config_dir / "content")
+        return derive_taxonomies_schema(pages, config)
+    try:
+        return derive_content_type_schema(target, config)
+    except SchemaError as exc:
+        raise UsageError(str(exc)) from exc
 
 
 def _cmd_theme_compile(args: argparse.Namespace) -> ThemeCompileResult:

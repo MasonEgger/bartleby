@@ -6,6 +6,10 @@ build-backend = "hatchling.build"
 name = "bartleby"
 version = "0.1.0"
 description = "A batteries-included Python static site generator"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Mason Egger", email = "mason@masonegger.com" }]
 requires-python = ">=3.14"
 dependencies = [
     "markdown>=3.4",

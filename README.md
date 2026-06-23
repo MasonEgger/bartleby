@@ -59,12 +59,14 @@ Or read the source directly:
 
 ## Status
 
-Version 0.1.0. All 27 implementation steps from the original plan are complete; the project passes 272 tests under `ruff` strict and `mypy --strict`. A few items are intentionally deferred for follow-up releases:
+Version 0.1.0. The initial 27-step build plus the v0.1.0 hardening pass (18 delta steps) are complete; the project passes 507 tests under `ruff` strict and `mypy --strict`, including an end-to-end smoke test. The hardening pass vendored the real Alpine.js, HTMX, and lunr.js bundles, added the hybrid Tailwind compile pipeline, shipped the full icon packs, and closed the build-failure, agent-surface, and feed gaps from the audit.
 
-- Real Tailwind CSS compilation (current stylesheet is hand-written structural CSS)
-- Real Alpine.js, HTMX, and lunr.js vendor bundles (stubs are in place; the build pipeline emits the right `<script>` tags)
-- Full icon pack vendoring (one sample SVG per pack ships today)
-- ProcessPoolExecutor-based markdown parallelism (the `async_build` entry point exists; current implementation uses `asyncio.to_thread`)
+A few items are intentionally deferred for follow-up releases:
+
+- Parallel build (asyncio + `ProcessPoolExecutor`); the build is synchronous and documented as such
+- Incremental rebuilds (`--dirty`)
+- Voice/tone content analysis for skill generation
+- A public theme API and additional themes
 
 ## Development
 
@@ -95,4 +97,4 @@ See [`spec.md`](spec.md) for the full specification and [`plan.md`](plan.md) for
 
 ## License
 
-TBD.
+MIT. See [`LICENSE`](LICENSE) for the full text.

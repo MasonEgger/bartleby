@@ -3,6 +3,7 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- For PEP 639 license metadata in pyproject.toml, use the SPDX expression string (`license = "MIT"`) plus `license-files = ["LICENSE"]`, not the deprecated table form (`license = { text = ... }`) or `License ::` classifiers; hatchling supports it and it is the current documented shape (2026-06-23)
 - Swapping magic strings for a `StrEnum` is a zero-risk refactor when the values flow through a string-keyed dict (e.g. `page.custom_metadata["taxonomy_kind"]` read by templates): `StrEnum` members compare equal to their string value, so producers can write the enum member while existing string consumers (templates, `==` checks) keep working untouched. Only the comparison sites in your own code need updating (2026-06-23)
 - To split a god-function under mypy strict without a 15-arg helper explosion, thread one underscore-prefixed `_BuildState` dataclass through small one-arg phase helpers. Fields set in later phases are typed `X | None` with `field(default_factory=...)`; each downstream phase opens with `assert state.x is not None` (which both narrows for mypy and documents the phase-ordering contract). Bind the narrowed value to a local before reusing it, since mypy does not narrow attribute access across calls (2026-06-23)
 - When a BPE plan splits one TDD cycle into separate RED and GREEN todo items but the step-executor contract forbids committing a red suite, fold the matching GREEN into the same dispatch and check off both items. Committing RED-only would leave a failing suite; the contract's "never commit a red suite" wins, and this repo's history is already one-green-commit-per-cycle (2026-06-23)
@@ -12,7 +13,11 @@
 - Adding a second loop over the same collection inside one function and reusing the prior loop's variable name trips mypy: the first `for _, content_type in config.content_types.items()` types `content_type` non-optional, so `content_type = config.content_types.get(name)` (which is `... | None`) is an incompatible-assignment error. Pick a fresh variable name for the new loop (2026-06-23)
 - Static-artifact builders (schema.json, content-index.json) should filter drafts themselves via `select_published`, not trust the caller to pre-filter; a unit test that passes raw `pages` to `build_schema_json` otherwise inflates taxonomy term counts with draft tags. Filter inside every builder so the contract holds regardless of call site (2026-06-22)
 - `bartleby new post` scaffolds with `draft: true`, so a CLI test that creates a post and asserts it appears in `content list` (which excludes drafts by default) will silently fail; in published-listing tests write a `draft: false` post directly instead of relying on the scaffold default (2026-06-22)
-- For the `bartleby schema` agent surface, derive "in-use" taxonomy terms by calling the existing `build_taxonomies` collector instead of re-walking `page.taxonomy_values`; the schema's notion of a term then matches exactly what the build indexes, and the same derivation function is reusable by the static `schema.json` step (2026-06-22)
+
+## Packaging
+
+- For PEP 639 license metadata in pyproject.toml, use the SPDX expression string (`license = "MIT"`) plus `license-files = ["LICENSE"]`, not the deprecated table form (`license = { text = ... }`) or `License ::` classifiers; hatchling supports it and it is the current documented shape (2026-06-23)
+- Before refreshing a README "Status"/test-count section, pull live facts (`git log --reverse` for the first-commit date, `pytest --co | tail -1` for the test count) and cross-check the "deferred items" list against plan.md "Out of scope" rather than copying the stale original forward; the v1 hardening had already closed half the originally-listed deferrals (2026-06-23)
 
 ## Workflow
 

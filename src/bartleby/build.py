@@ -74,6 +74,22 @@ class BuildResult:
 
 
 @dataclass(slots=True)
+class DryRunResult:
+    """What a ``--dry-run`` build would change, relative to the current ``site/``.
+
+    :ivar added: Output paths that would be newly created.
+    :ivar modified: Output paths whose bytes would change.
+    :ivar unchanged: Output paths that would be written identically.
+    :ivar deleted: Existing output paths that would no longer be produced.
+    """
+
+    added: list[str]
+    modified: list[str]
+    unchanged: list[str]
+    deleted: list[str]
+
+
+@dataclass(slots=True)
 class PageError:
     """A single page-level failure collected during the render pass.
 
@@ -119,7 +135,13 @@ def format_page_error(error: PageError) -> str:
     return f"{error.file_path}: {error.message}"
 
 
-def build(config_path: Path, *, include_drafts: bool = False, strict: bool = False) -> BuildResult:
+def build(
+    config_path: Path,
+    *,
+    include_drafts: bool = False,
+    strict: bool = False,
+    dry_run: bool = False,
+) -> BuildResult | DryRunResult:
     """Run the full Bartleby build pipeline against ``config_path``.
 
     :param config_path: Path to ``bartleby.yml``.
@@ -128,7 +150,11 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
     :param strict: When ``True``, broken cross-references abort the build.
         Cross-reference errors are always printed to stderr; ``strict`` only
         controls whether they are fatal.
-    :returns: A :class:`BuildResult` carrying the page count and wall time.
+    :param dry_run: When ``True``, the freshly rendered output is compared to
+        the existing ``site/`` and a :class:`DryRunResult` is returned; nothing
+        is written to disk and the previous ``site/`` is left untouched.
+    :returns: A :class:`BuildResult` for a normal build, or a
+        :class:`DryRunResult` when ``dry_run`` is set.
     :raises ValueError: When metadata validation fails, or when ``strict``
         is on and any cross-reference cannot be resolved.
     """
@@ -312,6 +338,13 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
         config.site, config.ai, output_dir, static_override_exists=static_robots_exists
     )
 
+    if dry_run:
+        diff = _diff_output_trees(build_dir, final_output_dir)
+        shutil.rmtree(build_dir, ignore_errors=True)
+        plugins.run_event("on_post_build", config)
+        plugins.run_lifecycle("on_shutdown")
+        return diff
+
     _swap_output_into_place(build_dir, final_output_dir)
     plugins.run_event("on_post_build", config)
     plugins.run_lifecycle("on_shutdown")
@@ -471,9 +504,12 @@ async def async_build(
     """
     import asyncio
 
-    return await asyncio.to_thread(
+    result = await asyncio.to_thread(
         build, config_path, include_drafts=include_drafts, strict=strict
     )
+    # async_build never requests a dry run, so the result is always a BuildResult.
+    assert isinstance(result, BuildResult)
+    return result
 
 
 def extract_excerpt(markdown_source: str, separator: str | None) -> str:
@@ -502,6 +538,58 @@ def calculate_readtime(text: str) -> int:
         return 1
     minutes = max(1, round(word_count / _WORDS_PER_MINUTE))
     return minutes
+
+
+def build_dry_run(
+    config_path: Path, *, include_drafts: bool = False, strict: bool = False
+) -> DryRunResult:
+    """Run the build pipeline in dry-run mode and return what would change.
+
+    Convenience wrapper around :func:`build` with ``dry_run=True``; the return
+    type is narrowed to :class:`DryRunResult` for callers that only want a diff.
+
+    :param config_path: Path to ``bartleby.yml``.
+    :param include_drafts: Forwarded to :func:`build`.
+    :param strict: Forwarded to :func:`build`.
+    :returns: The :class:`DryRunResult` describing added/modified/unchanged/deleted output.
+    """
+    result = build(config_path, include_drafts=include_drafts, strict=strict, dry_run=True)
+    assert isinstance(result, DryRunResult)
+    return result
+
+
+def _diff_output_trees(new_dir: Path, current_dir: Path) -> DryRunResult:
+    """Compare a freshly rendered output tree against the existing ``site/``.
+
+    Files are compared by relative path and byte content. A path present only in
+    the new tree is *added*; present in both with differing bytes is *modified*;
+    identical in both is *unchanged*; present only in the current tree is *deleted*.
+
+    :param new_dir: The freshly rendered (temp) output tree.
+    :param current_dir: The existing ``site/`` directory (may not exist).
+    :returns: A :class:`DryRunResult` with sorted path lists.
+    """
+    new_files = _relative_files(new_dir)
+    current_files = _relative_files(current_dir) if current_dir.exists() else set()
+
+    added: list[str] = []
+    modified: list[str] = []
+    unchanged: list[str] = []
+    for relative in sorted(new_files):
+        display = f"{current_dir.name}/{relative}"
+        if relative not in current_files:
+            added.append(display)
+        elif (new_dir / relative).read_bytes() == (current_dir / relative).read_bytes():
+            unchanged.append(display)
+        else:
+            modified.append(display)
+    deleted = sorted(f"{current_dir.name}/{relative}" for relative in current_files - new_files)
+    return DryRunResult(added=added, modified=modified, unchanged=unchanged, deleted=deleted)
+
+
+def _relative_files(root: Path) -> set[str]:
+    """Return every file under ``root`` as a POSIX path relative to ``root``."""
+    return {path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file()}
 
 
 def _swap_output_into_place(build_dir: Path, final_output_dir: Path) -> None:

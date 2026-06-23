@@ -109,12 +109,12 @@ prompts and `audit.md` for the findings each step closes. 6 of 18 steps done.
   - [x] 14.4: GREEN — linting.py + lint command
   - [x] 14.5: REFACTOR — share link resolution with crossrefs; run `just check`
 
-- [ ] **Step 15: export, generate-skill, build --dry-run**
-  - [ ] 15.1: RED — JSONL/JSON/CSV export
-  - [ ] 15.2: RED — three deterministic skills; agent_context verbatim; analyze_content reserved error
-  - [ ] 15.3: RED — build --dry-run reports without writing
-  - [ ] 15.4: GREEN — export.py, skills.py, dry-run
-  - [ ] 15.5: REFACTOR — reuse schema derivation + content selection; run `just check`
+- [x] **Step 15: export, generate-skill, build --dry-run**
+  - [x] 15.1: RED — JSONL/JSON/CSV export
+  - [x] 15.2: RED — three deterministic skills; agent_context verbatim; analyze_content reserved error
+  - [x] 15.3: RED — build --dry-run reports without writing
+  - [x] 15.4: GREEN — export.py, skills.py, dry-run
+  - [x] 15.5: REFACTOR — reuse schema derivation + content selection; run `just check`
 
 ## Phase 6 — Feeds
 

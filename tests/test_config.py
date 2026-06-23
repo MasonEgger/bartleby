@@ -30,6 +30,12 @@ def test_load_full_config() -> None:
     assert "search" in config.theme.features
     assert config.ai.llms_txt is True
     assert config.ai.markdown_variants is True
+    assert config.ai.skills.include_examples == 5
+    assert config.ai.skills.style_guide == "content/style-guide.md"
+    assert config.ai.skills.regenerate_on_build is True
+    assert config.ai.agent_context.voice == "Technical but approachable. Second person."
+    assert config.ai.agent_context.audience == "Python developers with 2+ years experience"
+    assert "All code examples must be runnable" in config.ai.agent_context.constraints
     assert config.dev_server.host == "0.0.0.0"
     assert config.dev_server.port == 9000
 
@@ -65,6 +71,11 @@ def test_default_values_applied() -> None:
     assert config.dev_server.port == 8000
     assert config.ai.llms_txt is True
     assert config.ai.markdown_variants is True
+    assert config.ai.skills.output_dir == ".claude/skills"
+    assert config.ai.skills.include_examples == 3
+    assert config.ai.skills.style_guide is None
+    assert config.ai.agent_context.voice is None
+    assert config.ai.agent_context.constraints == []
     assert config.extra_css == []
     assert config.extra_js == []
 

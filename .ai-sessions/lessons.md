@@ -3,6 +3,7 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- Widening a function's return type to a union (adding `dry_run` so `build()` returns `BuildResult | DryRunResult`) breaks existing callers that assumed the narrow type; mypy flagged `asyncio.to_thread(build, ...)` in `async_build`. Grep call sites and add a narrowing `assert isinstance(result, BuildResult)` where the caller never exercises the new branch (2026-06-23)
 - Stdlib response attributes are typed `Any` under mypy strict: `http.client.HTTPResponse.status` from `urllib.request.urlopen` triggers `no-any-return` when compared and returned directly; cast with `int(response.status)` before the bool comparison (2026-06-23)
 - Static-artifact builders (schema.json, content-index.json) should filter drafts themselves via `select_published`, not trust the caller to pre-filter; a unit test that passes raw `pages` to `build_schema_json` otherwise inflates taxonomy term counts with draft tags. Filter inside every builder so the contract holds regardless of call site (2026-06-22)
 - `bartleby new post` scaffolds with `draft: true`, so a CLI test that creates a post and asserts it appears in `content list` (which excludes drafts by default) will silently fail; in published-listing tests write a `draft: false` post directly instead of relying on the scaffold default (2026-06-22)
@@ -12,7 +13,6 @@
 - When a new render helper forwards args into an existing context builder, copy that builder's param types verbatim (`list[Any]`, `dict[str, Any]`); mypy strict treats `dict`/`list` as invariant, so a "tighter" `list[object]`/`Sequence` annotation breaks the forward (`list[NavItem]` is not a `list[object]`) (2026-06-22)
 - When gating existing template markup behind a Jinja global (e.g. a `feature()` helper), grep `tests/` for every assertion string on that markup first — multiple test files build their own bare `jinja2.Environment` and each needs the global registered, or pre-existing assertions on the now-gated markup go red (2026-06-22)
 - In a build test, a project template that exists only to bump the template-tree mtime must not shadow a theme template; `templates/base.html` containing `{% extends 'base.html' %}` self-references through the cascade and hits Jinja's recursion limit. Use a unique non-cascade name like `custom-partial.html` (2026-06-22)
-- When asserting that vendored/minified third-party code does NOT contain a marker, match the exact original stub string, not a generic word — minified Alpine.js contains an internal `__placeholder` token, so a `"placeholder" not in text` check false-positived against the real bundle (2026-06-22)
 ## Architecture
 
 - Static-artifact builders (schema.json, content-index.json) should filter drafts themselves via `select_published`, not trust the caller to pre-filter; passing raw `pages` to `build_schema_json` otherwise inflates taxonomy term counts with draft tags. Filter inside every builder so the contract holds regardless of call site (2026-06-22)
@@ -23,6 +23,7 @@
 
 - When a new render helper forwards args into an existing context builder, copy that builder's param types verbatim (`list[Any]`, `dict[str, Any]`); mypy strict treats `dict`/`list` as invariant, so a "tighter" `list[object]`/`Sequence` annotation breaks the forward (`list[NavItem]` is not a `list[object]`) (2026-06-22)
 - Stdlib response attributes are typed `Any` under mypy strict: `http.client.HTTPResponse.status` from `urllib.request.urlopen` triggers `no-any-return` when compared and returned directly; cast with `int(response.status)` before the bool comparison (2026-06-23)
+- Widening a function's return type to a union (adding `dry_run` so `build()` returns `BuildResult | DryRunResult`) breaks existing callers that assumed the narrow type; mypy flagged `asyncio.to_thread(build, ...)` in `async_build`. Grep call sites and add a narrowing `assert isinstance(result, BuildResult)` where the caller never exercises the new branch (2026-06-23)
 
 ## Testing
 

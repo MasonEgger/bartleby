@@ -108,6 +108,17 @@ ai:
   markdown_variants: true
   robots:
     allow: [GPTBot, ClaudeBot, PerplexityBot]
+  skills:
+    output_dir: .claude/skills
+    include_examples: 5
+    style_guide: content/style-guide.md
+    regenerate_on_build: true
+  agent_context:
+    voice: "Technical but approachable. Second person."
+    audience: "Python developers with 2+ years experience"
+    constraints:
+      - "All code examples must be runnable"
+      - "Include prerequisites section in tutorials"
 
 dev_server:
   host: "0.0.0.0"

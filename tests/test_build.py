@@ -8,7 +8,15 @@ from pathlib import Path
 
 import pytest
 
-from bartleby.build import BuildError, BuildResult, build, calculate_readtime, extract_excerpt
+from bartleby.build import (
+    BuildError,
+    BuildResult,
+    DryRunResult,
+    build,
+    build_dry_run,
+    calculate_readtime,
+    extract_excerpt,
+)
 from bartleby.config import ConfigError
 
 
@@ -188,6 +196,66 @@ def test_build_returns_result(project: Path) -> None:
     assert isinstance(result, BuildResult)
     assert result.page_count > 0
     assert result.duration_seconds >= 0.0
+
+
+def test_dry_run_reports_all_added_on_fresh_build(project: Path) -> None:
+    """With no existing ``site/``, every rendered file is reported as added."""
+    result = build_dry_run(project / "bartleby.yml")
+    assert isinstance(result, DryRunResult)
+    assert result.added  # at least the index and a blog post
+    assert result.modified == []
+    assert result.deleted == []
+    assert result.unchanged == []
+
+
+def test_dry_run_does_not_write_to_disk(project: Path) -> None:
+    """A dry run never creates the ``site/`` directory."""
+    build_dry_run(project / "bartleby.yml")
+    assert not (project / "site").exists()
+
+
+def test_dry_run_reports_unchanged_after_real_build(project: Path) -> None:
+    """After a real build, a dry run with no source changes reports everything unchanged."""
+    build(project / "bartleby.yml")
+    result = build_dry_run(project / "bartleby.yml")
+    assert result.added == []
+    assert result.modified == []
+    assert result.deleted == []
+    assert result.unchanged  # the previously built files are unchanged
+
+
+def test_dry_run_reports_modified_when_content_changes(project: Path) -> None:
+    """Editing a page's body shows that page's output as modified, not added."""
+    build(project / "bartleby.yml")
+    index = project / "content" / "index.md"
+    index.write_text(
+        index.read_text(encoding="utf-8") + "\n\nA brand new paragraph.\n", encoding="utf-8"
+    )
+    result = build_dry_run(project / "bartleby.yml")
+    modified_paths = " ".join(result.modified)
+    assert "index.html" in modified_paths
+    # The existing site/ is left untouched by the dry run.
+    assert (project / "site" / "index.html").exists()
+
+
+def test_dry_run_reports_deleted_when_source_removed(project: Path) -> None:
+    """Removing a content file marks its previously built output as deleted."""
+    build(project / "bartleby.yml")
+    (project / "content" / "blog" / "posts" / "first-post.md").unlink()
+    result = build_dry_run(project / "bartleby.yml")
+    deleted_paths = " ".join(result.deleted)
+    assert "first-post" in deleted_paths
+
+
+def test_dry_run_result_renders_dry_run_status() -> None:
+    """The dry-run output object reports the ``dry_run`` status in its JSON shape."""
+    from bartleby.output import DryRunOutput
+
+    output = DryRunOutput(added=["site/a/index.html"], modified=[], unchanged=5, deleted=[])
+    payload = output.to_dict()
+    assert payload["status"] == "dry_run"
+    assert payload["added"] == ["site/a/index.html"]
+    assert payload["unchanged"] == 5
 
 
 def test_extract_excerpt_with_separator() -> None:

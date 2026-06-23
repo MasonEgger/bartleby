@@ -97,6 +97,39 @@ class BuildOutput:
 
 
 @dataclass(slots=True)
+class DryRunOutput:
+    """Result of ``bartleby build --dry-run`` (spec.md dry-run JSON output)."""
+
+    added: list[str]
+    modified: list[str]
+    unchanged: int
+    deleted: list[str]
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_SUCCESS
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "status": "dry_run",
+            "added": self.added,
+            "modified": self.modified,
+            "unchanged": self.unchanged,
+            "deleted": self.deleted,
+        }
+
+    def to_text(self) -> str:
+        lines = [
+            f"dry run: {len(self.added)} added, {len(self.modified)} modified, "
+            f"{self.unchanged} unchanged, {len(self.deleted)} deleted"
+        ]
+        lines += [f"  + {path}" for path in self.added]
+        lines += [f"  ~ {path}" for path in self.modified]
+        lines += [f"  - {path}" for path in self.deleted]
+        return "\n".join(lines)
+
+
+@dataclass(slots=True)
 class ValidateOutput:
     """Result of ``bartleby validate`` (spec.md ``bartleby validate`` JSON output)."""
 
@@ -159,6 +192,51 @@ class NewPostOutput:
 
     def to_text(self) -> str:
         return f"Created post {self.path}"
+
+
+@dataclass(slots=True)
+class RawOutput:
+    """A pre-serialised text payload (e.g. export output) emitted as-is.
+
+    Export already produces its own JSONL/JSON/CSV string, so the output layer
+    passes it through unchanged in both text and JSON modes rather than wrapping
+    it in another JSON object.
+    """
+
+    text: str
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_SUCCESS
+
+    def to_dict(self) -> dict[str, object]:  # pragma: no cover - render() bypasses this
+        return {"output": self.text}
+
+    def to_text(self) -> str:
+        return self.text
+
+
+@dataclass(slots=True)
+class GenerateSkillOutput:
+    """Result of ``bartleby generate-skill`` (spec.md generate-skill JSON output)."""
+
+    skills_generated: list[dict[str, object]]
+    output_dir: str
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_SUCCESS
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "skills_generated": self.skills_generated,
+            "output_dir": self.output_dir,
+        }
+
+    def to_text(self) -> str:
+        lines = [f"Generated {len(self.skills_generated)} skills into {self.output_dir}"]
+        lines += [f"  {entry['path']}" for entry in self.skills_generated]
+        return "\n".join(lines)
 
 
 @dataclass(slots=True)
@@ -275,6 +353,10 @@ def render(result: Result, fmt: str) -> str:
     :param fmt: Either ``"json"`` or ``"text"``.
     :returns: The serialized string (no trailing newline).
     """
+    # Export already produces its own structured payload (JSONL/JSON/CSV chosen
+    # via --format), so it is emitted verbatim regardless of --output.
+    if isinstance(result, RawOutput):
+        return result.text
     if fmt == "json":
         return json.dumps(result.to_dict(), sort_keys=True)
     return result.to_text()

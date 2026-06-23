@@ -126,6 +126,30 @@ class ThemeConfig:
 
 
 @dataclass(slots=True)
+class SkillsConfig:
+    """Settings for deterministic agent-skill generation (``ai.skills``)."""
+
+    output_dir: str = ".claude/skills"
+    include_examples: int = 3
+    style_guide: str | None = None
+    regenerate_on_build: bool = False
+
+
+@dataclass(slots=True)
+class AgentContext:
+    """Explicit voice/audience/constraint declarations for generated skills.
+
+    These are included verbatim in the write/review skills when set; they are
+    the only source of voice/style information in v1 (content analysis is
+    deferred).
+    """
+
+    voice: str | None = None
+    audience: str | None = None
+    constraints: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class AIConfig:
     """AI and agent integration settings (LLM output, robots directives)."""
 
@@ -134,6 +158,8 @@ class AIConfig:
     markdown_variants: bool = True
     agent_surface: bool = True
     robots: dict[str, list[str]] = field(default_factory=dict)
+    skills: SkillsConfig = field(default_factory=SkillsConfig)
+    agent_context: AgentContext = field(default_factory=AgentContext)
 
 
 @dataclass(slots=True)
@@ -407,6 +433,47 @@ def _parse_ai(raw: Any) -> AIConfig:
         markdown_variants=bool(raw.get("markdown_variants", True)),
         agent_surface=bool(raw.get("agent_surface", True)),
         robots=robots,
+        skills=_parse_skills(raw.get("skills")),
+        agent_context=_parse_agent_context(raw.get("agent_context")),
+    )
+
+
+def _parse_skills(raw: Any) -> SkillsConfig:
+    """Parse the ``ai.skills`` section, rejecting the reserved ``analyze_content`` key."""
+    if raw is None:
+        return SkillsConfig()
+    if not isinstance(raw, dict):
+        raise ConfigError("ai.skills must be a mapping", key_path="ai.skills")
+    if "analyze_content" in raw:
+        raise ConfigError(
+            "ai.skills.analyze_content is not yet supported (content analysis is "
+            "deferred from v1)",
+            key_path="ai.skills.analyze_content",
+        )
+    return SkillsConfig(
+        output_dir=str(raw.get("output_dir", ".claude/skills")),
+        include_examples=int(raw.get("include_examples", 3)),
+        style_guide=_optional_str(raw.get("style_guide")),
+        regenerate_on_build=bool(raw.get("regenerate_on_build", False)),
+    )
+
+
+def _parse_agent_context(raw: Any) -> AgentContext:
+    """Parse the ``ai.agent_context`` section (voice/audience/constraints)."""
+    if raw is None:
+        return AgentContext()
+    if not isinstance(raw, dict):
+        raise ConfigError("ai.agent_context must be a mapping", key_path="ai.agent_context")
+    constraints_raw = raw.get("constraints") or []
+    if not isinstance(constraints_raw, list):
+        raise ConfigError(
+            "ai.agent_context.constraints must be a list",
+            key_path="ai.agent_context.constraints",
+        )
+    return AgentContext(
+        voice=_optional_str(raw.get("voice")),
+        audience=_optional_str(raw.get("audience")),
+        constraints=[str(item) for item in constraints_raw],
     )
 
 

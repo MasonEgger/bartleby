@@ -18,6 +18,7 @@ from bartleby.authors import AuthorError, load_authors
 from bartleby.build import (
     BuildError,
     async_build,
+    build_dry_run,
     calculate_readtime,
     format_page_error,
 )
@@ -32,15 +33,19 @@ from bartleby.content_query import (
     select_published,
 )
 from bartleby.crossrefs import resolve_page_crossrefs
+from bartleby.export import export_content
 from bartleby.linting import lint_site
 from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
 from bartleby.metadata import validate_all_metadata
 from bartleby.output import (
     BuildOutput,
+    DryRunOutput,
     ErrorOutput,
+    GenerateSkillOutput,
     LintOutput,
     NewPostOutput,
     NewSiteOutput,
+    RawOutput,
     RenderOutput,
     Result,
     ValidateOutput,
@@ -55,6 +60,7 @@ from bartleby.schema_introspection import (
     derive_taxonomies_schema,
 )
 from bartleby.shortcodes import ShortcodeError, process_shortcodes
+from bartleby.skills import generate_skills
 from bartleby.theme_compile import ThemeCompileError, ThemeCompileResult, compile_theme_css
 from bartleby.urls import generate_all_urls
 
@@ -223,6 +229,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--strict", action="store_true", help="Fail on cross-reference and validation errors"
     )
     build_parser.add_argument("--include-drafts", action="store_true", help="Include drafts")
+    build_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Report what would change without writing to disk",
+    )
     build_parser.set_defaults(_handler=_cmd_build)
 
     validate_parser = subparsers.add_parser(
@@ -302,6 +313,34 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     lint_parser.set_defaults(_handler=_cmd_lint)
 
+    export_parser = subparsers.add_parser(
+        "export", help="Export site content as JSONL/JSON/CSV", parents=[flags]
+    )
+    export_parser.add_argument(
+        "--format",
+        dest="export_format",
+        default="jsonl",
+        choices=["jsonl", "json", "csv"],
+        help="Export format: jsonl (default), json, or csv",
+    )
+    export_parser.add_argument("--type", default=None, help="Filter by content type")
+    export_parser.add_argument(
+        "--include-content", action="store_true", help="Include the markdown body"
+    )
+    export_parser.add_argument(
+        "--include-html", action="store_true", help="Include the rendered HTML"
+    )
+    export_parser.add_argument("--file", default=None, help="Write to this file instead of stdout")
+    export_parser.set_defaults(_handler=_cmd_export)
+
+    skill_parser = subparsers.add_parser(
+        "generate-skill", help="Generate agent skills from site content", parents=[flags]
+    )
+    skill_parser.add_argument(
+        "--force", action="store_true", help="Overwrite skills even if unchanged"
+    )
+    skill_parser.set_defaults(_handler=_cmd_generate_skill)
+
     theme_parser = subparsers.add_parser("theme", help="Theme asset commands")
     theme_sub = theme_parser.add_subparsers(dest="theme_command")
     theme_compile = theme_sub.add_parser(
@@ -366,9 +405,21 @@ def _cmd_new_post(args: argparse.Namespace) -> NewPostOutput:
     return NewPostOutput(path=str(destination))
 
 
-def _cmd_build(args: argparse.Namespace) -> BuildOutput:
-    """Run a full site build from ``./bartleby.yml`` via the async pipeline."""
+def _cmd_build(args: argparse.Namespace) -> BuildOutput | DryRunOutput:
+    """Run a full site build from ``./bartleby.yml`` via the async pipeline.
+
+    With ``--dry-run`` the build renders into a temp tree, diffs it against the
+    existing ``site/``, and reports the change set without writing to disk.
+    """
     config_path = _resolve_config_path(args)
+    if args.dry_run:
+        diff = build_dry_run(config_path, include_drafts=args.include_drafts, strict=args.strict)
+        return DryRunOutput(
+            added=diff.added,
+            modified=diff.modified,
+            unchanged=len(diff.unchanged),
+            deleted=diff.deleted,
+        )
     result = asyncio.run(
         async_build(config_path, include_drafts=args.include_drafts, strict=args.strict)
     )
@@ -555,6 +606,86 @@ def _cmd_lint(args: argparse.Namespace) -> LintOutput:
     warnings = sum(1 for finding in findings if finding.severity == "warning")
     info = sum(1 for finding in findings if finding.severity == "info")
     return LintOutput(issues=issues, errors=errors, warnings=warnings, info=info)
+
+
+def _cmd_export(args: argparse.Namespace) -> RawOutput:
+    """Export published content (``export``) as JSONL/JSON/CSV.
+
+    The payload is written to ``--file`` when given (and an empty result is
+    returned so nothing is echoed), otherwise it is emitted on stdout verbatim.
+    """
+    config_path = _resolve_config_path(args)
+    config = load_config(config_path)
+    pages, _assets = discover_content(config, config.config_dir / "content")
+    if args.type is not None and args.type not in config.content_types:
+        raise UsageError(f"unknown content type {args.type!r}")
+    payload = export_content(
+        pages,
+        config,
+        fmt=args.export_format,
+        content_type=args.type,
+        include_content=args.include_content,
+        include_html=args.include_html,
+    )
+    if args.file is not None:
+        Path(args.file).write_text(payload + "\n", encoding="utf-8")
+        return RawOutput(text=f"wrote {args.file}")
+    return RawOutput(text=payload)
+
+
+def _cmd_generate_skill(args: argparse.Namespace) -> GenerateSkillOutput:
+    """Generate the agent skills (``generate-skill``) and write them to disk.
+
+    Skills are rendered deterministically from the site's shape and written to
+    ``ai.skills.output_dir``. ``--force`` is accepted for parity with the spec;
+    generation is deterministic, so writes are always idempotent.
+    """
+    config_path = _resolve_config_path(args)
+    project_dir = config_path.parent
+    config = load_config(config_path)
+    authors = load_authors(project_dir / config.authors_file)
+    pages, _assets = discover_content(config, project_dir / "content")
+    generate_all_urls(pages, config)
+
+    shortcodes = _discover_shortcode_names(project_dir)
+    style_guide_text = _load_style_guide(project_dir, config.ai.skills.style_guide)
+    skills = generate_skills(
+        pages,
+        config,
+        authors,
+        shortcodes=shortcodes,
+        style_guide_text=style_guide_text,
+    )
+
+    output_dir = project_dir / config.ai.skills.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+    generated: list[dict[str, object]] = []
+    for skill in skills:
+        destination = output_dir / skill.filename
+        destination.write_text(skill.content, encoding="utf-8")
+        generated.append({"type": skill.name.removeprefix("bartleby-"), "path": str(destination)})
+    return GenerateSkillOutput(skills_generated=generated, output_dir=config.ai.skills.output_dir)
+
+
+def _discover_shortcode_names(project_dir: Path) -> list[str]:
+    """Return the names of the project's shortcode templates, sorted."""
+    shortcodes_dir = project_dir / "templates" / "shortcodes"
+    if not shortcodes_dir.is_dir():
+        return []
+    return sorted(path.stem for path in shortcodes_dir.glob("*.html"))
+
+
+def _load_style_guide(project_dir: Path, style_guide: str | None) -> str | None:
+    """Read the configured style-guide markdown, if any.
+
+    :raises UsageError: When ``style_guide`` points to a missing file.
+    """
+    if style_guide is None:
+        return None
+    path = project_dir / style_guide
+    if not path.exists():
+        raise UsageError(f"style guide not found at {path}")
+    return path.read_text(encoding="utf-8")
 
 
 def _find_page(path: str, pages: list[Page]) -> Page | None:

@@ -594,3 +594,77 @@ def test_lint_check_external_off_by_default(
     monkeypatch.setattr("bartleby.linting.check_external_url", fake_checker)
     main(["lint", "--output", "json"])
     assert called["checked"] is False
+
+
+def test_build_dry_run_reports_without_writing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby build --dry-run --output json`` reports changes and never writes site/."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["build", "--dry-run", "--output", "json"])
+    captured = capsys.readouterr()
+    payload = _last_json(captured.out)
+    assert payload["status"] == "dry_run"
+    assert isinstance(payload["added"], list)
+    assert payload["added"]  # a fresh site reports everything as added
+    assert not (tmp_path / "mysite" / "site").exists()
+
+
+def test_export_jsonl_emits_one_object_per_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby export`` defaults to JSONL with one published page per line."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    monkeypatch.chdir(tmp_path / "mysite")
+    post = tmp_path / "mysite" / "content" / "blog" / "posts" / "p.md"
+    post.write_text(
+        '---\ntitle: "P"\ndate: 2026-05-01\ndraft: false\ndescription: "d"\n---\n\nBody.\n',
+        encoding="utf-8",
+    )
+    capsys.readouterr()  # drop scaffolding output
+    main(["export"])
+    captured = capsys.readouterr()
+    lines = [line for line in captured.out.splitlines() if line.strip()]
+    records = [json.loads(line) for line in lines]
+    titles = {record["title"] for record in records}
+    assert "P" in titles
+
+
+def test_export_include_content_embeds_body(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby export --include-content`` embeds the markdown body."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    monkeypatch.chdir(tmp_path / "mysite")
+    post = tmp_path / "mysite" / "content" / "blog" / "posts" / "p.md"
+    post.write_text(
+        '---\ntitle: "P"\ndate: 2026-05-01\ndraft: false\ndescription: "d"\n---\n\n'
+        "Unique body text.\n",
+        encoding="utf-8",
+    )
+    capsys.readouterr()
+    main(["export", "--include-content"])
+    captured = capsys.readouterr()
+    assert "Unique body text." in captured.out
+
+
+def test_generate_skill_writes_three_skills(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby generate-skill`` writes the three skills under the configured output dir."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    monkeypatch.chdir(tmp_path / "mysite")
+    capsys.readouterr()
+    main(["generate-skill", "--output", "json"])
+    captured = capsys.readouterr()
+    payload = _last_json(captured.out)
+    generated = payload["skills_generated"]
+    assert isinstance(generated, list)
+    assert len(generated) == 3
+    skills_dir = tmp_path / "mysite" / ".claude" / "skills"
+    assert (skills_dir / "bartleby-write.md").exists()
+    assert (skills_dir / "bartleby-review.md").exists()
+    assert (skills_dir / "bartleby-ops.md").exists()

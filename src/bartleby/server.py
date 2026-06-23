@@ -11,6 +11,8 @@ import threading
 from typing import TYPE_CHECKING
 
 from bartleby.build import build
+from bartleby.config import load_config
+from bartleby.plugins import PluginCollection, discover_hooks
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -63,6 +65,18 @@ class DevServer:
         """Run a full build with drafts included."""
         build(self.config_path, include_drafts=True)
 
+    def dispatch_on_serve(self, server: object) -> None:
+        """Fire the ``on_serve`` hook so plugins can react to the dev server.
+
+        The project's ``hooks/`` directory is discovered and any ``on_serve``
+        handlers run with the live server object and resolved config, matching
+        the spec signature ``on_serve(server, config)``.
+        """
+        config = load_config(self.config_path)
+        plugins = PluginCollection()
+        plugins.merge(discover_hooks(config.config_dir))
+        plugins.run_event("on_serve", server, config=config)
+
     def handle_change(self, rel_path: str) -> None:
         """React to a single file change by re-running the appropriate build."""
         kind = classify_change(rel_path)
@@ -81,6 +95,7 @@ class DevServer:
         site_dir = self.config_path.parent / "site"
         handler = _site_request_handler(site_dir)
         with socketserver.TCPServer((self.host, self.port), handler) as httpd:
+            self.dispatch_on_serve(httpd)
             print(f"Serving at http://{self.host}:{httpd.server_address[1]}/")
             with contextlib.suppress(KeyboardInterrupt):
                 httpd.serve_forever()

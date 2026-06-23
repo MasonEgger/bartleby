@@ -136,7 +136,9 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
     config = load_config(config_path)
     project_dir = config.config_dir
     plugins.merge(discover_hooks(project_dir))
+    plugins.run_event("on_startup", "build")
     config = plugins.run_event("on_config", config)
+    plugins.run_event("on_pre_build", config)
     authors_path = project_dir / config.authors_file
     authors = load_authors(authors_path)
 
@@ -146,9 +148,9 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
     if not include_drafts:
         pages = [page for page in pages if not page.draft]
 
-    # Dispatch on_pages only after drafts are filtered out so plugins never
+    # Dispatch on_files only after drafts are filtered out so plugins never
     # operate on pages that the build is about to discard.
-    pages = list(plugins.run_event("on_pages", pages, config=config))
+    pages = list(plugins.run_event("on_files", pages, config=config))
 
     metadata_errors = validate_all_metadata(pages, config, authors)
     if metadata_errors:
@@ -162,6 +164,7 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
     all_pages = pages + taxonomy_pages + listing_pages
     nav = build_navigation(config, pages)
     link_pages(nav)
+    nav = plugins.run_event("on_nav", nav, config=config)
 
     md_renderer = create_markdown_renderer(config)
     env = create_jinja_env(config, project_dir)
@@ -179,11 +182,19 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
     page_errors: list[PageError] = []
 
     for page in all_pages:
+        plugins.run_event("on_pre_page", page, config=config)
+        # on_page_read_source may return a replacement source string; None falls
+        # back to the page's own raw content read at discovery time.
+        overridden_source = plugins.run_query("on_page_read_source", page=page, config=config)
+        raw_source = overridden_source if overridden_source is not None else page.raw_content
         try:
-            source = process_shortcodes(page.raw_content, {"build": build_info, "page": page}, env)
+            source = process_shortcodes(raw_source, {"build": build_info, "page": page}, env)
             source = plugins.run_event("on_page_markdown", source, page=page, config=config)
             rendered = render_markdown(source, md_renderer)
-            page.rendered_content = rendered.html
+            html_content = plugins.run_event(
+                "on_page_content", rendered.html, page=page, config=config
+            )
+            page.rendered_content = html_content
         except (ShortcodeError, ValueError) as exc:
             page_errors.append(PageError(file_path=str(page.source_path), message=str(exc)))
             continue
@@ -233,6 +244,7 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
                 data=data,
                 authors=authors,
             )
+            context = plugins.run_event("on_page_context", context, page=page, config=config)
             html = template.render(**context)
             html = plugins.run_event("on_post_page", html, page=page, config=config)
             _write_page(output_dir, page, html)
@@ -294,6 +306,8 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
     )
 
     _swap_output_into_place(build_dir, final_output_dir)
+    plugins.run_event("on_post_build", config)
+    plugins.run_lifecycle("on_shutdown")
 
     static_file_count = sum(
         1
@@ -345,6 +359,7 @@ def _fail_build(
     shutil.rmtree(build_dir, ignore_errors=True)
     error = BuildError(page_errors)
     plugins.run_event("on_build_error", error)
+    plugins.run_lifecycle("on_shutdown")
     raise error
 
 

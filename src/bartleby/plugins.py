@@ -30,7 +30,6 @@ KNOWN_EVENTS: tuple[str, ...] = (
     "on_post_build",
     "on_build_error",
     "on_serve",
-    "on_pages",
 )
 
 
@@ -89,7 +88,12 @@ class PluginCollection:
         self.events[name].sort(key=lambda fn: -_priority_of(fn))
 
     def run_event(self, name: str, item: Any, **kwargs: Any) -> Any:
-        """Dispatch an event through its registered handlers in priority order."""
+        """Dispatch an event through its registered handlers in priority order.
+
+        Each handler receives the threaded ``item`` as its first positional
+        argument plus ``kwargs``; a non-``None`` return replaces ``item`` for the
+        next handler and is returned at the end. ``None`` returns preserve it.
+        """
         handlers = self.events.get(name, [])
         current = item
         for handler in handlers:
@@ -97,6 +101,30 @@ class PluginCollection:
             if result is not None:
                 current = result
         return current
+
+    def run_query(self, name: str, **kwargs: Any) -> Any:
+        """Dispatch a query event whose handlers take no threaded value.
+
+        Used for ``on_page_read_source(page, config)``, where each handler is
+        offered the chance to produce a value (the page source). Handlers run in
+        priority-then-registration order; the first non-``None`` return wins and
+        short-circuits the rest. Returns ``None`` when no handler supplies one.
+        """
+        for handler in self.events.get(name, []):
+            result = handler(**kwargs)
+            if result is not None:
+                return result
+        return None
+
+    def run_lifecycle(self, name: str, **kwargs: Any) -> None:
+        """Dispatch a no-threaded-value lifecycle event (e.g. ``on_shutdown``).
+
+        Handlers run in the same priority-then-registration order as
+        :meth:`run_event` but receive no threaded item, matching the spec
+        signature of argument-free lifecycle hooks. Return values are ignored.
+        """
+        for handler in self.events.get(name, []):
+            handler(**kwargs)
 
     def merge(self, other: PluginCollection) -> None:
         """Fold another PluginCollection's handlers into this one."""

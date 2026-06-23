@@ -95,25 +95,25 @@ def test_tree_shake_retains_icon_referenced_only_in_template(project: Path) -> N
     assert (project / "site" / "icons" / "material" / "home.svg").exists()
 
 
-def test_on_pages_runs_after_draft_filter(project: Path) -> None:
-    """The ``on_pages`` hook sees only published pages, never drafts.
+def test_on_files_runs_after_draft_filter(project: Path) -> None:
+    """The ``on_files`` hook sees only published pages, never drafts.
 
     A hook registered in the project's ``hooks/`` directory records the titles
-    of every page it receives. Because the draft filter now runs before the
-    hook, a draft post must be absent from what the hook observed.
+    of every page it receives. Because the draft filter runs before the hook, a
+    draft post must be absent from what the hook observed.
     """
     hooks_dir = project / "hooks"
     hooks_dir.mkdir()
     record_path = project / "seen_pages.txt"
     (hooks_dir / "record.py").write_text(
-        "# ABOUTME: Test hook that records the titles on_pages receives.\n"
+        "# ABOUTME: Test hook that records the titles on_files receives.\n"
         "# Writes them to seen_pages.txt for the draft-filter ordering assertion.\n"
         "from __future__ import annotations\n"
         "from pathlib import Path\n"
         "\n"
         "RECORD = Path(__file__).parent.parent / 'seen_pages.txt'\n"
         "\n"
-        "def on_pages(pages, config):\n"
+        "def on_files(pages, config):\n"
         "    RECORD.write_text('\\n'.join(page.title for page in pages), encoding='utf-8')\n"
         "    return pages\n",
         encoding="utf-8",

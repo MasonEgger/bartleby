@@ -1,7 +1,7 @@
 # Bartleby v0.1.0 Hardening — Progress
 
 Delta plan over the 27-step initial build. See `plan.md` for the full TDD
-prompts and `audit.md` for the findings each step closes. 5 of 18 steps done.
+prompts and `audit.md` for the findings each step closes. 6 of 18 steps done.
 
 ## Phase 1 — Foundations
 
@@ -62,11 +62,11 @@ prompts and `audit.md` for the findings each step closes. 5 of 18 steps done.
 
 ## Phase 3 — Plugins
 
-- [ ] **Step 8: All hook events fire; BasePlugin parity** (Deferral 7, Design 6)
-  - [ ] 8.1: RED — each of the 16 events dispatched once with correct args; return-value semantics; BasePlugin parity
-  - [ ] 8.2: GREEN — add missing dispatch call sites in build.py/server.py
-  - [ ] 8.3: GREEN — reconcile KNOWN_EVENTS and BasePlugin
-  - [ ] 8.4: REFACTOR — priority-then-registration for every event; run `just check`
+- [x] **Step 8: All hook events fire; BasePlugin parity** (Deferral 7, Design 6)
+  - [x] 8.1: RED — each of the 16 events dispatched once with correct args; return-value semantics; BasePlugin parity
+  - [x] 8.2: GREEN — add missing dispatch call sites in build.py/server.py
+  - [x] 8.3: GREEN — reconcile KNOWN_EVENTS and BasePlugin
+  - [x] 8.4: REFACTOR — priority-then-registration for every event; run `just check`
 
 - [ ] **Step 9: Entry-point plugin discovery**
   - [ ] 9.1: RED — bartleby.plugins discovery; ordering internal/plugins/hooks; config disable

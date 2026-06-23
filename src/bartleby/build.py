@@ -33,7 +33,7 @@ from bartleby.llm import (
 from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
 from bartleby.metadata import validate_all_metadata
 from bartleby.navigation import build_navigation, link_pages
-from bartleby.plugins import PluginCollection, discover_hooks
+from bartleby.plugins import PluginCollection, discover_hooks, discover_plugins
 from bartleby.search import build_search_index, write_search_index
 from bartleby.shortcodes import ShortcodeError, process_shortcodes
 from bartleby.sitemap import write_robots_txt, write_sitemap
@@ -135,6 +135,9 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
 
     config = load_config(config_path)
     project_dir = config.config_dir
+    # Registration order at equal priority: internal handlers (already on
+    # `plugins`), then installed plugins (alphabetical), then project hooks last.
+    plugins.merge(discover_plugins(config.disabled_plugins))
     plugins.merge(discover_hooks(project_dir))
     plugins.run_event("on_startup", "build")
     config = plugins.run_event("on_config", config)

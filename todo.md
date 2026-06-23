@@ -68,11 +68,11 @@ prompts and `audit.md` for the findings each step closes. 6 of 18 steps done.
   - [x] 8.3: GREEN — reconcile KNOWN_EVENTS and BasePlugin
   - [x] 8.4: REFACTOR — priority-then-registration for every event; run `just check`
 
-- [ ] **Step 9: Entry-point plugin discovery**
-  - [ ] 9.1: RED — bartleby.plugins discovery; ordering internal/plugins/hooks; config disable
-  - [ ] 9.2: GREEN — entry-point discovery merged with hooks/*.py; honor disable list
-  - [ ] 9.3: GREEN — wire into hook-discovery pipeline step
-  - [ ] 9.4: REFACTOR — single registration path; run `just check`
+- [x] **Step 9: Entry-point plugin discovery**
+  - [x] 9.1: RED — bartleby.plugins discovery; ordering internal/plugins/hooks; config disable
+  - [x] 9.2: GREEN — entry-point discovery merged with hooks/*.py; honor disable list
+  - [x] 9.3: GREEN — wire into hook-discovery pipeline step
+  - [x] 9.4: REFACTOR — single registration path; run `just check`
 
 ## Phase 4 — Dev server
 

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib.metadata
 import importlib.util
 import inspect
 from collections.abc import Callable
@@ -10,6 +11,9 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 if TYPE_CHECKING:
     from pathlib import Path
+    from types import ModuleType
+
+PLUGIN_ENTRY_POINT_GROUP = "bartleby.plugins"
 
 EventHandler = Callable[..., Any]
 
@@ -154,10 +158,37 @@ def discover_hooks(project_dir: Path) -> PluginCollection:
             continue
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        for attr_name, attr_value in inspect.getmembers(module, inspect.isfunction):
-            if attr_name in KNOWN_EVENTS:
-                collection.register(attr_name, attr_value)
+        _register_module_handlers(collection, module)
     return collection
+
+
+def discover_plugins(disabled: set[str]) -> PluginCollection:
+    """Discover installed plugin packages via the ``bartleby.plugins`` entry-point group.
+
+    Each entry point names a module; its module-level ``on_<event>`` functions
+    are registered exactly like a ``hooks/*.py`` file. Entry points are processed
+    in alphabetical name order so installed plugins keep a deterministic relative
+    order at equal priority. A name present in ``disabled`` is skipped.
+
+    :param disabled: Plugin (entry-point) names to skip, from the ``plugins:``
+        config section's ``<name>: false`` entries.
+    :returns: A PluginCollection populated from every enabled entry-point module.
+    """
+    collection = PluginCollection()
+    entry_points = importlib.metadata.entry_points(group=PLUGIN_ENTRY_POINT_GROUP)
+    for entry_point in sorted(entry_points, key=lambda ep: ep.name):
+        if entry_point.name in disabled:
+            continue
+        module = entry_point.load()
+        _register_module_handlers(collection, module)
+    return collection
+
+
+def _register_module_handlers(collection: PluginCollection, module: ModuleType) -> None:
+    """Register every module-level ``on_<event>`` function in ``module`` onto ``collection``."""
+    for attr_name, attr_value in inspect.getmembers(module, inspect.isfunction):
+        if attr_name in KNOWN_EVENTS:
+            collection.register(attr_name, attr_value)
 
 
 def _priority_of(handler: EventHandler) -> int:

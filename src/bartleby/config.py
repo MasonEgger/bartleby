@@ -164,6 +164,7 @@ class BartlebyConfig:
     ai: AIConfig
     dev_server: DevServerConfig
     config_dir: Path
+    disabled_plugins: set[str] = field(default_factory=set)
 
 
 def load_config(config_path: Path) -> BartlebyConfig:
@@ -208,9 +209,7 @@ def _parse_config(raw: dict[str, Any], config_dir: Path) -> BartlebyConfig:
     )
 
     plugins_raw = raw.get("plugins")
-    plugins: list[str] = (
-        [str(name) for name in plugins_raw] if isinstance(plugins_raw, list) else []
-    )
+    plugins, disabled_plugins = _parse_plugins(plugins_raw)
 
     extra_css_raw = raw.get("extra_css")
     extra_css: list[str] = (
@@ -232,12 +231,36 @@ def _parse_config(raw: dict[str, Any], config_dir: Path) -> BartlebyConfig:
         exclude_patterns=exclude_patterns,
         markdown_extensions=markdown_extensions,
         plugins=plugins,
+        disabled_plugins=disabled_plugins,
         extra_css=extra_css,
         extra_js=extra_js,
         ai=_parse_ai(raw.get("ai")),
         dev_server=_parse_dev_server(raw.get("dev_server")),
         config_dir=config_dir,
     )
+
+
+def _parse_plugins(raw: Any) -> tuple[list[str], set[str]]:
+    """Parse the ``plugins`` section into enabled names and disabled names.
+
+    The section accepts two forms (spec.md "plugins"):
+
+    - a **list** of feature-module names to enable (e.g. ``[search, rss]``);
+    - a **mapping** of ``<name>: bool`` where ``false`` disables an
+      auto-registered plugin without uninstalling it.
+
+    :param raw: The raw ``plugins`` value from the parsed YAML.
+    :returns: A ``(enabled, disabled)`` tuple. ``enabled`` lists names mapped
+        to a truthy value (or every item of the list form); ``disabled`` holds
+        names mapped to ``false``.
+    """
+    if isinstance(raw, dict):
+        enabled = [str(name) for name, value in raw.items() if value]
+        disabled = {str(name) for name, value in raw.items() if not value}
+        return enabled, disabled
+    if isinstance(raw, list):
+        return [str(name) for name in raw], set()
+    return [], set()
 
 
 def _parse_site(raw: Any) -> SiteConfig:

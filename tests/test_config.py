@@ -152,3 +152,30 @@ def test_known_theme_features_are_accepted(tmp_path: Path) -> None:
     )
     config = load_config(config_path)
     assert set(config.theme.features) == KNOWN_FEATURES
+
+
+def test_plugins_list_form_enables_names(tmp_path: Path) -> None:
+    """The list form of ``plugins:`` populates enabled names with no disabled entries."""
+    config_path = tmp_path / "plugins-list.yml"
+    config_path.write_text(
+        "site:\n  title: Site\n  url: https://example.com\nplugins:\n  - search\n  - rss\n"
+    )
+    config = load_config(config_path)
+    assert config.plugins == ["search", "rss"]
+    assert config.disabled_plugins == set()
+
+
+def test_plugins_mapping_form_disables_named_plugin(tmp_path: Path) -> None:
+    """``plugins: {<name>: false}`` records the name in ``disabled_plugins``."""
+    config_path = tmp_path / "plugins-map.yml"
+    config_path.write_text(
+        "site:\n"
+        "  title: Site\n"
+        "  url: https://example.com\n"
+        "plugins:\n"
+        "  search: true\n"
+        "  legacy-redirects: false\n"
+    )
+    config = load_config(config_path)
+    assert config.disabled_plugins == {"legacy-redirects"}
+    assert config.plugins == ["search"]

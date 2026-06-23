@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import types
 from pathlib import Path
 from unittest.mock import patch
 
@@ -15,6 +16,7 @@ from bartleby.plugins import (
     BasePlugin,
     PluginCollection,
     discover_hooks,
+    discover_plugins,
     event_priority,
 )
 
@@ -472,3 +474,145 @@ def test_priority_then_registration_ordering_for_arbitrary_event() -> None:
     collection.register("on_files", prioritised)
     collection.run_event("on_files", object())
     assert order == ["prioritised", "first", "second"]
+
+
+# --- Step 9: entry-point plugin discovery -------------------------------------
+
+
+def _make_plugin_module(name: str, **handlers: object) -> types.ModuleType:
+    """Build an in-memory module carrying module-level ``on_<event>`` handlers."""
+    module = types.ModuleType(name)
+    for attr_name, handler in handlers.items():
+        setattr(module, attr_name, handler)
+    return module
+
+
+def _fake_entry_point(name: str, module: types.ModuleType) -> object:
+    """A stand-in for ``importlib.metadata.EntryPoint`` whose ``load`` returns ``module``."""
+
+    class _EntryPoint:
+        def __init__(self) -> None:
+            self.name = name
+            self.group = "bartleby.plugins"
+
+        def load(self) -> types.ModuleType:
+            return module
+
+    return _EntryPoint()
+
+
+def test_discover_plugins_registers_entry_point_handlers() -> None:
+    """A ``bartleby.plugins`` entry-point module has its ``on_<event>`` functions registered."""
+
+    def on_page_markdown(markdown: object, page: object, config: object) -> None:
+        return None
+
+    module = _make_plugin_module("fake_plugin", on_page_markdown=on_page_markdown)
+    entry_point = _fake_entry_point("fake_plugin", module)
+
+    with patch("importlib.metadata.entry_points", return_value=[entry_point]) as mock_ep:
+        collection = discover_plugins(set())
+
+    mock_ep.assert_called_once_with(group="bartleby.plugins")
+    assert "on_page_markdown" in collection.events
+    assert on_page_markdown in collection.events["on_page_markdown"]
+
+
+def test_discover_plugins_ignores_non_event_functions() -> None:
+    """Only module-level functions named after a known event are registered."""
+
+    def on_pre_build(config: object) -> None:
+        return None
+
+    def helper() -> None:
+        return None
+
+    module = _make_plugin_module("fake_plugin", on_pre_build=on_pre_build, helper=helper)
+    entry_point = _fake_entry_point("fake_plugin", module)
+
+    with patch("importlib.metadata.entry_points", return_value=[entry_point]):
+        collection = discover_plugins(set())
+
+    assert set(collection.events) == {"on_pre_build"}
+
+
+def test_discover_plugins_orders_entry_points_alphabetically() -> None:
+    """Installed plugins register in alphabetical entry-point name order at equal priority."""
+
+    def make_handler(tag: str) -> object:
+        def on_files(files: object, **_: object) -> None:
+            files.append(tag)  # type: ignore[attr-defined]
+            return None
+
+        return on_files
+
+    zed = _fake_entry_point("zed", _make_plugin_module("zed", on_files=make_handler("zed")))
+    alpha = _fake_entry_point(
+        "alpha", _make_plugin_module("alpha", on_files=make_handler("alpha"))
+    )
+
+    # Return them out of order; discovery must sort by entry-point name.
+    with patch("importlib.metadata.entry_points", return_value=[zed, alpha]):
+        collection = discover_plugins(set())
+
+    order: list[str] = []
+    collection.run_event("on_files", order)
+    assert order == ["alpha", "zed"]
+
+
+def test_discover_plugins_honors_disable_list() -> None:
+    """A name in the disabled set is skipped during entry-point discovery."""
+
+    def on_pre_build(config: object) -> None:
+        return None
+
+    keep = _fake_entry_point("keep", _make_plugin_module("keep", on_pre_build=on_pre_build))
+    drop = _fake_entry_point("drop", _make_plugin_module("drop", on_pre_build=on_pre_build))
+
+    with patch("importlib.metadata.entry_points", return_value=[keep, drop]):
+        collection = discover_plugins({"drop"})
+
+    assert len(collection.events.get("on_pre_build", [])) == 1
+
+
+def test_discover_plugins_no_entry_points_is_ok() -> None:
+    """No installed plugins yields an empty collection without error."""
+    with patch("importlib.metadata.entry_points", return_value=[]):
+        collection = discover_plugins(set())
+    assert collection.events == {}
+
+
+def test_combined_registration_order_internal_plugins_hooks() -> None:
+    """Equal priority: internal, then installed plugins (alpha), then project hooks last."""
+    order: list[str] = []
+
+    def internal(files: object, **_: object) -> None:
+        order.append("internal")
+        return None
+
+    collection = PluginCollection()
+    collection.register("on_files", internal)
+
+    def make_handler(tag: str) -> object:
+        def on_files(files: object, **_: object) -> None:
+            order.append(tag)
+            return None
+
+        return on_files
+
+    bravo = _fake_entry_point(
+        "bravo", _make_plugin_module("bravo", on_files=make_handler("plugin-bravo"))
+    )
+    alpha = _fake_entry_point(
+        "alpha", _make_plugin_module("alpha", on_files=make_handler("plugin-alpha"))
+    )
+
+    with patch("importlib.metadata.entry_points", return_value=[bravo, alpha]):
+        collection.merge(discover_plugins(set()))
+
+    project_hooks = PluginCollection()
+    project_hooks.register("on_files", make_handler("project-hook"))
+    collection.merge(project_hooks)
+
+    collection.run_event("on_files", None)
+    assert order == ["internal", "plugin-alpha", "plugin-bravo", "project-hook"]

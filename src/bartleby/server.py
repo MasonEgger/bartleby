@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from bartleby.build import build
 from bartleby.config import load_config
-from bartleby.plugins import PluginCollection, discover_hooks
+from bartleby.plugins import PluginCollection, discover_hooks, discover_plugins
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -74,6 +74,7 @@ class DevServer:
         """
         config = load_config(self.config_path)
         plugins = PluginCollection()
+        plugins.merge(discover_plugins(config.disabled_plugins))
         plugins.merge(discover_hooks(config.config_dir))
         plugins.run_event("on_serve", server, config=config)
 

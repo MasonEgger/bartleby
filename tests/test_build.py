@@ -63,6 +63,38 @@ def test_build_listing_page_lists_published_posts(project: Path) -> None:
     assert 'href="/blog/posts/draft-post/"' not in rendered
 
 
+def test_build_renders_standalone_404(project: Path) -> None:
+    """``build`` renders a standalone ``site/404.html`` from the 404 template."""
+    build(project / "bartleby.yml")
+    not_found = project / "site" / "404.html"
+    assert not_found.exists()
+    rendered = not_found.read_text(encoding="utf-8")
+    assert "404" in rendered
+    # The 404 template extends base.html, so the site chrome must be present.
+    assert "<html" in rendered.lower()
+
+
+def test_tree_shake_retains_icon_referenced_only_in_template(project: Path) -> None:
+    """An icon referenced only in a project template is copied to the output.
+
+    The page bodies never mention ``icon-material-home``; only an overriding
+    template does. Tree-shaking must scan template sources, not just rendered
+    page bodies, to retain it.
+    """
+    templates_dir = project / "templates"
+    templates_dir.mkdir()
+    (templates_dir / "page.html").write_text(
+        '{% extends "base.html" %}\n'
+        "{% block content %}\n"
+        '<span class="icon icon-material-home"></span>\n'
+        "<article><h1>{{ page.title }}</h1>{{ page.content | safe }}</article>\n"
+        "{% endblock %}\n",
+        encoding="utf-8",
+    )
+    build(project / "bartleby.yml")
+    assert (project / "site" / "icons" / "material" / "home.svg").exists()
+
+
 def test_on_pages_runs_after_draft_filter(project: Path) -> None:
     """The ``on_pages`` hook sees only published pages, never drafts.
 

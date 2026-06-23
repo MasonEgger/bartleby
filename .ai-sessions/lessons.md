@@ -3,6 +3,7 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- When a new render helper forwards args into an existing context builder, copy that builder's param types verbatim (`list[Any]`, `dict[str, Any]`); mypy strict treats `dict`/`list` as invariant, so a "tighter" `list[object]`/`Sequence` annotation breaks the forward (`list[NavItem]` is not a `list[object]`) (2026-06-22)
 - When gating existing template markup behind a Jinja global (e.g. a `feature()` helper), grep `tests/` for every assertion string on that markup first — multiple test files build their own bare `jinja2.Environment` and each needs the global registered, or pre-existing assertions on the now-gated markup go red (2026-06-22)
 - In a build test, a project template that exists only to bump the template-tree mtime must not shadow a theme template; `templates/base.html` containing `{% extends 'base.html' %}` self-references through the cascade and hits Jinja's recursion limit. Use a unique non-cascade name like `custom-partial.html` (2026-06-22)
 - When asserting that vendored/minified third-party code does NOT contain a marker, match the exact original stub string, not a generic word — minified Alpine.js contains an internal `__placeholder` token, so a `"placeholder" not in text` check false-positived against the real bundle (2026-06-22)
@@ -12,7 +13,10 @@
 - Launch long-lived local servers (`/bpe:review`, preview HTTP) with `setsid <cmd> > log 2>&1 < /dev/null &` — a plain background job gets reaped on shell teardown and a separately-run server gets killed by the background-task timeout; setsid in its own session survives both (2026-06-21)
 - When a `/bpe:brainstorm` decision and the drafted spec diverge, trust the `/bpe:review` + `/bpe:apply-review` cycle to catch it — the plugin-API "both in v1 vs staged" conflict surfaced exactly there and got resolved against the brainstorm (2026-06-21)
 - Run the actual smoke test before trusting a review claim — a subagent reported front-matter leaking into `.md` variants; running `new site && build` and inspecting output refuted it (raw_content is the parsed body) before it reached the report (2026-06-21)
-- Integration tests that only check file *existence* miss content bugs. After `bartleby new site && bartleby new post && bartleby build`, the post template rendered an empty author byline and the listing page rendered an empty post list, yet every test passed because they stopped at `(site / "blog" / "index.html").exists()` (2026-06-02)
+
+## Typing
+
+- When a new render helper forwards args into an existing context builder, copy that builder's param types verbatim (`list[Any]`, `dict[str, Any]`); mypy strict treats `dict`/`list` as invariant, so a "tighter" `list[object]`/`Sequence` annotation breaks the forward (`list[NavItem]` is not a `list[object]`) (2026-06-22)
 
 ## Testing
 

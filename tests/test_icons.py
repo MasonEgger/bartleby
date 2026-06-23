@@ -40,6 +40,19 @@ def test_resolve_simple_icon() -> None:
     assert result.exists()
 
 
+def test_each_pack_vendors_multiple_icons() -> None:
+    """Every pack ships more than a single stub icon so it is usable in practice."""
+    samples = {
+        "material": ["material-account", "material-home", "material-magnify", "material-close"],
+        "fontawesome": ["fontawesome-brands-github", "fontawesome-brands-twitter"],
+        "octicons": ["octicons-mark-github-16", "octicons-star-16", "octicons-repo-16"],
+        "simple": ["simple-python", "simple-github", "simple-rust"],
+    }
+    for pack, names in samples.items():
+        for name in names:
+            assert get_icon_path(name, {pack: True}) is not None, name
+
+
 def test_disabled_pack_not_resolved() -> None:
     """A pack with ``False`` in the icon_packs map returns ``None``."""
     assert get_icon_path("material-account", {"material": False}) is None
@@ -62,6 +75,21 @@ def test_tree_shake_excludes_unused(tmp_path: Path) -> None:
     rendered = ["<p>no icons here</p>"]
     tree_shake_icons(rendered, {"material": True, "fontawesome": True}, tmp_path)
     assert not (tmp_path / "icons" / "material" / "account.svg").exists()
+
+
+def test_tree_shake_unreferenced_pack_contributes_zero_files(tmp_path: Path) -> None:
+    """A pack with no referenced icons contributes zero files to the output.
+
+    One material icon is referenced; fontawesome is enabled but unreferenced,
+    so its output directory must not be created at all.
+    """
+    rendered = ['<svg class="icon icon-material-account">…</svg>']
+    enabled = {"material": True, "fontawesome": True, "octicons": True, "simple": True}
+    tree_shake_icons(rendered, enabled, tmp_path)
+    assert (tmp_path / "icons" / "material" / "account.svg").exists()
+    assert not (tmp_path / "icons" / "fontawesome-brands").exists()
+    assert not (tmp_path / "icons" / "octicons").exists()
+    assert not (tmp_path / "icons" / "simple").exists()
 
 
 def test_all_packs_enabled_by_default_can_be_listed() -> None:

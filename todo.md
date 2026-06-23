@@ -53,12 +53,12 @@ prompts and `audit.md` for the findings each step closes. 5 of 18 steps done.
   - [x] 6.4: GREEN — known-feature validation in config.py
   - [x] 6.5: REFACTOR — one known-feature list; run `just check`
 
-- [ ] **Step 7: Full icon packs and standalone 404** (Deferral 3, Spec 3)
-  - [ ] 7.1: RED — resolve icons across all four packs; tree-shake; unused pack = 0 files
-  - [ ] 7.2: RED — build renders site/404.html
-  - [ ] 7.3: GREEN — vendor complete packs; get_icon_path resolves full set
-  - [ ] 7.4: GREEN — 404 render in pipeline
-  - [ ] 7.5: REFACTOR — tree-shake scans HTML + templates; run `just check`
+- [x] **Step 7: Full icon packs and standalone 404** (Deferral 3, Spec 3)
+  - [x] 7.1: RED — resolve icons across all four packs; tree-shake; unused pack = 0 files
+  - [x] 7.2: RED — build renders site/404.html
+  - [x] 7.3: GREEN — vendor complete packs; get_icon_path resolves full set
+  - [x] 7.4: GREEN — 404 render in pipeline
+  - [x] 7.5: REFACTOR — tree-shake scans HTML + templates; run `just check`
 
 ## Phase 3 — Plugins
 

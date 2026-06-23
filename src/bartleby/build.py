@@ -12,7 +12,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn
 
 from jinja2 import TemplateError
 
@@ -48,6 +48,10 @@ from bartleby.templates import (
 from bartleby.urls import generate_all_urls
 
 if TYPE_CHECKING:
+    from jinja2 import Environment
+
+    from bartleby.authors import Author
+    from bartleby.config import BartlebyConfig
     from bartleby.content import Page
 
 
@@ -209,6 +213,7 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
         if strict:
             raise ValueError(f"strict mode: {len(crossref_errors)} unresolved cross-reference(s)")
 
+    rendered_html: list[str] = []
     for page in all_pages:
         content_type = (
             config.content_types.get(page.content_type_name) if page.content_type_name else None
@@ -231,11 +236,26 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
             html = template.render(**context)
             html = plugins.run_event("on_post_page", html, page=page, config=config)
             _write_page(output_dir, page, html)
+            rendered_html.append(html)
         except (TemplateError, ValueError) as exc:
             page_errors.append(PageError(file_path=str(page.source_path), message=str(exc)))
 
     if page_errors:
         _fail_build(page_errors, build_dir, plugins)
+
+    not_found_html = _render_404(
+        env=env,
+        config=config,
+        nav=nav.items,
+        all_pages=all_pages,
+        taxonomy_data=_taxonomy_context(taxonomy_data),
+        build_info=build_info,
+        data=data,
+        authors=authors,
+        project_dir=project_dir,
+    )
+    (output_dir / "404.html").write_text(not_found_html, encoding="utf-8")
+    rendered_html.append(not_found_html)
 
     from bartleby.theme import get_theme_templates_dir as _theme_dir
 
@@ -244,10 +264,15 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
     copy_static_files(project_dir / "static", output_dir)
     _apply_compiled_theme_css(project_dir, output_dir)
     copy_colocated_assets(assets, pages, content_dir, output_dir)
+    icon_packs = {pack: bool(value) for pack, value in config.theme.icon_packs.items()} or {
+        "material": True,
+        "fontawesome": True,
+        "octicons": True,
+        "simple": True,
+    }
     tree_shake_icons(
-        [page.rendered_content for page in pages if page.rendered_content],
-        {pack: bool(value) for pack, value in config.theme.icon_packs.items()}
-        or {"material": True, "fontawesome": True, "octicons": True, "simple": True},
+        rendered_html + _template_sources(project_dir),
+        icon_packs,
         output_dir,
     )
     write_search_index(build_search_index(pages, config), output_dir)
@@ -341,6 +366,73 @@ def _taxonomy_context(taxonomy_data: AllTaxonomies) -> dict[str, object]:
         "global": taxonomy_data.global_taxonomies,
         "by_content_type": taxonomy_data.content_type_taxonomies,
     }
+
+
+def _render_404(
+    *,
+    env: Environment,
+    config: BartlebyConfig,
+    nav: list[Any],
+    all_pages: list[Page],
+    taxonomy_data: dict[str, Any],
+    build_info: BuildInfo,
+    data: dict[str, object],
+    authors: dict[str, Author],
+    project_dir: Path,
+) -> str:
+    """Render the standalone ``404.html`` from the theme's 404 template.
+
+    The 404 page is not a content page, so it carries a synthetic
+    :class:`~bartleby.content.Page` that supplies the title and URL the base
+    template expects. The project may override ``404.html`` in its own
+    templates directory; resolution goes through Jinja's loader so the 5-level
+    cascade still applies.
+
+    :returns: The fully rendered 404 HTML.
+    """
+    from bartleby.content import Page
+
+    not_found_source = project_dir / "content" / "404.md"
+    not_found_page = Page(
+        source_path=Path("404.md"),
+        abs_source_path=not_found_source,
+        title="404 — Not Found",
+        description="The requested page could not be found.",
+    )
+    not_found_page.output_url = "/404.html"
+    template = env.get_template("404.html")
+    context = build_page_context(
+        page=not_found_page,
+        site_config=config.site,
+        nav=nav,
+        all_pages=all_pages,
+        taxonomy_data=taxonomy_data,
+        config=config,
+        build_info=build_info,
+        data=data,
+        authors=authors,
+    )
+    return template.render(**context)
+
+
+def _template_sources(project_dir: Path) -> list[str]:
+    """Return the raw text of every theme and project template.
+
+    Tree-shaking scans rendered HTML for icon references, but icons can also be
+    referenced directly in template markup that never appears verbatim in any
+    single rendered page (e.g. a partial included only on some pages). Reading
+    the template sources ensures those references are retained too.
+    """
+    from bartleby.theme import get_theme_templates_dir as _theme_dir
+
+    sources: list[str] = []
+    template_roots = [_theme_dir(), project_dir / "templates"]
+    for root in template_roots:
+        if not root.is_dir():
+            continue
+        for template_file in root.rglob("*.html"):
+            sources.append(template_file.read_text(encoding="utf-8"))
+    return sources
 
 
 async def async_build(

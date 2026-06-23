@@ -3,6 +3,7 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- When asserting that vendored/minified third-party code does NOT contain a marker, match the exact original stub string, not a generic word — minified Alpine.js contains an internal `__placeholder` token, so a `"placeholder" not in text` check false-positived against the real bundle (2026-06-22)
 - In CLI tests, a scaffolding helper (`new site`) that now prints its own structured result pollutes `capsys` stdout ahead of the command under test; clear capsys after setup, or parse only the last non-empty stdout line, before `json.loads` (2026-06-22)
 - When migrating output from `print(..., file=sys.stderr)` to `logging.getLogger`, rewrite the asserting tests from `capsys` to `caplog` (with `caplog.at_level("WARNING", logger="bartleby")`) in the same dispatch — the suite otherwise goes red because capsys can no longer see logger output (2026-06-22)
 - When a plan splits RED and GREEN into separate sub-items, an autonomous one-commit-per-dispatch BPE executor must bundle the matching RED+GREEN pair in one dispatch, because the never-commit-a-red-suite rule forbids ending a dispatch on the RED-only sub-item (2026-06-22)
@@ -12,10 +13,10 @@
 - Integration tests that only check file *existence* miss content bugs. After `bartleby new site && bartleby new post && bartleby build`, the post template rendered an empty author byline and the listing page rendered an empty post list, yet every test passed because they stopped at `(site / "blog" / "index.html").exists()` (2026-06-02)
 - Dogfooding documentation against the tool is a high-signal integration test — writing the docs for Bartleby's shortcode feature immediately surfaced a real bug where the preprocessor didn't respect fenced code blocks or inline `code` spans (2026-06-02)
 - Run `/bpe:lessons prune` periodically (not just at end of major work) — the BPE goal description called for it and the pile of redundant Python/YAML notes that accumulated across 27 implementation steps was real lint debt (2026-06-02)
-- The previous session's "Suggested Skills for Next Session" line is a high-signal hint — trust it on the next `/bpe:execute-plan` and invoke those skills first, then layer on anything the current step uniquely needs (2026-05-23)
 
 ## Testing
 
+- When asserting that vendored/minified third-party code does NOT contain a marker, match the exact original stub string, not a generic word — minified Alpine.js contains an internal `__placeholder` token, so a `"placeholder" not in text` check false-positived against the real bundle (2026-06-22)
 - In CLI tests, a scaffolding helper (`new site`) that now prints its own structured result pollutes `capsys` stdout ahead of the command under test; clear capsys after setup, or parse only the last non-empty stdout line, before `json.loads` (2026-06-22)
 - When migrating output from `print(..., file=sys.stderr)` to `logging.getLogger`, rewrite the asserting tests from `capsys` to `caplog` (with `caplog.at_level("WARNING", logger="bartleby")`) in the same dispatch — the suite otherwise goes red because capsys can no longer see logger output (2026-06-22)
 - Integration tests that only check file *existence* miss content bugs. After `bartleby new site && bartleby new post && bartleby build`, the post template rendered an empty author byline and the listing page rendered an empty post list, yet every test passed because they stopped at `(site / "blog" / "index.html").exists()` (2026-06-02)

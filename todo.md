@@ -1,7 +1,7 @@
 # Bartleby v0.1.0 Hardening — Progress
 
 Delta plan over the 27-step initial build. See `plan.md` for the full TDD
-prompts and `audit.md` for the findings each step closes. 3 of 18 steps done.
+prompts and `audit.md` for the findings each step closes. 4 of 18 steps done.
 
 ## Phase 1 — Foundations
 
@@ -31,12 +31,12 @@ prompts and `audit.md` for the findings each step closes. 3 of 18 steps done.
 
 ## Phase 2 — Theme reality
 
-- [ ] **Step 4: Vendor real Alpine, HTMX, lunr bundles** (Deferral 1)
-  - [ ] 4.1: RED — size/signature tests + THIRD-PARTY-NOTICES + build copies them
-  - [ ] 4.2: GREEN — vendor pinned minified bundles; record versions/licenses
-  - [ ] 4.3: RED — rendered output wires markup to the bundles
-  - [ ] 4.4: GREEN — base.html/partials reference real bundles
-  - [ ] 4.5: REFACTOR — remove stub comments; run `just check`
+- [x] **Step 4: Vendor real Alpine, HTMX, lunr bundles** (Deferral 1)
+  - [x] 4.1: RED — size/signature tests + THIRD-PARTY-NOTICES + build copies them
+  - [x] 4.2: GREEN — vendor pinned minified bundles; record versions/licenses
+  - [x] 4.3: RED — rendered output wires markup to the bundles
+  - [x] 4.4: GREEN — base.html/partials reference real bundles
+  - [x] 4.5: REFACTOR — remove stub comments; run `just check`
 
 - [ ] **Step 5: Hybrid Tailwind pipeline and `bartleby theme compile`** (Deferral 2)
   - [ ] 5.1: RED — resolver order, checksum-abort, compiled-CSS preference

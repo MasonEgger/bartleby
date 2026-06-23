@@ -7,3 +7,8 @@ from pathlib import Path
 def get_theme_templates_dir() -> Path:
     """Absolute path to the directory containing the built-in theme templates."""
     return Path(__file__).parent / "templates"
+
+
+def get_theme_static_dir() -> Path:
+    """Absolute path to the directory containing the built-in theme static assets."""
+    return Path(__file__).parent / "static"

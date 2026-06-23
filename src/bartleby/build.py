@@ -4,15 +4,15 @@
 from __future__ import annotations
 
 import datetime
+import logging
 import os
 import re
 import shutil
-import sys
 import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NoReturn
 
 from jinja2 import TemplateError
 
@@ -83,12 +83,26 @@ class BuildError(Exception):
 
     def __init__(self, errors: list[PageError]) -> None:
         self.errors = errors
-        summary = "; ".join(f"{error.file_path}: {error.message}" for error in errors)
+        summary = "; ".join(format_page_error(error) for error in errors)
         super().__init__(f"build failed with {len(errors)} error(s): {summary}")
 
 
+_LOGGER = logging.getLogger("bartleby")
+
 _WORDS_PER_MINUTE = 265
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def format_page_error(error: PageError) -> str:
+    """Render a :class:`PageError` as a single stable ``path: message`` line.
+
+    Both the text CLI output and the JSON formatter route page-level failures
+    through this helper so the wording stays identical across output modes.
+
+    :param error: The collected page failure to format.
+    :returns: ``"<file_path>: <message>"``.
+    """
+    return f"{error.file_path}: {error.message}"
 
 
 def build(config_path: Path, *, include_drafts: bool = False, strict: bool = False) -> BuildResult:
@@ -171,17 +185,18 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
             page.excerpt = extract_excerpt(page.raw_content, content_type.excerpt_separator)
 
     if page_errors:
-        shutil.rmtree(build_dir, ignore_errors=True)
-        raise BuildError(page_errors)
+        _fail_build(page_errors, build_dir, plugins)
 
     # Cross-reference resolution needs every page rendered before any rewriting,
     # so it lives outside the render loop above and below the template render below.
     crossref_errors = resolve_all_crossrefs(all_pages, content_dir)
     if crossref_errors:
         for error in crossref_errors:
-            print(
-                f"crossref: {error.source_path} -> {error.target_path}: {error.message}",
-                file=sys.stderr,
+            _LOGGER.warning(
+                "crossref: %s -> %s: %s",
+                error.source_path,
+                error.target_path,
+                error.message,
             )
         if strict:
             raise ValueError(f"strict mode: {len(crossref_errors)} unresolved cross-reference(s)")
@@ -212,8 +227,7 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
             page_errors.append(PageError(file_path=str(page.source_path), message=str(exc)))
 
     if page_errors:
-        shutil.rmtree(build_dir, ignore_errors=True)
-        raise BuildError(page_errors)
+        _fail_build(page_errors, build_dir, plugins)
 
     from bartleby.theme import get_theme_templates_dir as _theme_dir
 
@@ -249,6 +263,26 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
 
     duration = time.perf_counter() - started
     return BuildResult(page_count=len(all_pages), duration_seconds=duration)
+
+
+def _fail_build(
+    page_errors: list[PageError], build_dir: Path, plugins: PluginCollection
+) -> NoReturn:
+    """Discard the partial build, fire ``on_build_error`` once, and raise.
+
+    The hook receives the assembled :class:`BuildError` so a plugin can inspect
+    every collected :class:`PageError` in a single call. The temp build
+    directory is removed first so a failed build never leaves output behind.
+
+    :param page_errors: Every page-level failure collected during the pass.
+    :param build_dir: The temp directory holding the partial build output.
+    :param plugins: The active plugin collection to dispatch the hook through.
+    :raises BuildError: Always, carrying ``page_errors``.
+    """
+    shutil.rmtree(build_dir, ignore_errors=True)
+    error = BuildError(page_errors)
+    plugins.run_event("on_build_error", error)
+    raise error
 
 
 def _template_type_for(page: Page, content_type: object) -> str:

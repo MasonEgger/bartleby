@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime
+import logging
 import os
 import sys
 from pathlib import Path
@@ -13,7 +14,7 @@ from pathlib import Path
 from slugify import slugify
 
 from bartleby.authors import AuthorError, load_authors
-from bartleby.build import BuildError, async_build
+from bartleby.build import BuildError, async_build, format_page_error
 from bartleby.config import ConfigError, load_config
 from bartleby.content import discover_content
 from bartleby.metadata import validate_all_metadata
@@ -30,6 +31,7 @@ _ERROR_CODES: dict[type[Exception], str] = {
 
 def main(argv: list[str] | None = None) -> None:
     """Top-level CLI entry point."""
+    _configure_logging()
     parser = _build_parser()
     args = parser.parse_args(argv)
     handler = getattr(args, "_handler", None)
@@ -40,6 +42,25 @@ def main(argv: list[str] | None = None) -> None:
         handler(args)
     except (BuildError, ConfigError, AuthorError) as exc:
         _report_error(exc)
+
+
+def _configure_logging() -> None:
+    """Route the ``bartleby`` logger's non-essential output to stderr.
+
+    Build results stay on stdout (printed directly); warnings such as broken
+    cross-references go through ``logging`` to stderr. ``BARTLEBY_DEBUG`` lowers
+    the threshold to ``DEBUG`` for development.
+
+    The handler is attached once; repeat ``main()`` calls (e.g. in tests) do not
+    stack duplicate handlers.
+    """
+    logger = logging.getLogger("bartleby")
+    level = logging.DEBUG if os.environ.get("BARTLEBY_DEBUG") else logging.INFO
+    logger.setLevel(level)
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+        logger.addHandler(handler)
 
 
 def _report_error(exc: BuildError | ConfigError | AuthorError) -> None:
@@ -56,7 +77,7 @@ def _report_error(exc: BuildError | ConfigError | AuthorError) -> None:
     code = _ERROR_CODES[type(exc)]
     if isinstance(exc, BuildError):
         for page_error in exc.errors:
-            print(f"error [{code}] {page_error.file_path}: {page_error.message}", file=sys.stderr)
+            print(f"error [{code}] {format_page_error(page_error)}", file=sys.stderr)
     else:
         print(f"error [{code}] {exc}", file=sys.stderr)
     raise SystemExit(1)

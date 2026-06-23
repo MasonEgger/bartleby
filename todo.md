@@ -1,7 +1,7 @@
 # Bartleby v0.1.0 Hardening — Progress
 
 Delta plan over the 27-step initial build. See `plan.md` for the full TDD
-prompts and `audit.md` for the findings each step closes. 1 of 18 steps done.
+prompts and `audit.md` for the findings each step closes. 2 of 18 steps done.
 
 ## Phase 1 — Foundations
 
@@ -13,14 +13,14 @@ prompts and `audit.md` for the findings each step closes. 1 of 18 steps done.
   - [x] 1.5: REFACTOR — remove dict-adapter dead code
   - [x] 1.6: Confirm spec Template Context section; run `just check`
 
-- [ ] **Step 2: Build failure semantics and clean error reporting** (Design 5, 14, 15)
+- [x] **Step 2: Build failure semantics and clean error reporting** (Design 5, 14, 15)
   - [x] 2.1: RED — collect-all errors, untouched site/ on failure, atomic swap, fail-fast on config
   - [x] 2.2: RED — clean error (no traceback) + BARTLEBY_DEBUG re-enables it
   - [x] 2.3: GREEN — accumulate per-page errors; temp-dir build + swap
   - [x] 2.4: GREEN — top-level CLI error boundary
-  - [ ] 2.5: GREEN — logging.getLogger for non-essential output
-  - [ ] 2.6: RED — on_build_error fires once with the collected list
-  - [ ] 2.7: REFACTOR — shared error formatting; run `just check`
+  - [x] 2.5: GREEN — logging.getLogger for non-essential output
+  - [x] 2.6: RED — on_build_error fires once with the collected list
+  - [x] 2.7: REFACTOR — shared error formatting; run `just check`
 
 - [ ] **Step 3: Structured output layer (--output json)**
   - [ ] 3.1: RED — formatter tests (build/error/text shapes, exit codes)

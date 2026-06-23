@@ -186,30 +186,29 @@ def test_calculate_readtime_short_text() -> None:
 
 
 def test_build_strict_fails_on_broken_crossref(
-    project: Path, capsys: pytest.CaptureFixture[str]
+    project: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     """In strict mode, an unresolved ``.md`` link aborts the build."""
     post_path = project / "content" / "blog" / "posts" / "first-post.md"
     text = post_path.read_text(encoding="utf-8")
     post_path.write_text(text + "\nSee [missing page](missing-target.md).\n", encoding="utf-8")
-    with pytest.raises(ValueError) as exc:
+    with caplog.at_level("WARNING", logger="bartleby"), pytest.raises(ValueError) as exc:
         build(project / "bartleby.yml", strict=True)
     assert "strict" in str(exc.value).lower()
-    captured = capsys.readouterr()
-    assert "missing-target.md" in captured.err
+    assert "missing-target.md" in caplog.text
 
 
 def test_build_non_strict_warns_on_broken_crossref(
-    project: Path, capsys: pytest.CaptureFixture[str]
+    project: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Without strict mode, broken cross-references print to stderr but do not abort."""
+    """Without strict mode, broken cross-references log a warning but do not abort."""
     post_path = project / "content" / "blog" / "posts" / "first-post.md"
     text = post_path.read_text(encoding="utf-8")
     post_path.write_text(text + "\nSee [missing page](missing-target.md).\n", encoding="utf-8")
-    result = build(project / "bartleby.yml")
+    with caplog.at_level("WARNING", logger="bartleby"):
+        result = build(project / "bartleby.yml")
     assert result.page_count > 0
-    captured = capsys.readouterr()
-    assert "missing-target.md" in captured.err
+    assert "missing-target.md" in caplog.text
 
 
 def _inject_unknown_shortcode(post_path: Path, shortcode_name: str) -> None:
@@ -296,3 +295,67 @@ def test_invalid_config_fails_before_render(project: Path) -> None:
     # Pre-render failure leaves the existing site/ completely untouched.
     assert sentinel.exists()
     assert sentinel.read_text(encoding="utf-8") == "previous good build"
+
+
+def test_on_build_error_fires_once_with_collected_errors(project: Path) -> None:
+    """A failing build dispatches ``on_build_error`` exactly once with the full error list.
+
+    The hook receives the same :class:`BuildError` that is raised, so a plugin
+    can inspect every collected :class:`PageError` in a single call rather than
+    once per failure.
+    """
+    hooks_dir = project / "hooks"
+    hooks_dir.mkdir()
+    record_path = project / "build_errors.txt"
+    (hooks_dir / "record_errors.py").write_text(
+        "# ABOUTME: Test hook that records on_build_error invocations.\n"
+        "# Appends one line per call carrying the count of collected errors.\n"
+        "from __future__ import annotations\n"
+        "from pathlib import Path\n"
+        "\n"
+        "RECORD = Path(__file__).parent.parent / 'build_errors.txt'\n"
+        "\n"
+        "def on_build_error(error):\n"
+        "    paths = ','.join(str(page_error.file_path) for page_error in error.errors)\n"
+        "    with RECORD.open('a', encoding='utf-8') as handle:\n"
+        "        handle.write(f'{len(error.errors)}|{paths}\\n')\n",
+        encoding="utf-8",
+    )
+
+    first = project / "content" / "blog" / "posts" / "first-post.md"
+    second = project / "content" / "blog" / "posts" / "second-post.md"
+    _inject_unknown_shortcode(first, "totally_unknown_one")
+    _inject_unknown_shortcode(second, "totally_unknown_two")
+
+    with pytest.raises(BuildError):
+        build(project / "bartleby.yml")
+
+    lines = record_path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1, "on_build_error must fire exactly once, not per page error"
+    count, paths = lines[0].split("|", 1)
+    assert count == "2", "the hook must receive every collected error in one call"
+    assert "first-post.md" in paths
+    assert "second-post.md" in paths
+
+
+def test_successful_build_does_not_fire_on_build_error(project: Path) -> None:
+    """A clean build never dispatches ``on_build_error``."""
+    hooks_dir = project / "hooks"
+    hooks_dir.mkdir()
+    record_path = project / "build_errors.txt"
+    (hooks_dir / "record_errors.py").write_text(
+        "# ABOUTME: Test hook that records on_build_error invocations.\n"
+        "# Writes a marker file if the hook ever fires.\n"
+        "from __future__ import annotations\n"
+        "from pathlib import Path\n"
+        "\n"
+        "RECORD = Path(__file__).parent.parent / 'build_errors.txt'\n"
+        "\n"
+        "def on_build_error(error):\n"
+        "    RECORD.write_text('fired', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+
+    build(project / "bartleby.yml")
+
+    assert not record_path.exists(), "on_build_error must not fire on a successful build"

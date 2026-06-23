@@ -359,3 +359,37 @@ def test_successful_build_does_not_fire_on_build_error(project: Path) -> None:
     build(project / "bartleby.yml")
 
     assert not record_path.exists(), "on_build_error must not fire on a successful build"
+
+
+def test_build_prefers_compiled_theme_css(project: Path) -> None:
+    """A current ``.bartleby/theme.css`` overrides the shipped ``css/main.css``."""
+    compiled = project / ".bartleby" / "theme.css"
+    compiled.parent.mkdir(parents=True)
+    compiled.write_text("/* compiled-by-tailwind */", encoding="utf-8")
+
+    build(project / "bartleby.yml")
+
+    rendered_css = (project / "site" / "css" / "main.css").read_text(encoding="utf-8")
+    assert rendered_css == "/* compiled-by-tailwind */"
+
+
+def test_build_ignores_stale_compiled_theme_css(project: Path) -> None:
+    """A stale compiled CSS (older than a template) is not preferred."""
+    import os
+    import time
+
+    templates_dir = project / "templates"
+    templates_dir.mkdir(exist_ok=True)
+    override = templates_dir / "custom-partial.html"
+    override.write_text("<p>override</p>", encoding="utf-8")
+
+    compiled = project / ".bartleby" / "theme.css"
+    compiled.parent.mkdir(parents=True)
+    compiled.write_text("/* compiled-but-stale */", encoding="utf-8")
+    later = time.time() + 100
+    os.utime(override, (later, later))
+
+    build(project / "bartleby.yml")
+
+    rendered_css = (project / "site" / "css" / "main.css").read_text(encoding="utf-8")
+    assert "compiled-but-stale" not in rendered_css

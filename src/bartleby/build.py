@@ -242,6 +242,7 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
     theme_static = _theme_dir().parent / "static"
     copy_static_files(theme_static, output_dir)
     copy_static_files(project_dir / "static", output_dir)
+    _apply_compiled_theme_css(project_dir, output_dir)
     copy_colocated_assets(assets, pages, content_dir, output_dir)
     tree_shake_icons(
         [page.rendered_content for page in pages if page.rendered_content],
@@ -282,6 +283,24 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
         static_file_count=static_file_count,
         output_dir=f"{final_output_dir.name}/",
     )
+
+
+def _apply_compiled_theme_css(project_dir: Path, output_dir: Path) -> None:
+    """Override the shipped CSS with the project's compiled ``.bartleby/theme.css``.
+
+    The compiled CSS wins only when it exists and is at least as new as the
+    template tree (see :func:`bartleby.theme_compile.active_theme_css`). The
+    build never downloads the Tailwind binary; it only consumes an already
+    compiled stylesheet produced by ``bartleby theme compile``.
+    """
+    from bartleby.theme_compile import active_theme_css
+
+    compiled = active_theme_css(project_dir)
+    if compiled is None:
+        return
+    destination = output_dir / "css" / "main.css"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(compiled, destination)
 
 
 def _fail_build(

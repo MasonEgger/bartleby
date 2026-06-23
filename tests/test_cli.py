@@ -112,6 +112,58 @@ def test_parse_args_help_exits_zero(monkeypatch: pytest.MonkeyPatch) -> None:
     assert exc.value.code == 0
 
 
+def test_theme_compile_command_emits_json_shape(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby theme compile --output json`` emits the documented shape."""
+    from bartleby.theme_compile import ThemeCompileResult
+
+    _scaffold_and_enter(tmp_path, monkeypatch)
+
+    def fake_compile(*args: object, **kwargs: object) -> ThemeCompileResult:
+        return ThemeCompileResult(
+            css_path=".bartleby/theme.css",
+            binary="cached",
+            duration_ms=410,
+            classes_scanned=1842,
+        )
+
+    monkeypatch.setattr("bartleby.cli.compile_theme_css", fake_compile)
+    main(["theme", "compile", "--output", "json"])
+
+    payload = _last_json(capsys.readouterr().out)
+    assert payload == {
+        "status": "success",
+        "css_path": ".bartleby/theme.css",
+        "binary": "cached",
+        "duration_ms": 410,
+        "classes_scanned": 1842,
+    }
+
+
+def test_theme_compile_clean_error_when_binary_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A binary-resolution failure prints a clean coded error and exits 1."""
+    from bartleby.theme_compile import ThemeCompileError
+
+    _scaffold_and_enter(tmp_path, monkeypatch)
+
+    def boom(*args: object, **kwargs: object) -> object:
+        raise ThemeCompileError("checksum mismatch")
+
+    monkeypatch.setattr("bartleby.cli.compile_theme_css", boom)
+
+    with pytest.raises(SystemExit) as exc:
+        main(["theme", "compile"])
+    assert exc.value.code == 1
+
+    captured = capsys.readouterr()
+    assert "Traceback" not in captured.err
+    assert "theme_compile_error" in captured.err
+    assert "checksum mismatch" in captured.err
+
+
 def test_serve_command_constructs_devserver(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

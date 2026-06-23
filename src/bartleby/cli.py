@@ -28,6 +28,7 @@ from bartleby.output import (
     ValidationError,
     render,
 )
+from bartleby.theme_compile import ThemeCompileError, ThemeCompileResult, compile_theme_css
 
 # Stable, machine-recognizable error codes per failure type. These strings are
 # part of the CLI error contract (text and JSON output) and must not change
@@ -36,6 +37,7 @@ _ERROR_CODES: dict[type[Exception], str] = {
     BuildError: "build_error",
     ConfigError: "config_error",
     AuthorError: "author_error",
+    ThemeCompileError: "theme_compile_error",
 }
 
 
@@ -65,7 +67,7 @@ def main(argv: list[str] | None = None) -> None:
         result = handler(args)
     except UsageError as exc:
         _emit_error(ErrorOutput(message=str(exc), code=exc.code, usage=True), fmt)
-    except (BuildError, ConfigError, AuthorError) as exc:
+    except (BuildError, ConfigError, AuthorError, ThemeCompileError) as exc:
         _report_error(exc, fmt)
     else:
         if result is not None:
@@ -111,7 +113,9 @@ def _configure_logging() -> None:
         logger.addHandler(handler)
 
 
-def _report_error(exc: BuildError | ConfigError | AuthorError, fmt: str) -> None:
+def _report_error(
+    exc: BuildError | ConfigError | AuthorError | ThemeCompileError, fmt: str
+) -> None:
     """Surface a build/config/author failure in the requested format and exit 1.
 
     Honors ``BARTLEBY_DEBUG``: when set to a truthy value, the exception is
@@ -207,6 +211,16 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     serve_parser.set_defaults(_handler=_cmd_serve)
 
+    theme_parser = subparsers.add_parser("theme", help="Theme asset commands")
+    theme_sub = theme_parser.add_subparsers(dest="theme_command")
+    theme_compile = theme_sub.add_parser(
+        "compile", help="Recompile theme CSS including project overrides", parents=[flags]
+    )
+    theme_compile.add_argument(
+        "--refresh", action="store_true", help="Force re-download of the Tailwind binary"
+    )
+    theme_compile.set_defaults(_handler=_cmd_theme_compile)
+
     return parser
 
 
@@ -296,6 +310,15 @@ def _cmd_validate(args: argparse.Namespace) -> ValidateOutput:
             for error in errors
         ],
     )
+
+
+def _cmd_theme_compile(args: argparse.Namespace) -> ThemeCompileResult:
+    """Recompile the theme CSS including project overrides via the Tailwind CLI."""
+    config_path = _resolve_config_path(args)
+    project_dir = config_path.parent
+    from bartleby.theme import get_theme_templates_dir
+
+    return compile_theme_css(project_dir, get_theme_templates_dir(), refresh=args.refresh)
 
 
 def _cmd_serve(args: argparse.Namespace) -> None:

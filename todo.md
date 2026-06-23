@@ -1,7 +1,7 @@
 # Bartleby v0.1.0 Hardening — Progress
 
 Delta plan over the 27-step initial build. See `plan.md` for the full TDD
-prompts and `audit.md` for the findings each step closes. 4 of 18 steps done.
+prompts and `audit.md` for the findings each step closes. 5 of 18 steps done.
 
 ## Phase 1 — Foundations
 
@@ -38,13 +38,13 @@ prompts and `audit.md` for the findings each step closes. 4 of 18 steps done.
   - [x] 4.4: GREEN — base.html/partials reference real bundles
   - [x] 4.5: REFACTOR — remove stub comments; run `just check`
 
-- [ ] **Step 5: Hybrid Tailwind pipeline and `bartleby theme compile`** (Deferral 2)
-  - [ ] 5.1: RED — resolver order, checksum-abort, compiled-CSS preference
-  - [ ] 5.2: GREEN — package-build CSS from templates + safelist
-  - [ ] 5.3: GREEN — theme compile command (PATH/cache/download, SHA-256, --refresh)
-  - [ ] 5.4: GREEN — build prefers .bartleby/theme.css
-  - [ ] 5.5: RED — theme compile --output json shape
-  - [ ] 5.6: REFACTOR — no implicit download in build; run `just check`
+- [x] **Step 5: Hybrid Tailwind pipeline and `bartleby theme compile`** (Deferral 2)
+  - [x] 5.1: RED — resolver order, checksum-abort, compiled-CSS preference
+  - [x] 5.2: GREEN — package-build CSS from templates + safelist
+  - [x] 5.3: GREEN — theme compile command (PATH/cache/download, SHA-256, --refresh)
+  - [x] 5.4: GREEN — build prefers .bartleby/theme.css
+  - [x] 5.5: RED — theme compile --output json shape
+  - [x] 5.6: REFACTOR — no implicit download in build; run `just check`
 
 - [ ] **Step 6: Feature toggle enforcement** (Spec 2)
   - [ ] 6.1: RED — unknown feature name is a validation error

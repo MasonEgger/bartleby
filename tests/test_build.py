@@ -8,7 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from bartleby.build import BuildResult, build, calculate_readtime, extract_excerpt
+from bartleby.build import BuildError, BuildResult, build, calculate_readtime, extract_excerpt
+from bartleby.config import ConfigError
 
 
 @pytest.fixture
@@ -209,3 +210,89 @@ def test_build_non_strict_warns_on_broken_crossref(
     assert result.page_count > 0
     captured = capsys.readouterr()
     assert "missing-target.md" in captured.err
+
+
+def _inject_unknown_shortcode(post_path: Path, shortcode_name: str) -> None:
+    """Append an unknown shortcode invocation to a content file so render fails."""
+    text = post_path.read_text(encoding="utf-8")
+    post_path.write_text(f"{text}\n[% {shortcode_name} %]\n", encoding="utf-8")
+
+
+def test_build_collects_all_page_errors_into_one_build_error(project: Path) -> None:
+    """Two pages with render errors raise a single BuildError carrying both.
+
+    The render pass must not stop on the first failure. Both offending pages'
+    paths appear in the collected error list.
+    """
+    first = project / "content" / "blog" / "posts" / "first-post.md"
+    second = project / "content" / "blog" / "posts" / "second-post.md"
+    _inject_unknown_shortcode(first, "totally_unknown_one")
+    _inject_unknown_shortcode(second, "totally_unknown_two")
+
+    with pytest.raises(BuildError) as exc:
+        build(project / "bartleby.yml")
+
+    collected = exc.value.errors
+    assert len(collected) == 2, "render pass must collect both errors, not stop on the first"
+    reported = "\n".join(str(error.file_path) for error in collected)
+    assert "first-post.md" in reported
+    assert "second-post.md" in reported
+
+
+def test_failed_build_leaves_existing_site_untouched(project: Path) -> None:
+    """A failing build never deletes or partially overwrites a pre-existing site/."""
+    site_dir = project / "site"
+    site_dir.mkdir()
+    sentinel = site_dir / "sentinel.html"
+    sentinel.write_text("previous good build", encoding="utf-8")
+
+    first = project / "content" / "blog" / "posts" / "first-post.md"
+    _inject_unknown_shortcode(first, "totally_unknown_one")
+
+    with pytest.raises(BuildError):
+        build(project / "bartleby.yml")
+
+    assert sentinel.exists(), "failed build must not delete the existing site/"
+    assert sentinel.read_text(encoding="utf-8") == "previous good build"
+    # No partial output for the (would-be) new build leaked into site/.
+    assert not (site_dir / "blog" / "posts" / "first-post" / "index.html").exists()
+
+
+def test_successful_build_swaps_output_atomically(project: Path) -> None:
+    """On success the new output replaces site/ wholesale and no temp dir lingers.
+
+    A stale sentinel from a prior build must be gone (the directory is swapped,
+    not merged into), and no sibling temp build directory is left behind.
+    """
+    site_dir = project / "site"
+    site_dir.mkdir()
+    (site_dir / "stale-from-old-build.html").write_text("old", encoding="utf-8")
+
+    build(project / "bartleby.yml")
+
+    assert (site_dir / "index.html").exists()
+    assert not (site_dir / "stale-from-old-build.html").exists()
+    leftover_temp = [
+        child
+        for child in project.iterdir()
+        if child.is_dir() and child.name != "site" and child.name.startswith(".bartleby")
+    ]
+    assert leftover_temp == [], f"build left a temp directory behind: {leftover_temp}"
+
+
+def test_invalid_config_fails_before_render(project: Path) -> None:
+    """An invalid config raises ConfigError immediately, before any render pass."""
+    site_dir = project / "site"
+    site_dir.mkdir()
+    sentinel = site_dir / "sentinel.html"
+    sentinel.write_text("previous good build", encoding="utf-8")
+
+    config_path = project / "bartleby.yml"
+    config_path.write_text("site:\n  title: only a title, no url\n", encoding="utf-8")
+
+    with pytest.raises(ConfigError):
+        build(config_path)
+
+    # Pre-render failure leaves the existing site/ completely untouched.
+    assert sentinel.exists()
+    assert sentinel.read_text(encoding="utf-8") == "previous good build"

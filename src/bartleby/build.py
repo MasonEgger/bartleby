@@ -4,12 +4,17 @@
 from __future__ import annotations
 
 import datetime
+import os
 import re
 import shutil
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
+
+from jinja2 import TemplateError
 
 import bartleby
 from bartleby.assets import copy_colocated_assets, copy_static_files
@@ -30,7 +35,7 @@ from bartleby.metadata import validate_all_metadata
 from bartleby.navigation import build_navigation, link_pages
 from bartleby.plugins import PluginCollection, discover_hooks
 from bartleby.search import build_search_index, write_search_index
-from bartleby.shortcodes import process_shortcodes
+from bartleby.shortcodes import ShortcodeError, process_shortcodes
 from bartleby.sitemap import write_robots_txt, write_sitemap
 from bartleby.taxonomies import AllTaxonomies, build_taxonomies, generate_taxonomy_pages
 from bartleby.templates import (
@@ -43,8 +48,6 @@ from bartleby.templates import (
 from bartleby.urls import generate_all_urls
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from bartleby.content import Page
 
 
@@ -54,6 +57,34 @@ class BuildResult:
 
     page_count: int
     duration_seconds: float
+
+
+@dataclass(slots=True)
+class PageError:
+    """A single page-level failure collected during the render pass.
+
+    :ivar file_path: Path to the offending content file.
+    :ivar message: Human-readable description of what went wrong.
+    """
+
+    file_path: str
+    message: str
+
+
+class BuildError(Exception):
+    """Raised at the end of a render pass that produced one or more errors.
+
+    The render pass collects every page-level failure instead of stopping on
+    the first, so :attr:`errors` carries the full list. The pre-existing
+    ``site/`` output is left untouched when this is raised.
+
+    :ivar errors: Every :class:`PageError` collected during the build.
+    """
+
+    def __init__(self, errors: list[PageError]) -> None:
+        self.errors = errors
+        summary = "; ".join(f"{error.file_path}: {error.message}" for error in errors)
+        super().__init__(f"build failed with {len(errors)} error(s): {summary}")
 
 
 _WORDS_PER_MINUTE = 265
@@ -93,9 +124,9 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
     # operate on pages that the build is about to discard.
     pages = list(plugins.run_event("on_pages", pages, config=config))
 
-    errors = validate_all_metadata(pages, config, authors)
-    if errors:
-        message = "\n".join(f"  {error.file_path}: {error.message}" for error in errors)
+    metadata_errors = validate_all_metadata(pages, config, authors)
+    if metadata_errors:
+        message = "\n".join(f"  {error.file_path}: {error.message}" for error in metadata_errors)
         raise ValueError(f"metadata validation failed:\n{message}")
 
     generate_all_urls(pages, config)
@@ -113,16 +144,23 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
     data = load_data_files(project_dir)
     build_info = BuildInfo(date=datetime.date.today(), bartleby_version=bartleby.__version__)
 
-    output_dir = project_dir / "site"
-    if output_dir.exists():
-        shutil.rmtree(output_dir)
-    output_dir.mkdir(parents=True)
+    final_output_dir = project_dir / "site"
+    # Render into a sibling temp directory and swap it into place only on full
+    # success, so a failed build never touches the previous good site/.
+    build_dir = Path(tempfile.mkdtemp(prefix=".bartleby-build-", dir=project_dir))
+    output_dir = build_dir
+
+    page_errors: list[PageError] = []
 
     for page in all_pages:
-        source = process_shortcodes(page.raw_content, {"build": build_info, "page": page}, env)
-        source = plugins.run_event("on_page_markdown", source, page=page, config=config)
-        rendered = render_markdown(source, md_renderer)
-        page.rendered_content = rendered.html
+        try:
+            source = process_shortcodes(page.raw_content, {"build": build_info, "page": page}, env)
+            source = plugins.run_event("on_page_markdown", source, page=page, config=config)
+            rendered = render_markdown(source, md_renderer)
+            page.rendered_content = rendered.html
+        except (ShortcodeError, ValueError) as exc:
+            page_errors.append(PageError(file_path=str(page.source_path), message=str(exc)))
+            continue
 
         content_type = (
             config.content_types.get(page.content_type_name) if page.content_type_name else None
@@ -131,6 +169,10 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
             page.readtime = calculate_readtime(page.raw_content)
         if content_type is not None and content_type.excerpt_separator and page.raw_content:
             page.excerpt = extract_excerpt(page.raw_content, content_type.excerpt_separator)
+
+    if page_errors:
+        shutil.rmtree(build_dir, ignore_errors=True)
+        raise BuildError(page_errors)
 
     # Cross-reference resolution needs every page rendered before any rewriting,
     # so it lives outside the render loop above and below the template render below.
@@ -149,22 +191,29 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
             config.content_types.get(page.content_type_name) if page.content_type_name else None
         )
         template_type = _template_type_for(page, content_type)
-        template_name = resolve_template_name(page, template_type, project_dir)
-        template = env.get_template(template_name)
-        context = build_page_context(
-            page=page,
-            site_config=config.site,
-            nav=nav.items,
-            all_pages=all_pages,
-            taxonomy_data=_taxonomy_context(taxonomy_data),
-            config=config,
-            build_info=build_info,
-            data=data,
-            authors=authors,
-        )
-        html = template.render(**context)
-        html = plugins.run_event("on_post_page", html, page=page, config=config)
-        _write_page(output_dir, page, html)
+        try:
+            template_name = resolve_template_name(page, template_type, project_dir)
+            template = env.get_template(template_name)
+            context = build_page_context(
+                page=page,
+                site_config=config.site,
+                nav=nav.items,
+                all_pages=all_pages,
+                taxonomy_data=_taxonomy_context(taxonomy_data),
+                config=config,
+                build_info=build_info,
+                data=data,
+                authors=authors,
+            )
+            html = template.render(**context)
+            html = plugins.run_event("on_post_page", html, page=page, config=config)
+            _write_page(output_dir, page, html)
+        except (TemplateError, ValueError) as exc:
+            page_errors.append(PageError(file_path=str(page.source_path), message=str(exc)))
+
+    if page_errors:
+        shutil.rmtree(build_dir, ignore_errors=True)
+        raise BuildError(page_errors)
 
     from bartleby.theme import get_theme_templates_dir as _theme_dir
 
@@ -195,6 +244,8 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
     write_robots_txt(
         config.site, config.ai, output_dir, static_override_exists=static_robots_exists
     )
+
+    _swap_output_into_place(build_dir, final_output_dir)
 
     duration = time.perf_counter() - started
     return BuildResult(page_count=len(all_pages), duration_seconds=duration)
@@ -265,6 +316,22 @@ def calculate_readtime(text: str) -> int:
         return 1
     minutes = max(1, round(word_count / _WORDS_PER_MINUTE))
     return minutes
+
+
+def _swap_output_into_place(build_dir: Path, final_output_dir: Path) -> None:
+    """Replace ``final_output_dir`` with the freshly built ``build_dir``.
+
+    The previous output is removed only after the new build is complete, so an
+    interrupted or failed build can never leave a half-written ``site/``. The
+    new directory is renamed into place (an atomic operation on the same
+    filesystem) once the old one is gone.
+
+    :param build_dir: The temp directory holding the completed build output.
+    :param final_output_dir: The destination ``site/`` directory to swap in.
+    """
+    if final_output_dir.exists():
+        shutil.rmtree(final_output_dir)
+    os.replace(build_dir, final_output_dir)
 
 
 def _write_page(output_dir: Path, page: Page, html: str) -> None:

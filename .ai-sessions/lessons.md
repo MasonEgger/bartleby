@@ -3,6 +3,7 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- When a plan splits RED and GREEN into separate sub-items, an autonomous one-commit-per-dispatch BPE executor must bundle the matching RED+GREEN pair in one dispatch, because the never-commit-a-red-suite rule forbids ending a dispatch on the RED-only sub-item (2026-06-22)
 - Launch long-lived local servers (`/bpe:review`, preview HTTP) with `setsid <cmd> > log 2>&1 < /dev/null &` — a plain background job gets reaped on shell teardown and a separately-run server gets killed by the background-task timeout; setsid in its own session survives both (2026-06-21)
 - When a `/bpe:brainstorm` decision and the drafted spec diverge, trust the `/bpe:review` + `/bpe:apply-review` cycle to catch it — the plugin-API "both in v1 vs staged" conflict surfaced exactly there and got resolved against the brainstorm (2026-06-21)
 - Run the actual smoke test before trusting a review claim — a subagent reported front-matter leaking into `.md` variants; running `new site && build` and inspecting output refuted it (raw_content is the parsed body) before it reached the report (2026-06-21)
@@ -25,6 +26,7 @@
 
 ## Workflow
 
+- When a plan splits RED and GREEN into separate sub-items, an autonomous one-commit-per-dispatch BPE executor must bundle the matching RED+GREEN pair in one dispatch, because the never-commit-a-red-suite rule forbids ending a dispatch on the RED-only sub-item (2026-06-22)
 - When a `/bpe:brainstorm` decision and the drafted spec diverge, trust the `/bpe:review` + `/bpe:apply-review` cycle to catch it — the plugin-API "both in v1 vs staged" conflict surfaced exactly there and got resolved against the brainstorm (2026-06-21)
 - Run the actual smoke test before trusting a review claim — a subagent reported front-matter leaking into `.md` variants; running `new site && build` and inspecting output refuted it before it reached the report (2026-06-21)
 - Run `/bpe:lessons prune` periodically (not just at end of major work) — the BPE goal description called for it and the pile of redundant Python/YAML notes that accumulated across 27 implementation steps was real lint debt (2026-06-02)

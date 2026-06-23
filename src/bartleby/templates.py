@@ -15,6 +15,7 @@ from bartleby.theme import get_theme_templates_dir
 
 if TYPE_CHECKING:
     import datetime
+    from collections.abc import Callable
     from pathlib import Path
 
     from bartleby.authors import Author
@@ -28,6 +29,26 @@ class BuildInfo:
 
     date: datetime.date
     bartleby_version: str
+
+
+def make_feature_checker(features: list[str]) -> Callable[[str], bool]:
+    """Return a ``feature(name)`` predicate backed by the resolved feature list.
+
+    Templates call the returned callable to gate markup on whether a theme
+    feature is enabled. The set of valid names is owned by
+    :data:`bartleby.config.KNOWN_FEATURES`; this helper only reports membership
+    in the *enabled* subset, so a name's validity is enforced earlier, during
+    config validation.
+
+    :param features: The enabled ``theme.features`` names for this build.
+    :returns: A callable that returns ``True`` when its argument is enabled.
+    """
+    enabled = frozenset(features)
+
+    def feature(name: str) -> bool:
+        return name in enabled
+
+    return feature
 
 
 def create_jinja_env(config: BartlebyConfig, project_dir: Path) -> jinja2.Environment:
@@ -47,11 +68,13 @@ def create_jinja_env(config: BartlebyConfig, project_dir: Path) -> jinja2.Enviro
         str(get_theme_templates_dir()),
     ]
     loader = jinja2.FileSystemLoader(search_paths)
-    return jinja2.Environment(
+    env = jinja2.Environment(
         loader=loader,
         autoescape=jinja2.select_autoescape(["html", "htm", "xml"]),
         keep_trailing_newline=True,
     )
+    env.globals["feature"] = make_feature_checker(config.theme.features)
+    return env
 
 
 def resolve_template_name(page: Page, template_type: str, project_dir: Path) -> str:

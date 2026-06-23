@@ -12,6 +12,37 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+KNOWN_FEATURES: frozenset[str] = frozenset(
+    {
+        "search",
+        "navigation.tabs",
+        "navigation.sections",
+        "navigation.top",
+        "navigation.footer",
+        "navigation.indexes",
+        "navigation.tracking",
+        "content.code.copy",
+        "content.code.annotate",
+        "content.code.select",
+        "content.tabs.link",
+        "content.tooltips",
+        "content.footnote.tooltips",
+        "content.action.edit",
+        "content.action.view",
+        "search.highlight",
+        "search.suggest",
+        "search.share",
+        "toc.follow",
+    }
+)
+"""The complete set of recognized ``theme.features`` names (spec.md Theme System).
+
+This is the single source of truth for feature gating. The ``feature()`` template
+helper in :mod:`bartleby.templates` consults the same list so config validation and
+template rendering never drift apart.
+"""
+
+
 class ConfigError(Exception):
     """Raised when ``bartleby.yml`` is malformed or fails validation.
 
@@ -370,8 +401,16 @@ def _validate_config(config: BartlebyConfig) -> None:
     """Verify cross-references and constraints on a parsed config.
 
     :param config: The parsed config to validate.
-    :raises ConfigError: If any content type references an undefined taxonomy.
+    :raises ConfigError: If any content type references an undefined taxonomy,
+        or if ``theme.features`` contains an unknown feature name.
     """
+    for feature_name in config.theme.features:
+        if feature_name not in KNOWN_FEATURES:
+            raise ConfigError(
+                f"unknown feature {feature_name!r}",
+                key_path="theme.features",
+            )
+
     defined_taxonomies = set(config.taxonomies.keys())
     for content_type_name, content_type in config.content_types.items():
         for taxonomy_name in content_type.taxonomies:

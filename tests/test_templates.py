@@ -25,6 +25,7 @@ from bartleby.templates import (
     build_page_context,
     create_jinja_env,
     load_data_files,
+    make_feature_checker,
     resolve_template_name,
 )
 
@@ -411,6 +412,24 @@ def test_built_in_theme_base_renders_seo_meta() -> None:
     assert 'property="og:title"' in rendered
     assert 'name="twitter:card"' in rendered
     assert "application/ld+json" in rendered
+
+
+def test_feature_checker_reports_enabled_and_disabled() -> None:
+    """``make_feature_checker`` returns True only for enabled feature names."""
+    feature = make_feature_checker(["search", "navigation.top"])
+    assert feature("search") is True
+    assert feature("navigation.top") is True
+    assert feature("content.code.copy") is False
+
+
+def test_create_jinja_env_registers_feature_global(tmp_path: Path) -> None:
+    """The env exposes a ``feature`` global backed by the config's feature list."""
+    config = _empty_config()
+    config.theme.features = ["search"]
+    env = create_jinja_env(config, tmp_path)
+    checker = env.globals["feature"]
+    assert checker("search") is True
+    assert checker("content.code.copy") is False
 
 
 pytest.importorskip("jinja2")

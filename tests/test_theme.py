@@ -19,9 +19,15 @@ VENDORED_BUNDLES = {
 }
 
 
-def _env() -> jinja2.Environment:
+def _env(features: list[str] | None = None) -> jinja2.Environment:
+    from bartleby.config import KNOWN_FEATURES
+    from bartleby.templates import make_feature_checker
+
+    enabled = list(KNOWN_FEATURES) if features is None else features
     loader = jinja2.FileSystemLoader([str(get_theme_templates_dir())])
-    return jinja2.Environment(loader=loader, autoescape=True)
+    env = jinja2.Environment(loader=loader, autoescape=True)
+    env.globals["feature"] = make_feature_checker(enabled)
+    return env
 
 
 def _notices_path() -> Path:
@@ -96,6 +102,48 @@ def test_dark_mode_toggle() -> None:
     rendered = _env().get_template("base.html").render(**_base_context())
     assert "theme-toggle" in rendered
     assert "x-data" in rendered
+
+
+def test_search_feature_enabled_includes_markup() -> None:
+    """Enabling ``search`` puts the search modal markup in the rendered HTML."""
+    rendered = _env(features=["search"]).get_template("base.html").render(**_base_context())
+    assert "search-modal" in rendered
+    assert "search-input" in rendered
+
+
+def test_search_feature_disabled_removes_markup() -> None:
+    """Disabling ``search`` removes the search markup entirely, not merely hides it."""
+    rendered = _env(features=[]).get_template("base.html").render(**_base_context())
+    assert "search-modal" not in rendered
+    assert "search-input" not in rendered
+
+
+def test_code_copy_feature_enabled_includes_markup() -> None:
+    """Enabling ``content.code.copy`` injects the copy-button behavior."""
+    rendered = (
+        _env(features=["content.code.copy"]).get_template("base.html").render(**_base_context())
+    )
+    assert "data-code-copy" in rendered
+
+
+def test_code_copy_feature_disabled_removes_markup() -> None:
+    """Disabling ``content.code.copy`` removes the copy-button markup entirely."""
+    rendered = _env(features=[]).get_template("base.html").render(**_base_context())
+    assert "data-code-copy" not in rendered
+
+
+def test_navigation_top_feature_enabled_includes_markup() -> None:
+    """Enabling ``navigation.top`` puts the back-to-top button in the HTML."""
+    rendered = (
+        _env(features=["navigation.top"]).get_template("base.html").render(**_base_context())
+    )
+    assert "back-to-top" in rendered
+
+
+def test_navigation_top_feature_disabled_removes_markup() -> None:
+    """Disabling ``navigation.top`` removes the back-to-top button entirely."""
+    rendered = _env(features=[]).get_template("base.html").render(**_base_context())
+    assert "back-to-top" not in rendered
 
 
 def test_404_template_renders() -> None:

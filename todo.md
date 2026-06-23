@@ -46,12 +46,12 @@ prompts and `audit.md` for the findings each step closes. 5 of 18 steps done.
   - [x] 5.5: RED — theme compile --output json shape
   - [x] 5.6: REFACTOR — no implicit download in build; run `just check`
 
-- [ ] **Step 6: Feature toggle enforcement** (Spec 2)
-  - [ ] 6.1: RED — unknown feature name is a validation error
-  - [ ] 6.2: RED — enabling/disabling adds/removes markup entirely
-  - [ ] 6.3: GREEN — feature() helper + template gating
-  - [ ] 6.4: GREEN — known-feature validation in config.py
-  - [ ] 6.5: REFACTOR — one known-feature list; run `just check`
+- [x] **Step 6: Feature toggle enforcement** (Spec 2)
+  - [x] 6.1: RED — unknown feature name is a validation error
+  - [x] 6.2: RED — enabling/disabling adds/removes markup entirely
+  - [x] 6.3: GREEN — feature() helper + template gating
+  - [x] 6.4: GREEN — known-feature validation in config.py
+  - [x] 6.5: REFACTOR — one known-feature list; run `just check`
 
 - [ ] **Step 7: Full icon packs and standalone 404** (Deferral 3, Spec 3)
   - [ ] 7.1: RED — resolve icons across all four packs; tree-shake; unused pack = 0 files

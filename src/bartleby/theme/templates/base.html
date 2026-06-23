@@ -16,11 +16,12 @@
 </head>
 <body>
   {% include "partials/header.html" %}
-  {% include "partials/search.html" %}
+  {% if feature is defined and feature('search') %}{% include "partials/search.html" %}{% endif %}
   <main>
     {% block content %}{{ page.content | safe if page.content else "" }}{% endblock %}
   </main>
-  {% include "partials/back_to_top.html" %}
+  {% if feature is defined and feature('navigation.top') %}{% include "partials/back_to_top.html" %}{% endif %}
+  {% if feature is defined and feature('content.code.copy') %}{% include "partials/code_copy.html" %}{% endif %}
   {% include "partials/footer.html" %}
   {% for js in extra_js %}
   <script src="/{{ js.lstrip('/') }}"></script>

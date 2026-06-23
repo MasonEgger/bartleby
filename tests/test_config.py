@@ -121,3 +121,34 @@ def test_config_dir_is_set() -> None:
     config = load_config(FIXTURES / "minimal.yml")
     assert isinstance(config, BartlebyConfig)
     assert config.config_dir == FIXTURES
+
+
+def test_unknown_theme_feature_is_validation_error(tmp_path: Path) -> None:
+    """An unknown theme.features entry raises ConfigError naming the bad entry."""
+    config_path = tmp_path / "bad-feature.yml"
+    config_path.write_text(
+        "site:\n"
+        "  title: Site\n"
+        "  url: https://example.com\n"
+        "theme:\n"
+        "  features:\n"
+        "    - search\n"
+        "    - not_a_real_feature\n"
+    )
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(config_path)
+    assert "not_a_real_feature" in str(excinfo.value)
+    assert excinfo.value.key_path == "theme.features"
+
+
+def test_known_theme_features_are_accepted(tmp_path: Path) -> None:
+    """Every documented feature name is accepted without error."""
+    from bartleby.config import KNOWN_FEATURES
+
+    feature_lines = "".join(f"    - {name}\n" for name in sorted(KNOWN_FEATURES))
+    config_path = tmp_path / "all-features.yml"
+    config_path.write_text(
+        "site:\n  title: Site\n  url: https://example.com\ntheme:\n  features:\n" + feature_lines
+    )
+    config = load_config(config_path)
+    assert set(config.theme.features) == KNOWN_FEATURES

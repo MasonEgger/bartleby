@@ -9,10 +9,15 @@ from bartleby.theme import get_theme_templates_dir
 
 
 def _env() -> jinja2.Environment:
-    return jinja2.Environment(
+    from bartleby.config import KNOWN_FEATURES
+    from bartleby.templates import make_feature_checker
+
+    env = jinja2.Environment(
         loader=jinja2.FileSystemLoader([str(get_theme_templates_dir())]),
         autoescape=True,
     )
+    env.globals["feature"] = make_feature_checker(list(KNOWN_FEATURES))
+    return env
 
 
 def _ctx(**overrides: object) -> dict[str, object]:

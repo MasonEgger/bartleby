@@ -6,16 +6,26 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime
+import os
 import sys
 from pathlib import Path
 
 from slugify import slugify
 
-from bartleby.authors import load_authors
-from bartleby.build import async_build
+from bartleby.authors import AuthorError, load_authors
+from bartleby.build import BuildError, async_build
 from bartleby.config import ConfigError, load_config
 from bartleby.content import discover_content
 from bartleby.metadata import validate_all_metadata
+
+# Stable, machine-recognizable error codes per failure type. These strings are
+# part of the CLI error contract (text and, later, JSON output) and must not
+# change without a versioning bump.
+_ERROR_CODES: dict[type[Exception], str] = {
+    BuildError: "build_error",
+    ConfigError: "config_error",
+    AuthorError: "author_error",
+}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -26,7 +36,30 @@ def main(argv: list[str] | None = None) -> None:
     if handler is None:
         parser.print_help()
         raise SystemExit(1)
-    handler(args)
+    try:
+        handler(args)
+    except (BuildError, ConfigError, AuthorError) as exc:
+        _report_error(exc)
+
+
+def _report_error(exc: BuildError | ConfigError | AuthorError) -> None:
+    """Print a clean, traceback-free error to stderr and exit 1.
+
+    Honors ``BARTLEBY_DEBUG``: when set to a truthy value, the exception is
+    re-raised so Python prints the full traceback for development.
+
+    :param exc: The build/config/author failure to surface.
+    :raises SystemExit: Always, with code 1, in non-debug mode.
+    """
+    if os.environ.get("BARTLEBY_DEBUG"):
+        raise exc
+    code = _ERROR_CODES[type(exc)]
+    if isinstance(exc, BuildError):
+        for page_error in exc.errors:
+            print(f"error [{code}] {page_error.file_path}: {page_error.message}", file=sys.stderr)
+    else:
+        print(f"error [{code}] {exc}", file=sys.stderr)
+    raise SystemExit(1)
 
 
 def _build_parser() -> argparse.ArgumentParser:

@@ -15,9 +15,9 @@ prompts and `audit.md` for the findings each step closes. 1 of 18 steps done.
 
 - [ ] **Step 2: Build failure semantics and clean error reporting** (Design 5, 14, 15)
   - [x] 2.1: RED — collect-all errors, untouched site/ on failure, atomic swap, fail-fast on config
-  - [ ] 2.2: RED — clean error (no traceback) + BARTLEBY_DEBUG re-enables it
+  - [x] 2.2: RED — clean error (no traceback) + BARTLEBY_DEBUG re-enables it
   - [x] 2.3: GREEN — accumulate per-page errors; temp-dir build + swap
-  - [ ] 2.4: GREEN — top-level CLI error boundary
+  - [x] 2.4: GREEN — top-level CLI error boundary
   - [ ] 2.5: GREEN — logging.getLogger for non-essential output
   - [ ] 2.6: RED — on_build_error fires once with the collected list
   - [ ] 2.7: REFACTOR — shared error formatting; run `just check`

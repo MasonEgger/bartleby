@@ -121,3 +121,80 @@ def test_serve_command_constructs_devserver(
     monkeypatch.setattr("bartleby.server.DevServer", FakeDevServer)
     main(["serve"])
     assert captured["ran"] is True
+
+
+def _scaffold_and_enter(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Create a fresh site and chdir into it so build/validate can run."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    monkeypatch.chdir(tmp_path / "mysite")
+
+
+def test_build_error_prints_clean_message_and_exits_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A build failure prints a clean stderr message with file path and a stable
+    error code, exits 1, and never leaks a raw Python traceback."""
+    from bartleby.build import BuildError, PageError
+
+    _scaffold_and_enter(tmp_path, monkeypatch)
+
+    def boom(*args: object, **kwargs: object) -> object:
+        raise BuildError([PageError(file_path="content/blog/posts/bad.md", message="boom")])
+
+    monkeypatch.setattr("bartleby.cli.async_build", boom)
+
+    with pytest.raises(SystemExit) as exc:
+        main(["build"])
+    assert exc.value.code == 1
+
+    captured = capsys.readouterr()
+    assert "Traceback" not in captured.err
+    assert "Traceback" not in captured.out
+    # The clean message carries the offending file path and the cause.
+    assert "content/blog/posts/bad.md" in captured.err
+    assert "boom" in captured.err
+    # A stable, machine-recognizable error code is present.
+    assert "build_error" in captured.err
+
+
+def test_build_error_traceback_reenabled_by_debug_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``BARTLEBY_DEBUG=1`` re-enables the raw traceback for development."""
+    from bartleby.build import BuildError, PageError
+
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    monkeypatch.setenv("BARTLEBY_DEBUG", "1")
+
+    def boom(*args: object, **kwargs: object) -> object:
+        raise BuildError([PageError(file_path="content/blog/posts/bad.md", message="boom")])
+
+    monkeypatch.setattr("bartleby.cli.async_build", boom)
+
+    # With debug on, the boundary re-raises so Python prints the full traceback.
+    with pytest.raises(BuildError):
+        main(["build"])
+
+
+def test_config_error_prints_clean_message_and_exits_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A config failure during build surfaces cleanly with its stable code."""
+    from bartleby.config import ConfigError
+
+    _scaffold_and_enter(tmp_path, monkeypatch)
+
+    def boom(*args: object, **kwargs: object) -> object:
+        raise ConfigError("site section is required", key_path="site")
+
+    monkeypatch.setattr("bartleby.cli.async_build", boom)
+
+    with pytest.raises(SystemExit) as exc:
+        main(["build"])
+    assert exc.value.code == 1
+
+    captured = capsys.readouterr()
+    assert "Traceback" not in captured.err
+    assert "config_error" in captured.err
+    assert "site section is required" in captured.err

@@ -85,10 +85,13 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
 
     content_dir = project_dir / "content"
     pages, assets = discover_content(config, content_dir)
-    pages = list(plugins.run_event("on_pages", pages, config=config))
 
     if not include_drafts:
         pages = [page for page in pages if not page.draft]
+
+    # Dispatch on_pages only after drafts are filtered out so plugins never
+    # operate on pages that the build is about to discard.
+    pages = list(plugins.run_event("on_pages", pages, config=config))
 
     errors = validate_all_metadata(pages, config, authors)
     if errors:

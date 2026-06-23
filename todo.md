@@ -1,17 +1,17 @@
 # Bartleby v0.1.0 Hardening — Progress
 
 Delta plan over the 27-step initial build. See `plan.md` for the full TDD
-prompts and `audit.md` for the findings each step closes. 0 of 18 steps done.
+prompts and `audit.md` for the findings each step closes. 1 of 18 steps done.
 
 ## Phase 1 — Foundations
 
-- [ ] **Step 1: Pass the Page dataclass into template context** (Design 3, 4)
-  - [ ] 1.1: RED — template-context tests (Page reachable, new field renders, bylines resolve)
-  - [ ] 1.2: RED — draft-filter ordering test (on_pages sees only published)
-  - [ ] 1.3: GREEN — build_page_context passes Page; templates read page.<attr>
-  - [ ] 1.4: GREEN — move on_pages after the draft filter
-  - [ ] 1.5: REFACTOR — remove dict-adapter dead code
-  - [ ] 1.6: Confirm spec Template Context section; run `just check`
+- [x] **Step 1: Pass the Page dataclass into template context** (Design 3, 4)
+  - [x] 1.1: RED — template-context tests (Page reachable, new field renders, bylines resolve)
+  - [x] 1.2: RED — draft-filter ordering test (on_pages sees only published)
+  - [x] 1.3: GREEN — build_page_context passes Page; templates read page.<attr>
+  - [x] 1.4: GREEN — move on_pages after the draft filter
+  - [x] 1.5: REFACTOR — remove dict-adapter dead code
+  - [x] 1.6: Confirm spec Template Context section; run `just check`
 
 - [ ] **Step 2: Build failure semantics and clean error reporting** (Design 5, 14, 15)
   - [ ] 2.1: RED — collect-all errors, untouched site/ on failure, atomic swap, fail-fast on config

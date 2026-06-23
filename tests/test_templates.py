@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from bartleby.authors import Author
 from bartleby.config import (
     AIConfig,
     BartlebyConfig,
@@ -172,7 +173,7 @@ def test_context_has_required_keys(tmp_path: Path) -> None:
 
 
 def test_context_page_fields(tmp_path: Path) -> None:
-    """The ``page`` namespace exposes the standard rendering attributes."""
+    """The ``page`` object exposes the standard rendering attributes."""
     page = _page(title="Field Test")
     page.output_url = "/blog/posts/post/"
     page.date = datetime.date(2026, 4, 15)
@@ -190,17 +191,112 @@ def test_context_page_fields(tmp_path: Path) -> None:
         data={},
     )
     page_ctx = context["page"]
-    assert isinstance(page_ctx, dict)
-    assert page_ctx["title"] == "Field Test"
-    assert page_ctx["content"] == "<p>body</p>"
-    assert page_ctx["url"] == "/blog/posts/post/"
-    assert page_ctx["readtime"] == 3
-    assert page_ctx["date"] == datetime.date(2026, 4, 15)
-    assert page_ctx["description"] == "desc"
-    assert "previous" in page_ctx
-    assert "next" in page_ctx
-    assert "toc" in page_ctx
-    assert "authors" in page_ctx
+    assert isinstance(page_ctx, Page)
+    assert page_ctx.title == "Field Test"
+    assert page_ctx.content == "<p>body</p>"
+    assert page_ctx.url == "/blog/posts/post/"
+    assert page_ctx.readtime == 3
+    assert page_ctx.date == datetime.date(2026, 4, 15)
+    assert page_ctx.description == "desc"
+    assert page_ctx.previous is None
+    assert page_ctx.next is None
+    assert page_ctx.toc == []
+    assert page_ctx.authors == []
+
+
+def test_context_page_is_the_dataclass() -> None:
+    """``build_page_context`` exposes the Page object itself under ``page``.
+
+    Passing the dataclass through (rather than a flattened dict) keeps the
+    schema open: every Page attribute is reachable without ``build_page_context``
+    having to enumerate it.
+    """
+    page = _page(title="Dataclass Page")
+    page.output_url = "/blog/posts/post/"
+    page.date = datetime.date(2026, 4, 15)
+    page.description = "desc"
+    page.rendered_content = "<p>body</p>"
+    page.readtime = 7
+    page.taxonomy_values = {"tags": ["python", "ssg"]}
+    context = build_page_context(
+        page=page,
+        site_config=_empty_config().site,
+        nav=[],
+        all_pages=[page],
+        taxonomy_data={},
+        config=_empty_config(),
+        build_info=BuildInfo(date=datetime.date(2026, 5, 23), bartleby_version="0.1.0"),
+        data={},
+    )
+    ctx_page = context["page"]
+    assert ctx_page is page
+    assert isinstance(ctx_page, Page)
+    # Template-facing aliases for the underlying source fields.
+    assert ctx_page.content == "<p>body</p>"
+    assert ctx_page.url == "/blog/posts/post/"
+    assert ctx_page.taxonomies == {"tags": ["python", "ssg"]}
+    # Real source attributes remain reachable too.
+    assert ctx_page.title == "Dataclass Page"
+    assert ctx_page.date == datetime.date(2026, 4, 15)
+    assert ctx_page.description == "desc"
+    assert ctx_page.readtime == 7
+    assert ctx_page.custom_metadata == {}
+
+
+def test_context_new_page_field_reachable_without_editing_builder() -> None:
+    """A value set on the Page renders without ``build_page_context`` knowing it.
+
+    This is the whole point of passing the dataclass: a template author who adds
+    a custom_metadata field reaches it in the template with no builder change.
+    """
+    page = _page()
+    page.custom_metadata = {"hero_image": "/img/hero.png"}
+    context = build_page_context(
+        page=page,
+        site_config=_empty_config().site,
+        nav=[],
+        all_pages=[page],
+        taxonomy_data={},
+        config=_empty_config(),
+        build_info=BuildInfo(date=datetime.date(2026, 5, 23), bartleby_version="0.1.0"),
+        data={},
+    )
+    env = create_jinja_env(_empty_config(), Path("/nonexistent-project"))
+    template = env.from_string("{{ page.custom_metadata.hero_image }}")
+    assert template.render(**context) == "/img/hero.png"
+
+
+def test_context_authors_resolve_to_author_objects() -> None:
+    """``page.authors`` carries resolved :class:`Author` objects, not raw keys."""
+    page = _page()
+    page.author_keys = ["mason", "ghost"]
+    authors = {
+        "mason": Author(
+            key="mason",
+            name="Mason Egger",
+            description=None,
+            avatar=None,
+            url="https://masonegger.com",
+        )
+    }
+    context = build_page_context(
+        page=page,
+        site_config=_empty_config().site,
+        nav=[],
+        all_pages=[page],
+        taxonomy_data={},
+        config=_empty_config(),
+        build_info=BuildInfo(date=datetime.date(2026, 5, 23), bartleby_version="0.1.0"),
+        data={},
+        authors=authors,
+    )
+    ctx_page = context["page"]
+    assert isinstance(ctx_page, Page)
+    resolved = ctx_page.authors
+    assert isinstance(resolved[0], Author)
+    assert resolved[0].name == "Mason Egger"
+    # Unknown keys fall back to the bare string so the build keeps going.
+    assert resolved[1] == "ghost"
 
 
 def test_context_build_metadata() -> None:

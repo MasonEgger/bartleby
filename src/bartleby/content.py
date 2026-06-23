@@ -13,6 +13,7 @@ import yaml
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from bartleby.authors import Author
     from bartleby.config import BartlebyConfig
 
 
@@ -51,6 +52,26 @@ class Page:
     readtime: int | None = None
     previous: Page | None = None
     next: Page | None = None
+    # Populated at template-context build time: author_keys resolved to Author
+    # objects (unknown keys fall back to the bare key string), and the table of
+    # contents extracted during markdown rendering.
+    authors: list[Author | str] = field(default_factory=list)
+    toc: list[Any] = field(default_factory=list)
+
+    @property
+    def content(self) -> str:
+        """Template-facing alias for :attr:`rendered_content`."""
+        return self.rendered_content
+
+    @property
+    def url(self) -> str:
+        """Template-facing alias for :attr:`output_url`."""
+        return self.output_url
+
+    @property
+    def taxonomies(self) -> dict[str, list[str]]:
+        """Template-facing alias for :attr:`taxonomy_values`."""
+        return self.taxonomy_values
 
 
 @dataclass(slots=True)

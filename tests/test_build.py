@@ -62,6 +62,36 @@ def test_build_listing_page_lists_published_posts(project: Path) -> None:
     assert 'href="/blog/posts/draft-post/"' not in rendered
 
 
+def test_on_pages_runs_after_draft_filter(project: Path) -> None:
+    """The ``on_pages`` hook sees only published pages, never drafts.
+
+    A hook registered in the project's ``hooks/`` directory records the titles
+    of every page it receives. Because the draft filter now runs before the
+    hook, a draft post must be absent from what the hook observed.
+    """
+    hooks_dir = project / "hooks"
+    hooks_dir.mkdir()
+    record_path = project / "seen_pages.txt"
+    (hooks_dir / "record.py").write_text(
+        "# ABOUTME: Test hook that records the titles on_pages receives.\n"
+        "# Writes them to seen_pages.txt for the draft-filter ordering assertion.\n"
+        "from __future__ import annotations\n"
+        "from pathlib import Path\n"
+        "\n"
+        "RECORD = Path(__file__).parent.parent / 'seen_pages.txt'\n"
+        "\n"
+        "def on_pages(pages, config):\n"
+        "    RECORD.write_text('\\n'.join(page.title for page in pages), encoding='utf-8')\n"
+        "    return pages\n",
+        encoding="utf-8",
+    )
+    build(project / "bartleby.yml")
+    seen = record_path.read_text(encoding="utf-8")
+    assert "Draft Post" not in seen
+    # Sanity: the published posts the hook should see are present.
+    assert "First Post" in seen
+
+
 def test_build_sitemap_includes_listing_url(project: Path) -> None:
     """``sitemap.xml`` lists the navigable ``/blog/`` listing URL."""
     build(project / "bartleby.yml")

@@ -53,10 +53,18 @@ if TYPE_CHECKING:
 
 @dataclass(slots=True)
 class BuildResult:
-    """Summary returned from :func:`build`."""
+    """Summary returned from :func:`build`.
+
+    :ivar page_count: Number of pages written (content + generated pages).
+    :ivar duration_seconds: Wall-clock build time.
+    :ivar static_file_count: Non-HTML asset files copied into the output tree.
+    :ivar output_dir: The directory the finished site was written to.
+    """
 
     page_count: int
     duration_seconds: float
+    static_file_count: int = 0
+    output_dir: str = "site"
 
 
 @dataclass(slots=True)
@@ -261,8 +269,19 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
 
     _swap_output_into_place(build_dir, final_output_dir)
 
+    static_file_count = sum(
+        1
+        for path in final_output_dir.rglob("*")
+        if path.is_file() and path.suffix.lower() != ".html"
+    )
+
     duration = time.perf_counter() - started
-    return BuildResult(page_count=len(all_pages), duration_seconds=duration)
+    return BuildResult(
+        page_count=len(all_pages),
+        duration_seconds=duration,
+        static_file_count=static_file_count,
+        output_dir=f"{final_output_dir.name}/",
+    )
 
 
 def _fail_build(

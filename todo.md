@@ -1,7 +1,7 @@
 # Bartleby v0.1.0 Hardening — Progress
 
 Delta plan over the 27-step initial build. See `plan.md` for the full TDD
-prompts and `audit.md` for the findings each step closes. 2 of 18 steps done.
+prompts and `audit.md` for the findings each step closes. 3 of 18 steps done.
 
 ## Phase 1 — Foundations
 
@@ -22,12 +22,12 @@ prompts and `audit.md` for the findings each step closes. 2 of 18 steps done.
   - [x] 2.6: RED — on_build_error fires once with the collected list
   - [x] 2.7: REFACTOR — shared error formatting; run `just check`
 
-- [ ] **Step 3: Structured output layer (--output json)**
-  - [ ] 3.1: RED — formatter tests (build/error/text shapes, exit codes)
-  - [ ] 3.2: GREEN — output.py result dataclasses + formatter
-  - [ ] 3.3: GREEN — global flags; route build/validate/new through it
-  - [ ] 3.4: RED — build/validate json is valid and parseable
-  - [ ] 3.5: REFACTOR — one path, both formats; run `just check`
+- [x] **Step 3: Structured output layer (--output json)**
+  - [x] 3.1: RED — formatter tests (build/error/text shapes, exit codes)
+  - [x] 3.2: GREEN — output.py result dataclasses + formatter
+  - [x] 3.3: GREEN — global flags; route build/validate/new through it
+  - [x] 3.4: RED — build/validate json is valid and parseable
+  - [x] 3.5: REFACTOR — one path, both formats; run `just check`
 
 ## Phase 2 — Theme reality
 

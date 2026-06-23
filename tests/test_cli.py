@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
 import pytest
@@ -12,6 +13,17 @@ from bartleby.config import load_config
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+
+def _last_json(stdout: str) -> dict[str, object]:
+    """Parse the last non-empty stdout line as JSON.
+
+    Scaffolding helpers print their own result line before the command under
+    test runs, so the JSON we care about is the final line.
+    """
+    line = [ln for ln in stdout.splitlines() if ln.strip()][-1]
+    parsed: dict[str, object] = json.loads(line)
+    return parsed
 
 
 def test_new_site_creates_structure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -198,3 +210,83 @@ def test_config_error_prints_clean_message_and_exits_one(
     assert "Traceback" not in captured.err
     assert "config_error" in captured.err
     assert "site section is required" in captured.err
+
+
+def test_build_output_json_is_valid_and_parseable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby build --output json`` emits a single parseable JSON object on stdout."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["build", "--output", "json"])
+    captured = capsys.readouterr()
+    payload = _last_json(captured.out)
+    assert payload["status"] == "success"
+    assert payload["pages"] >= 1
+    assert payload["output_dir"]
+    assert isinstance(payload["errors"], list)
+    assert isinstance(payload["warnings"], list)
+
+
+def test_validate_output_json_is_valid_and_parseable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby validate --output json`` emits a parseable JSON object on stdout."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["validate", "--output", "json"])
+    captured = capsys.readouterr()
+    payload = _last_json(captured.out)
+    assert payload["valid"] is True
+    assert payload["files_checked"] >= 1
+
+
+def test_build_error_json_mode_emits_error_object(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """In JSON mode a build failure is a parseable error object on stdout, exit 1."""
+    from bartleby.build import BuildError, PageError
+
+    _scaffold_and_enter(tmp_path, monkeypatch)
+
+    def boom(*args: object, **kwargs: object) -> object:
+        raise BuildError([PageError(file_path="content/blog/posts/bad.md", message="boom")])
+
+    monkeypatch.setattr("bartleby.cli.async_build", boom)
+
+    with pytest.raises(SystemExit) as exc:
+        main(["build", "--output", "json"])
+    assert exc.value.code == 1
+
+    captured = capsys.readouterr()
+    payload = _last_json(captured.out)
+    assert payload["error"]
+    assert payload["code"] == "build_error"
+    assert payload["file"] == "content/blog/posts/bad.md"
+
+
+def test_new_site_output_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby new site --output json`` emits the documented path/config object."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite", "--output", "json"])
+    captured = capsys.readouterr()
+    payload = _last_json(captured.out)
+    assert payload["path"]
+    assert payload["config"]
+
+
+def test_new_post_missing_type_json_is_usage_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An unknown content type in JSON mode is a usage error (exit 2), never a prompt."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    monkeypatch.chdir(tmp_path / "mysite")
+
+    with pytest.raises(SystemExit) as exc:
+        main(["new", "post", "Hi", "--type", "nope", "--output", "json"])
+    assert exc.value.code == 2
+
+    captured = capsys.readouterr()
+    payload = _last_json(captured.out)
+    assert payload["code"] == "usage_error"

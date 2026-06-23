@@ -147,6 +147,28 @@ def test_no_entry_point_discovery() -> None:
     mock_ep.assert_not_called()
 
 
+def test_hook_can_import_sibling_module(tmp_path: Path) -> None:
+    """A ``hooks/*.py`` file can ``import`` a sibling helper from the same dir.
+
+    The ``hooks/`` directory is put on ``sys.path`` during discovery, so a hook
+    can split shared logic into a ``_helpers.py`` sibling (underscore-prefixed,
+    so it is not itself loaded as a hook) and import it by module name.
+    """
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "_shared.py").write_text("GREETING = 'hi from sibling'\n", encoding="utf-8")
+    (hooks_dir / "greet.py").write_text(
+        "import _shared\n\n\ndef on_page_markdown(source, **_):\n"
+        "    return source + _shared.GREETING\n",
+        encoding="utf-8",
+    )
+
+    collection = discover_hooks(tmp_path)
+
+    result = collection.run_event("on_page_markdown", "src: ")
+    assert result == "src: hi from sibling"
+
+
 def test_event_priority_works_on_methods() -> None:
     """``@event_priority`` decorates instance methods just as well as plain functions."""
 

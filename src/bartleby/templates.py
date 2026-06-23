@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 import tomllib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -22,6 +23,8 @@ if TYPE_CHECKING:
     from bartleby.authors import Author
     from bartleby.config import BartlebyConfig, SiteConfig
     from bartleby.content import Page
+
+_LOGGER = logging.getLogger("bartleby")
 
 
 @dataclass(slots=True)
@@ -81,20 +84,26 @@ def create_jinja_env(config: BartlebyConfig, project_dir: Path) -> jinja2.Enviro
 def resolve_template_name(page: Page, template_type: str, project_dir: Path) -> str:
     """Return the template name to render for ``page``.
 
-    Implements the 6-level lookup cascade documented in spec.md:
+    Implements the 6-level lookup cascade documented in spec.md. Each level is
+    checked, in order, against ``overrides/`` then ``templates/`` then the theme
+    (first existing file wins):
 
-    1. Page front matter ``template`` override
-    2. ``overrides/{template_name}`` at project root
-    3. ``templates/{content_type}/{template_type}.html``
-    4. ``templates/{content_type}/base.html``
-    5. ``templates/defaults/{template_type}.html``
-    6. Built-in theme fallback (``{template_type}.html`` or ``page.html``)
+    1. Page front matter ``template`` override (returned immediately)
+    2. Content-type taxonomy templates (only when ``template_type`` is
+       ``"taxonomy"`` and the page has a content type)
+    3. ``{content_type}/{template_type}.html``
+    4. ``{content_type}/base.html``
+    5. ``defaults/{template_type}.html``
+    6. Theme fallback: ``{template_type}.html``, plus an ultimate ``page.html``
+       fallback for any non-``page`` template type
 
     :param page: The page being rendered.
     :param template_type: One of ``"post"``, ``"list"``, ``"page"``,
         ``"taxonomy"``, ``"taxonomy_index"``.
     :param project_dir: The user's project directory.
-    :returns: A template name resolvable by the Jinja2 environment.
+    :returns: A template name resolvable by the Jinja2 environment. When no
+        candidate exists on disk the last candidate is returned, so Jinja2's
+        ``TemplateNotFound`` surfaces the concrete missing name.
     """
     if page.template_override:
         return page.template_override
@@ -125,8 +134,15 @@ def resolve_template_name(page: Page, template_type: str, project_dir: Path) -> 
             return candidate
         if (theme_dir / candidate).exists():
             return candidate
-    # Fall through to the very last candidate name — Jinja2 will surface the
-    # missing-template error if it really isn't anywhere on the search path.
+    # Nothing matched on disk. Log the full candidate list so the eventual
+    # Jinja2 TemplateNotFound has context, then return the last candidate so
+    # that error names a concrete template rather than failing silently here.
+    _LOGGER.warning(
+        "no template found for %s (type %r); tried: %s",
+        page.source_path,
+        template_type,
+        ", ".join(candidates),
+    )
     return candidates[-1]
 
 

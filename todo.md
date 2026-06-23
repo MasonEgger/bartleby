@@ -139,6 +139,6 @@ prompts and `audit.md` for the findings each step closes. 6 of 18 steps done.
 - [ ] **Step 18: Packaging and polish** (Meta 1-2, Design 1, 2, 7-12, 16, 17)
   - [x] 18.1: RED — front-matter newline (Design 1) + non-dict YAML error (Design 2) + configurable output dir (Design 10) + expanded validate (Design 17)
   - [x] 18.2: GREEN — implement those behavior changes
-  - [ ] 18.3: REFACTOR — magic-string enum (7), docstring/fall-through (8, 9), import to top (11), hooks sys.path (12), split build() (16)
+  - [x] 18.3: REFACTOR — magic-string enum (7), docstring/fall-through (8, 9), import to top (11), hooks sys.path (12), split build() (16)
   - [ ] 18.4: Packaging — LICENSE (MIT), pyproject license, README, CHANGELOG (Meta 1, 2)
   - [ ] 18.5: Run `just check`

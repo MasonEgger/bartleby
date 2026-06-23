@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -11,6 +12,20 @@ from bartleby.pagination import paginate
 
 if TYPE_CHECKING:
     from bartleby.config import BartlebyConfig
+
+#: ``custom_metadata`` key carrying the listing page kind.
+LISTING_KIND_KEY = "listing_kind"
+
+
+class ListingKind(StrEnum):
+    """The kind of generated listing page.
+
+    Stored under :data:`LISTING_KIND_KEY` in a page's ``custom_metadata`` and
+    read back by the build's template-type dispatch. ``StrEnum`` compares equal
+    to its string value, so templates reading the raw string are unaffected.
+    """
+
+    CONTENT_TYPE = "content_type"
 
 
 def generate_listing_pages(
@@ -110,7 +125,7 @@ def _build_listing_page(
         title=content_type_name.title(),
         content_type_name=content_type_name,
         custom_metadata={
-            "listing_kind": "content_type",
+            LISTING_KIND_KEY: ListingKind.CONTENT_TYPE,
             "posts": posts,
             "intro_content": intro_content,
         },

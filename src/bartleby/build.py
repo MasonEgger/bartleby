@@ -10,7 +10,7 @@ import re
 import shutil
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn
 
@@ -26,7 +26,7 @@ from bartleby.content_query import select_published
 from bartleby.crossrefs import resolve_all_crossrefs
 from bartleby.feeds import generate_feeds
 from bartleby.icons import tree_shake_icons
-from bartleby.listings import generate_listing_pages
+from bartleby.listings import LISTING_KIND_KEY, ListingKind, generate_listing_pages
 from bartleby.llm import (
     generate_llms_full_txt,
     generate_llms_txt,
@@ -39,7 +39,13 @@ from bartleby.plugins import PluginCollection, discover_hooks, discover_plugins
 from bartleby.search import build_search_index, write_search_index
 from bartleby.shortcodes import ShortcodeError, process_shortcodes
 from bartleby.sitemap import write_robots_txt, write_sitemap
-from bartleby.taxonomies import AllTaxonomies, build_taxonomies, generate_taxonomy_pages
+from bartleby.taxonomies import (
+    TAXONOMY_KIND_KEY,
+    AllTaxonomies,
+    TaxonomyKind,
+    build_taxonomies,
+    generate_taxonomy_pages,
+)
 from bartleby.templates import (
     BuildInfo,
     build_page_context,
@@ -47,6 +53,7 @@ from bartleby.templates import (
     load_data_files,
     resolve_template_name,
 )
+from bartleby.theme import get_theme_templates_dir
 from bartleby.urls import generate_all_urls
 
 if TYPE_CHECKING:
@@ -54,7 +61,34 @@ if TYPE_CHECKING:
 
     from bartleby.authors import Author
     from bartleby.config import BartlebyConfig
-    from bartleby.content import Page
+    from bartleby.content import ColocatedAsset, Page
+
+
+@dataclass(slots=True)
+class _BuildState:
+    """Mutable workspace threaded through the build's phase helpers.
+
+    Each phase (load inputs, filter/validate, render, emit) reads and extends
+    this one object instead of passing a dozen positional arguments around. It
+    is an internal implementation detail of :func:`build`, not a public type.
+    """
+
+    plugins: PluginCollection
+    config: BartlebyConfig
+    project_dir: Path
+    content_dir: Path
+    authors: dict[str, Author]
+    pages: list[Page]
+    assets: list[ColocatedAsset]
+    all_pages: list[Page] = field(default_factory=list)
+    taxonomy_data: AllTaxonomies | None = None
+    nav: Any = None
+    env: Environment | None = None
+    md_renderer: Any = None
+    data: dict[str, object] = field(default_factory=dict)
+    build_info: BuildInfo | None = None
+    output_dir: Path | None = None
+    final_output_dir: Path | None = None
 
 
 @dataclass(slots=True)
@@ -159,8 +193,23 @@ def build(
         is on and any cross-reference cannot be resolved.
     """
     started = time.perf_counter()
-    plugins = PluginCollection()
 
+    state = _load_inputs(config_path)
+    _filter_and_validate(state, include_drafts=include_drafts)
+    rendered_html = _render_all_pages(state, strict=strict)
+    _emit_outputs(state, rendered_html)
+
+    return _finish_build(state, started=started, dry_run=dry_run)
+
+
+def _load_inputs(config_path: Path) -> _BuildState:
+    """Phase 1: load config, discover plugins/hooks, and read authors + content.
+
+    Fires the early lifecycle hooks (``on_startup``, ``on_config``,
+    ``on_pre_build``) and returns a populated :class:`_BuildState` carrying the
+    config, plugin collection, authors, and the discovered pages/assets.
+    """
+    plugins = PluginCollection()
     config = load_config(config_path)
     project_dir = config.config_dir
     # Registration order at equal priority: internal handlers (already on
@@ -170,11 +219,34 @@ def build(
     plugins.run_event("on_startup", "build")
     config = plugins.run_event("on_config", config)
     plugins.run_event("on_pre_build", config)
-    authors_path = project_dir / config.authors_file
-    authors = load_authors(authors_path)
+    authors = load_authors(project_dir / config.authors_file)
 
     content_dir = project_dir / "content"
     pages, assets = discover_content(config, content_dir)
+
+    return _BuildState(
+        plugins=plugins,
+        config=config,
+        project_dir=project_dir,
+        content_dir=content_dir,
+        authors=authors,
+        pages=pages,
+        assets=assets,
+    )
+
+
+def _filter_and_validate(state: _BuildState, *, include_drafts: bool) -> None:
+    """Phase 2: drop drafts, validate metadata, and build the page/nav graph.
+
+    Populates ``state`` with the full page list (content + taxonomy + listing
+    pages), navigation, the Jinja environment, the markdown renderer, data
+    files, build info, and the temp/final output directories.
+
+    :raises ValueError: When metadata validation fails.
+    """
+    config = state.config
+    plugins = state.plugins
+    pages = state.pages
 
     if not include_drafts:
         pages = select_published(pages)
@@ -182,37 +254,60 @@ def build(
     # Dispatch on_files only after drafts are filtered out so plugins never
     # operate on pages that the build is about to discard.
     pages = list(plugins.run_event("on_files", pages, config=config))
+    state.pages = pages
 
-    metadata_errors = validate_all_metadata(pages, config, authors)
+    metadata_errors = validate_all_metadata(pages, config, state.authors)
     if metadata_errors:
         message = "\n".join(f"  {error.file_path}: {error.message}" for error in metadata_errors)
         raise ValueError(f"metadata validation failed:\n{message}")
 
     generate_all_urls(pages, config)
-    taxonomy_data = build_taxonomies(pages, config)
-    taxonomy_pages = generate_taxonomy_pages(taxonomy_data, config)
-    listing_pages = generate_listing_pages(pages, config, content_dir)
-    all_pages = pages + taxonomy_pages + listing_pages
+    state.taxonomy_data = build_taxonomies(pages, config)
+    taxonomy_pages = generate_taxonomy_pages(state.taxonomy_data, config)
+    listing_pages = generate_listing_pages(pages, config, state.content_dir)
+    state.all_pages = pages + taxonomy_pages + listing_pages
+
     nav = build_navigation(config, pages)
     link_pages(nav)
-    nav = plugins.run_event("on_nav", nav, config=config)
+    state.nav = plugins.run_event("on_nav", nav, config=config)
 
-    md_renderer = create_markdown_renderer(config)
-    env = create_jinja_env(config, project_dir)
-    env = plugins.run_event("on_env", env, config=config)
+    state.md_renderer = create_markdown_renderer(config)
+    env = create_jinja_env(config, state.project_dir)
+    state.env = plugins.run_event("on_env", env, config=config)
 
-    data = load_data_files(project_dir)
-    build_info = BuildInfo(date=datetime.date.today(), bartleby_version=bartleby.__version__)
+    state.data = load_data_files(state.project_dir)
+    state.build_info = BuildInfo(date=datetime.date.today(), bartleby_version=bartleby.__version__)
 
-    final_output_dir = project_dir / config.output_dir
+    state.final_output_dir = state.project_dir / config.output_dir
     # Render into a sibling temp directory and swap it into place only on full
     # success, so a failed build never touches the previous good output dir.
-    build_dir = Path(tempfile.mkdtemp(prefix=".bartleby-build-", dir=project_dir))
-    output_dir = build_dir
+    state.output_dir = Path(tempfile.mkdtemp(prefix=".bartleby-build-", dir=state.project_dir))
+
+
+def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
+    """Phase 3: render markdown, resolve crossrefs, render templates, and the 404.
+
+    Both the markdown render loop and the template render loop collect every
+    page-level failure and abort the build (discarding the temp dir) if any
+    occurred, instead of stopping on the first error.
+
+    :raises ValueError: When ``strict`` is set and a cross-reference is broken.
+    :returns: Every rendered HTML document, including ``404.html``, for icon
+        tree-shaking downstream.
+    """
+    config = state.config
+    plugins = state.plugins
+    assert state.env is not None
+    assert state.build_info is not None
+    assert state.output_dir is not None
+    assert state.taxonomy_data is not None
+    env = state.env
+    build_info = state.build_info
+    output_dir = state.output_dir
+    taxonomy_context = _taxonomy_context(state.taxonomy_data)
 
     page_errors: list[PageError] = []
-
-    for page in all_pages:
+    for page in state.all_pages:
         plugins.run_event("on_pre_page", page, config=config)
         # on_page_read_source may return a replacement source string; None falls
         # back to the page's own raw content read at discovery time.
@@ -221,7 +316,7 @@ def build(
         try:
             source = process_shortcodes(raw_source, {"build": build_info, "page": page}, env)
             source = plugins.run_event("on_page_markdown", source, page=page, config=config)
-            rendered = render_markdown(source, md_renderer)
+            rendered = render_markdown(source, state.md_renderer)
             html_content = plugins.run_event(
                 "on_page_content", rendered.html, page=page, config=config
             )
@@ -239,11 +334,11 @@ def build(
             page.excerpt = extract_excerpt(page.raw_content, content_type.excerpt_separator)
 
     if page_errors:
-        _fail_build(page_errors, build_dir, plugins)
+        _fail_build(page_errors, output_dir, plugins)
 
     # Cross-reference resolution needs every page rendered before any rewriting,
-    # so it lives outside the render loop above and below the template render below.
-    crossref_errors = resolve_all_crossrefs(all_pages, content_dir)
+    # so it lives between the markdown loop above and the template loop below.
+    crossref_errors = resolve_all_crossrefs(state.all_pages, state.content_dir)
     if crossref_errors:
         for error in crossref_errors:
             _LOGGER.warning(
@@ -256,24 +351,24 @@ def build(
             raise ValueError(f"strict mode: {len(crossref_errors)} unresolved cross-reference(s)")
 
     rendered_html: list[str] = []
-    for page in all_pages:
+    for page in state.all_pages:
         content_type = (
             config.content_types.get(page.content_type_name) if page.content_type_name else None
         )
         template_type = _template_type_for(page, content_type)
         try:
-            template_name = resolve_template_name(page, template_type, project_dir)
+            template_name = resolve_template_name(page, template_type, state.project_dir)
             template = env.get_template(template_name)
             context = build_page_context(
                 page=page,
                 site_config=config.site,
-                nav=nav.items,
-                all_pages=all_pages,
-                taxonomy_data=_taxonomy_context(taxonomy_data),
+                nav=state.nav.items,
+                all_pages=state.all_pages,
+                taxonomy_data=taxonomy_context,
                 config=config,
                 build_info=build_info,
-                data=data,
-                authors=authors,
+                data=state.data,
+                authors=state.authors,
             )
             context = plugins.run_event("on_page_context", context, page=page, config=config)
             html = template.render(**context)
@@ -284,29 +379,40 @@ def build(
             page_errors.append(PageError(file_path=str(page.source_path), message=str(exc)))
 
     if page_errors:
-        _fail_build(page_errors, build_dir, plugins)
+        _fail_build(page_errors, output_dir, plugins)
 
     not_found_html = _render_404(
         env=env,
         config=config,
-        nav=nav.items,
-        all_pages=all_pages,
-        taxonomy_data=_taxonomy_context(taxonomy_data),
+        nav=state.nav.items,
+        all_pages=state.all_pages,
+        taxonomy_data=taxonomy_context,
         build_info=build_info,
-        data=data,
-        authors=authors,
-        project_dir=project_dir,
+        data=state.data,
+        authors=state.authors,
+        project_dir=state.project_dir,
     )
     (output_dir / "404.html").write_text(not_found_html, encoding="utf-8")
     rendered_html.append(not_found_html)
+    return rendered_html
 
-    from bartleby.theme import get_theme_templates_dir as _theme_dir
 
-    theme_static = _theme_dir().parent / "static"
+def _emit_outputs(state: _BuildState, rendered_html: list[str]) -> None:
+    """Phase 4: copy assets and write search, feeds, sitemap, robots, AI surfaces.
+
+    Everything written here lands in the temp output dir; the swap into the
+    final location happens later in :func:`_finish_build`.
+    """
+    config = state.config
+    assert state.output_dir is not None
+    output_dir = state.output_dir
+    project_dir = state.project_dir
+
+    theme_static = get_theme_templates_dir().parent / "static"
     copy_static_files(theme_static, output_dir)
     copy_static_files(project_dir / "static", output_dir)
     _apply_compiled_theme_css(project_dir, output_dir)
-    copy_colocated_assets(assets, pages, content_dir, output_dir)
+    copy_colocated_assets(state.assets, state.pages, state.content_dir, output_dir)
     icon_packs = {pack: bool(value) for pack, value in config.theme.icon_packs.items()} or {
         "material": True,
         "fontawesome": True,
@@ -318,25 +424,44 @@ def build(
         icon_packs,
         output_dir,
     )
-    write_search_index(build_search_index(pages, config), output_dir)
-    generate_feeds(pages, config, output_dir)
+    write_search_index(build_search_index(state.pages, config), output_dir)
+    generate_feeds(state.pages, config, output_dir)
     if config.ai.markdown_variants:
-        for page in pages:
+        for page in state.pages:
             if not page.draft and page.raw_content:
                 write_markdown_variant(page, output_dir)
     if config.ai.llms_txt:
-        (output_dir / "llms.txt").write_text(generate_llms_txt(pages, config), encoding="utf-8")
+        (output_dir / "llms.txt").write_text(
+            generate_llms_txt(state.pages, config), encoding="utf-8"
+        )
     if config.ai.llms_full_txt:
         (output_dir / "llms-full.txt").write_text(
-            generate_llms_full_txt(pages, config), encoding="utf-8"
+            generate_llms_full_txt(state.pages, config), encoding="utf-8"
         )
-    write_sitemap(all_pages, config.site, output_dir)
+    write_sitemap(state.all_pages, config.site, output_dir)
     if config.ai.agent_surface:
-        write_agent_surface(pages, config, authors, output_dir)
+        write_agent_surface(state.pages, config, state.authors, output_dir)
     static_robots_exists = (project_dir / "static" / "robots.txt").exists()
     write_robots_txt(
         config.site, config.ai, output_dir, static_override_exists=static_robots_exists
     )
+
+
+def _finish_build(
+    state: _BuildState, *, started: float, dry_run: bool
+) -> BuildResult | DryRunResult:
+    """Phase 5: swap the temp output into place (or diff it) and fire shutdown hooks.
+
+    On ``dry_run`` the temp tree is diffed against the existing output and
+    discarded; otherwise it atomically replaces the previous output directory.
+    Either path fires ``on_post_build`` and ``on_shutdown`` before returning.
+    """
+    plugins = state.plugins
+    config = state.config
+    assert state.output_dir is not None
+    assert state.final_output_dir is not None
+    build_dir = state.output_dir
+    final_output_dir = state.final_output_dir
 
     if dry_run:
         diff = _diff_output_trees(build_dir, final_output_dir)
@@ -354,10 +479,9 @@ def build(
         for path in final_output_dir.rglob("*")
         if path.is_file() and path.suffix.lower() != ".html"
     )
-
     duration = time.perf_counter() - started
     return BuildResult(
-        page_count=len(all_pages),
+        page_count=len(state.all_pages),
         duration_seconds=duration,
         static_file_count=static_file_count,
         output_dir=f"{final_output_dir.name}/",
@@ -405,12 +529,12 @@ def _fail_build(
 
 def _template_type_for(page: Page, content_type: object) -> str:
     """Pick the template type bucket — taxonomy and listing pages bypass post/page logic."""
-    taxonomy_kind = page.custom_metadata.get("taxonomy_kind")
-    if taxonomy_kind == "term":
+    taxonomy_kind = page.custom_metadata.get(TAXONOMY_KIND_KEY)
+    if taxonomy_kind == TaxonomyKind.TERM:
         return "taxonomy"
-    if taxonomy_kind == "index":
+    if taxonomy_kind == TaxonomyKind.INDEX:
         return "taxonomy_index"
-    if page.custom_metadata.get("listing_kind") == "content_type":
+    if page.custom_metadata.get(LISTING_KIND_KEY) == ListingKind.CONTENT_TYPE:
         return "list"
     return "post" if content_type is not None else "page"
 
@@ -478,10 +602,8 @@ def _template_sources(project_dir: Path) -> list[str]:
     single rendered page (e.g. a partial included only on some pages). Reading
     the template sources ensures those references are retained too.
     """
-    from bartleby.theme import get_theme_templates_dir as _theme_dir
-
     sources: list[str] = []
-    template_roots = [_theme_dir(), project_dir / "templates"]
+    template_roots = [get_theme_templates_dir(), project_dir / "templates"]
     for root in template_roots:
         if not root.is_dir():
             continue

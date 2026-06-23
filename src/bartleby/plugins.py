@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import inspect
+import sys
 from collections.abc import Callable
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -147,6 +148,13 @@ def discover_hooks(project_dir: Path) -> PluginCollection:
     hooks_dir = project_dir / "hooks"
     if not hooks_dir.exists() or not hooks_dir.is_dir():
         return collection
+
+    # Put hooks/ on sys.path so a hook can import an underscore-prefixed sibling
+    # helper module (which discovery itself skips) instead of being forced to
+    # install shared logic as a separate package.
+    hooks_path = str(hooks_dir)
+    if hooks_path not in sys.path:
+        sys.path.insert(0, hooks_path)
 
     for path in sorted(hooks_dir.glob("*.py")):
         if path.name.startswith("_"):

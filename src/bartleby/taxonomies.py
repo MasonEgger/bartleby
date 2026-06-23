@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -12,6 +13,22 @@ from bartleby.urls import slugify
 
 if TYPE_CHECKING:
     from bartleby.config import BartlebyConfig
+
+#: ``custom_metadata`` key carrying the taxonomy page kind (index vs. term).
+TAXONOMY_KIND_KEY = "taxonomy_kind"
+
+
+class TaxonomyKind(StrEnum):
+    """The two flavours of generated taxonomy page.
+
+    Stored under :data:`TAXONOMY_KIND_KEY` in a page's ``custom_metadata`` and
+    read back by the build's template-type dispatch. ``StrEnum`` members compare
+    equal to their string value, so existing templates that read the raw string
+    keep working unchanged.
+    """
+
+    INDEX = "index"
+    TERM = "term"
 
 
 @dataclass(slots=True)
@@ -164,7 +181,7 @@ def _make_taxonomy_index_page(
         content_type_name=content_type,
         custom_metadata={
             "taxonomy_name": taxonomy_name,
-            "taxonomy_kind": "index",
+            TAXONOMY_KIND_KEY: TaxonomyKind.INDEX,
         },
     )
     page.output_url = url
@@ -198,7 +215,7 @@ def _make_taxonomy_term_page(
         content_type_name=content_type,
         custom_metadata={
             "taxonomy_name": taxonomy_name,
-            "taxonomy_kind": "term",
+            TAXONOMY_KIND_KEY: TaxonomyKind.TERM,
             "taxonomy_term": term_name,
             "posts": term.pages,
         },

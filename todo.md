@@ -1,207 +1,144 @@
-# Bartleby Implementation Progress
+# Bartleby v0.1.0 Hardening — Progress
 
-## Phase 1: Foundation
+Delta plan over the 27-step initial build. See `plan.md` for the full TDD
+prompts and `audit.md` for the findings each step closes. 0 of 18 steps done.
 
-- [x] **Step 1: Project Scaffolding**
-  - [x] 1.1: Create pyproject.toml with all dependencies and tool config
-  - [x] 1.2: Create package structure (src/bartleby/, tests/, fixtures/)
-  - [x] 1.3: Create Justfile (check, lint, typecheck, test, format)
-  - [x] 1.4: Update .gitignore
-  - [x] 1.5: Write smoke tests (test_init.py)
-  - [x] 1.6: Verify `uv sync --dev` and `just check` pass
+## Phase 1 — Foundations
 
-- [x] **Step 2: Configuration System**
-  - [x] 2.1: Create test fixture configs (minimal.yml, full.yml, invalid_*.yml)
-  - [x] 2.2: Write config loading and validation tests (test_config.py)
-  - [x] 2.3: Implement config dataclasses and load_config (config.py)
-  - [x] 2.4: Refactor — validation error messages with key paths
-  - [x] 2.5: Verify `just check` passes
+- [ ] **Step 1: Pass the Page dataclass into template context** (Design 3, 4)
+  - [ ] 1.1: RED — template-context tests (Page reachable, new field renders, bylines resolve)
+  - [ ] 1.2: RED — draft-filter ordering test (on_pages sees only published)
+  - [ ] 1.3: GREEN — build_page_context passes Page; templates read page.<attr>
+  - [ ] 1.4: GREEN — move on_pages after the draft filter
+  - [ ] 1.5: REFACTOR — remove dict-adapter dead code
+  - [ ] 1.6: Confirm spec Template Context section; run `just check`
 
-- [x] **Step 3: Authors System**
-  - [x] 3.1: Create test fixture author files (valid.yml, minimal.yml)
-  - [x] 3.2: Write author loading and resolution tests (test_authors.py)
-  - [x] 3.3: Implement Author dataclass, load_authors, resolve_authors (authors.py)
-  - [x] 3.4: Verify `just check` passes
+- [ ] **Step 2: Build failure semantics and clean error reporting** (Design 5, 14, 15)
+  - [ ] 2.1: RED — collect-all errors, untouched site/ on failure, atomic swap, fail-fast on config
+  - [ ] 2.2: RED — clean error (no traceback) + BARTLEBY_DEBUG re-enables it
+  - [ ] 2.3: GREEN — accumulate per-page errors; temp-dir build + swap
+  - [ ] 2.4: GREEN — top-level CLI error boundary
+  - [ ] 2.5: GREEN — logging.getLogger for non-essential output
+  - [ ] 2.6: RED — on_build_error fires once with the collected list
+  - [ ] 2.7: REFACTOR — shared error formatting; run `just check`
 
-## Phase 2: Content Layer
+- [ ] **Step 3: Structured output layer (--output json)**
+  - [ ] 3.1: RED — formatter tests (build/error/text shapes, exit codes)
+  - [ ] 3.2: GREEN — output.py result dataclasses + formatter
+  - [ ] 3.3: GREEN — global flags; route build/validate/new through it
+  - [ ] 3.4: RED — build/validate json is valid and parseable
+  - [ ] 3.5: REFACTOR — one path, both formats; run `just check`
 
-- [x] **Step 4: Content Discovery and Front Matter**
-  - [x] 4.1: Create sample site fixture (tests/fixtures/site/)
-  - [x] 4.2: Write content discovery tests (test_content.py)
-  - [x] 4.3: Add shared fixtures to conftest.py
-  - [x] 4.4: Implement Page dataclass, parse_front_matter, discover_content (content.py)
-  - [x] 4.5: Verify `just check` passes
+## Phase 2 — Theme reality
 
-- [x] **Step 5: Metadata Validation**
-  - [x] 5.1: Write metadata validation tests (test_metadata.py)
-  - [x] 5.2: Implement validate_page_metadata, validate_all_metadata (metadata.py)
-  - [x] 5.3: Verify `just check` passes
+- [ ] **Step 4: Vendor real Alpine, HTMX, lunr bundles** (Deferral 1)
+  - [ ] 4.1: RED — size/signature tests + THIRD-PARTY-NOTICES + build copies them
+  - [ ] 4.2: GREEN — vendor pinned minified bundles; record versions/licenses
+  - [ ] 4.3: RED — rendered output wires markup to the bundles
+  - [ ] 4.4: GREEN — base.html/partials reference real bundles
+  - [ ] 4.5: REFACTOR — remove stub comments; run `just check`
 
-- [x] **Step 6: URL Generation**
-  - [x] 6.1: Write URL generation tests (test_urls.py)
-  - [x] 6.2: Implement generate_url, generate_all_urls (urls.py)
-  - [x] 6.3: Handle edge cases (missing dates, index files)
-  - [x] 6.4: Verify `just check` passes
+- [ ] **Step 5: Hybrid Tailwind pipeline and `bartleby theme compile`** (Deferral 2)
+  - [ ] 5.1: RED — resolver order, checksum-abort, compiled-CSS preference
+  - [ ] 5.2: GREEN — package-build CSS from templates + safelist
+  - [ ] 5.3: GREEN — theme compile command (PATH/cache/download, SHA-256, --refresh)
+  - [ ] 5.4: GREEN — build prefers .bartleby/theme.css
+  - [ ] 5.5: RED — theme compile --output json shape
+  - [ ] 5.6: REFACTOR — no implicit download in build; run `just check`
 
-## Phase 3: Rendering Pipeline
+- [ ] **Step 6: Feature toggle enforcement** (Spec 2)
+  - [ ] 6.1: RED — unknown feature name is a validation error
+  - [ ] 6.2: RED — enabling/disabling adds/removes markup entirely
+  - [ ] 6.3: GREEN — feature() helper + template gating
+  - [ ] 6.4: GREEN — known-feature validation in config.py
+  - [ ] 6.5: REFACTOR — one known-feature list; run `just check`
 
-- [x] **Step 7: Markdown Pipeline**
-  - [x] 7.1: Write markdown pipeline tests (test_markdown_pipeline.py)
-  - [x] 7.2: Implement create_markdown_renderer, render_markdown (markdown_pipeline.py)
-  - [x] 7.3: Verify extension ordering (fence before superfences)
-  - [x] 7.4: Verify `just check` passes
+- [ ] **Step 7: Full icon packs and standalone 404** (Deferral 3, Spec 3)
+  - [ ] 7.1: RED — resolve icons across all four packs; tree-shake; unused pack = 0 files
+  - [ ] 7.2: RED — build renders site/404.html
+  - [ ] 7.3: GREEN — vendor complete packs; get_icon_path resolves full set
+  - [ ] 7.4: GREEN — 404 render in pipeline
+  - [ ] 7.5: REFACTOR — tree-shake scans HTML + templates; run `just check`
 
-- [x] **Step 8: Template System (+ customization seams)**
-  - [x] 8.1: Create test fixture templates, overrides/, partials/, data/ fixtures
-  - [x] 8.2: Write template system tests (test_templates.py) including overrides, partials, data, extra_css/js
-  - [x] 8.3: Implement create_jinja_env with 6-level cascade (overrides/ on top, project_dir for partials/shortcodes)
-  - [x] 8.4: Implement load_data_files() — YAML + TOML auto-load from data/
-  - [x] 8.5: Implement build_page_context including `data`, `extra_css`, `extra_js`
-  - [x] 8.6: Create theme package and minimal built-in templates
-  - [x] 8.7: Create SEO/JSON-LD partials in base template
-  - [x] 8.8: Verify `just check` passes
+## Phase 3 — Plugins
 
-## Phase 4: First Working Build
+- [ ] **Step 8: All hook events fire; BasePlugin parity** (Deferral 7, Design 6)
+  - [ ] 8.1: RED — each of the 16 events dispatched once with correct args; return-value semantics; BasePlugin parity
+  - [ ] 8.2: GREEN — add missing dispatch call sites in build.py/server.py
+  - [ ] 8.3: GREEN — reconcile KNOWN_EVENTS and BasePlugin
+  - [ ] 8.4: REFACTOR — priority-then-registration for every event; run `just check`
 
-- [x] **Step 9: Navigation System**
-  - [x] 9.1: Write navigation tests (test_navigation.py)
-  - [x] 9.2: Implement build_navigation, auto_generate_nav, link_pages (navigation.py)
-  - [x] 9.3: Verify `just check` passes
+- [ ] **Step 9: Entry-point plugin discovery**
+  - [ ] 9.1: RED — bartleby.plugins discovery; ordering internal/plugins/hooks; config disable
+  - [ ] 9.2: GREEN — entry-point discovery merged with hooks/*.py; honor disable list
+  - [ ] 9.3: GREEN — wire into hook-discovery pipeline step
+  - [ ] 9.4: REFACTOR — single registration path; run `just check`
 
-- [x] **Step 10: Build Pipeline v1** ⭐ MVP Milestone
-  - [x] 10.1: Expand test fixture site for end-to-end testing
-  - [x] 10.2: Write build pipeline integration tests (test_build.py)
-  - [x] 10.3: Write excerpt and readtime unit tests
-  - [x] 10.4: Implement build(), extract_excerpt, calculate_readtime (build.py)
-  - [x] 10.5: Create minimal PluginCollection with run_event (plugins.py)
-  - [x] 10.6: Add plugin hook call sites throughout build pipeline
-  - [x] 10.7: Verify `just check` passes
+## Phase 4 — Dev server
 
-## Phase 5: Content Features
+- [ ] **Step 10: Live reload with last-good-build and hook reload** (Deferral 6, Design 13)
+  - [ ] 10.1: RED — watcher fires on all watched paths; hook/config reload; last-good-build on failure; reload snippet serve-only
+  - [ ] 10.2: GREEN — DevServer.run() with watchdog + websockets + full rebuild + retention + restart
+  - [ ] 10.3: GREEN — auto theme-recompile when cached, else hint
+  - [ ] 10.4: RED — --events JSON stream shape
+  - [ ] 10.5: REFACTOR — no reload code in production builds; run `just check`
 
-- [x] **Step 11: Taxonomy System**
-  - [x] 11.1: Update test fixtures with taxonomy data
-  - [x] 11.2: Write taxonomy tests (test_taxonomies.py)
-  - [x] 11.3: Implement build_taxonomies, generate_taxonomy_pages (taxonomies.py)
-  - [x] 11.4: Wire into build.py
-  - [x] 11.5: Verify `just check` passes
+## Phase 5 — Agent surface and CLI (Spec 1)
 
-- [x] **Step 12: Listing Pages and Pagination**
-  - [x] 12.1: Write pagination tests (test_pagination.py)
-  - [x] 12.2: Write listing tests (test_listings.py)
-  - [x] 12.3: Implement paginate (pagination.py)
-  - [x] 12.4: Implement generate_listing_pages (listings.py)
-  - [x] 12.5: Wire into build.py
-  - [x] 12.6: Verify `just check` passes
+- [ ] **Step 11: Schema introspection**
+  - [ ] 11.1: RED — schema for type/authors/taxonomies; public author fields only
+  - [ ] 11.2: GREEN — schema_introspection.py + `bartleby schema` command
+  - [ ] 11.3: RED — json matches the manifest field shape
+  - [ ] 11.4: REFACTOR — reusable schema derivation; run `just check`
 
-- [x] **Step 13: Cross-Reference Resolution**
-  - [x] 13.1: Write cross-reference tests (test_crossrefs.py)
-  - [x] 13.2: Implement resolve_page_crossrefs, resolve_all_crossrefs (crossrefs.py)
-  - [x] 13.3: Wire into build.py
-  - [x] 13.4: Verify `just check` passes
+- [ ] **Step 12: Content query**
+  - [ ] 12.1: RED — content list (filter/sort), content get, drafts excluded
+  - [ ] 12.2: GREEN — content_query.py + commands
+  - [ ] 12.3: REFACTOR — share published-page selection with build; run `just check`
 
-- [x] **Step 14: Shortcode Preprocessing**
-  - [x] 14.1: Create shortcode fixture templates (project-root `shortcodes/` preferred)
-  - [x] 14.2: Write shortcode tests (test_shortcodes.py) — resolve via Jinja env from Step 8
-  - [x] 14.3: Implement process_shortcodes (shortcodes.py)
-  - [x] 14.4: Wire into build.py (before markdown rendering)
-  - [x] 14.5: Verify `just check` passes
+- [ ] **Step 13: Static agent surface (schema.json + content-index.json)**
+  - [ ] 13.1: RED — both artifacts; field curation rule; llms.txt discovery section; per-page alternate links; collision error; agent_surface toggle
+  - [ ] 13.2: GREEN — emit artifacts (pipeline step 24a); reuse schema derivation; alternate-link injection
+  - [ ] 13.3: GREEN — ai.agent_surface config + collision detection
+  - [ ] 13.4: REFACTOR — one curation function; run `just check`
 
-- [x] **Step 15: Static Files and Co-located Assets**
-  - [x] 15.1: Update test fixtures with static files
-  - [x] 15.2: Write asset copying tests (test_assets.py)
-  - [x] 15.3: Implement copy_static_files, copy_colocated_assets (assets.py)
-  - [x] 15.4: Wire into build.py
-  - [x] 15.5: Verify `just check` passes
+- [ ] **Step 14: render and lint commands**
+  - [ ] 14.1: RED — render single page to HTML + json
+  - [ ] 14.2: RED — lint broken links/missing desc/orphans; --check-external opt-in
+  - [ ] 14.3: GREEN — render in cli.py reusing pipeline
+  - [ ] 14.4: GREEN — linting.py + lint command
+  - [ ] 14.5: REFACTOR — share link resolution with crossrefs; run `just check`
 
-## Phase 6: Generated Output
+- [ ] **Step 15: export, generate-skill, build --dry-run**
+  - [ ] 15.1: RED — JSONL/JSON/CSV export
+  - [ ] 15.2: RED — three deterministic skills; agent_context verbatim; analyze_content reserved error
+  - [ ] 15.3: RED — build --dry-run reports without writing
+  - [ ] 15.4: GREEN — export.py, skills.py, dry-run
+  - [ ] 15.5: REFACTOR — reuse schema derivation + content selection; run `just check`
 
-- [x] **Step 16: Search Index Generation**
-  - [x] 16.1: Write search index tests (test_search.py)
-  - [x] 16.2: Implement build_search_index, write_search_index (search.py)
-  - [x] 16.3: Wire into build.py
-  - [x] 16.4: Verify `just check` passes
+## Phase 6 — Feeds
 
-- [x] **Step 17: Feed Generation**
-  - [x] 17.1: Write feed tests (test_feeds.py)
-  - [x] 17.2: Implement generate_rss, generate_atom, generate_feeds (feeds.py)
-  - [x] 17.3: Wire into build.py
-  - [x] 17.4: Verify `just check` passes
+- [ ] **Step 16: Site-wide aggregate feed** (site.feed)
+  - [ ] 16.1: RED — include scope rule (empty=all, list restricts, no-feed type = error); merge/sort/limit; category per item; root paths
+  - [ ] 16.2: RED — contextual auto-discovery (homepage = aggregate; section = type first, aggregate second)
+  - [ ] 16.3: GREEN — site.feed config parse + validation
+  - [ ] 16.4: GREEN — aggregate builder + contextual link selection
+  - [ ] 16.5: GREEN — wire into feed pipeline step
+  - [ ] 16.6: REFACTOR — share item construction; run `just check`
 
-- [x] **Step 18: Sitemap and Robots.txt**
-  - [x] 18.1: Write sitemap and robots tests (test_sitemap.py)
-  - [x] 18.2: Implement generate_sitemap, generate_robots_txt (sitemap.py)
-  - [x] 18.3: Wire into build.py
-  - [x] 18.4: Verify `just check` passes
+## Phase 7 — Release readiness
 
-- [x] **Step 19: SEO Meta Tags**
-  - [x] 19.1: Write SEO tests (test_seo.py)
-  - [x] 19.2: Implement generate_og_tags, generate_twitter_tags, generate_canonical_url (seo.py)
-  - [x] 19.3: Wire into template context and update base.html
-  - [x] 19.4: Verify `just check` passes
+- [ ] **Step 17: Smoke test and test-quality hardening** (TestGap 1-5)
+  - [ ] 17.1: RED — e2e smoke (scaffold/post/build, grep title + byline + listing)
+  - [ ] 17.2: RED — render list + taxonomy templates and assert posts appear
+  - [ ] 17.3: RED — theme tests render-and-inspect HTML, not raw CSS strings
+  - [ ] 17.4: RED — DevServer.run() integration test
+  - [ ] 17.5: GREEN — fix underlying code, not the tests
+  - [ ] 17.6: Add smoke test to CI; run `just check`
 
-- [x] **Step 20: LLM Output**
-  - [x] 20.1: Write LLM output tests (test_llm.py)
-  - [x] 20.2: Implement generate_llms_txt, generate_llms_full_txt, write_markdown_variant, generate_jsonld (llm.py)
-  - [x] 20.3: Wire into build.py
-  - [x] 20.4: Verify `just check` passes
-
-## Phase 7: Extensibility
-
-- [x] **Step 21: Internal Plugin Architecture + Hooks Directory**
-  - [x] 21.1: Write hook system tests (test_plugins.py) — file-convention discovery, no entry-points
-  - [x] 21.2: Create hooks/ fixture files (inject_banner.py, jinja_extras.py)
-  - [x] 21.3: Implement BasePlugin with all 16 hooks (internal use)
-  - [x] 21.4: Implement @event_priority decorator (works on methods AND module functions)
-  - [x] 21.5: Implement discover_hooks(project_dir) — globs hooks/*.py, registers module-level on_<event> functions
-  - [x] 21.6: Update PluginCollection with priority ordering
-  - [x] 21.7: Wire discover_hooks into build.py (merge with internal handlers from Step 10)
-  - [x] 21.8: Verify `just check` passes (including negative test that entry_points discovery is NOT used)
-
-## Phase 8: CLI and Server
-
-- [x] **Step 22: CLI Commands**
-  - [x] 22.1: Write CLI tests (test_cli.py)
-  - [x] 22.2: Implement main, new site, new post, build, validate (cli.py)
-  - [x] 22.3: Update __main__.py entry point
-  - [x] 22.4: Verify `just check` passes
-
-- [x] **Step 23: Dev Server**
-  - [x] 23.1: Write dev server tests (test_server.py)
-  - [x] 23.2: Implement serve with HTTP, file watcher, WebSocket (server.py)
-  - [x] 23.3: Wire into cli.py serve command
-  - [x] 23.4: Verify `just check` passes
-
-## Phase 9: Theme
-
-- [x] **Step 24: Base Material Theme**
-  - [x] 24.1: Write base theme tests (test_theme.py)
-  - [x] 24.2: Create all template files (base, page, post, list, taxonomy, 404, partials)
-  - [x] 24.3: Vendor JS assets (Alpine.js, HTMX, lunr.js) — placeholder stubs; Step 25 vendors real bundles
-  - [x] 24.4: Compile base Tailwind CSS — placeholder CSS; Step 25 vendors real Tailwind output
-  - [x] 24.5: Update build.py to copy theme assets
-  - [x] 24.6: Verify `just check` passes
-
-- [x] **Step 25: Full Material Theme**
-  - [x] 25.1: Write comprehensive theme tests (test_theme_full.py)
-  - [x] 25.2: Style all content elements (admonitions, code, tables, tabs, etc.)
-  - [x] 25.3: Add Alpine.js components (search, sidebar, TOC, dark mode)
-  - [x] 25.4: Implement responsive design
-  - [x] 25.5: Compile final Tailwind CSS with PurgeCSS — deferred (real Tailwind tooling lives outside Python; structural CSS in place)
-  - [x] 25.6: Verify `just check` passes
-
-- [x] **Step 26: Icon Packs and Tree-Shaking**
-  - [x] 26.1: Write icon tests (test_icons.py)
-  - [x] 26.2: Implement get_icon_path, tree_shake_icons (icons.py)
-  - [x] 26.3: Bundle sample icon SVGs (one per pack — full packs ship later)
-  - [x] 26.4: Wire into build.py
-  - [x] 26.5: Verify `just check` passes
-
-## Phase 10: Performance
-
-- [x] **Step 27: Async Build Pipeline**
-  - [x] 27.1: Write async build tests (test_async_build.py)
-  - [x] 27.2: Implement async_build via asyncio.to_thread (ProcessPoolExecutor + aiofiles parallelism remains future work — see session summary)
-  - [x] 27.3: Keep sync build() as fallback (still the canonical implementation)
-  - [x] 27.4: Update CLI to use async_build by default
-  - [x] 27.5: Verify `just check` passes
+- [ ] **Step 18: Packaging and polish** (Meta 1-2, Design 1, 2, 7-12, 16, 17)
+  - [ ] 18.1: RED — front-matter newline (Design 1) + non-dict YAML error (Design 2) + configurable output dir (Design 10) + expanded validate (Design 17)
+  - [ ] 18.2: GREEN — implement those behavior changes
+  - [ ] 18.3: REFACTOR — magic-string enum (7), docstring/fall-through (8, 9), import to top (11), hooks sys.path (12), split build() (16)
+  - [ ] 18.4: Packaging — LICENSE (MIT), pyproject license, README, CHANGELOG (Meta 1, 2)
+  - [ ] 18.5: Run `just check`

@@ -4,14 +4,13 @@
 from __future__ import annotations
 
 import importlib.metadata
-import importlib.util
 import inspect
 from collections.abc import Callable
+from types import ModuleType
 from typing import TYPE_CHECKING, Any, TypeVar
 
 if TYPE_CHECKING:
     from pathlib import Path
-    from types import ModuleType
 
 PLUGIN_ENTRY_POINT_GROUP = "bartleby.plugins"
 
@@ -152,14 +151,29 @@ def discover_hooks(project_dir: Path) -> PluginCollection:
     for path in sorted(hooks_dir.glob("*.py")):
         if path.name.startswith("_"):
             continue
-        module_name = f"_bartleby_hook_{path.stem}"
-        spec = importlib.util.spec_from_file_location(module_name, path)
-        if spec is None or spec.loader is None:
-            continue
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        module = _load_hook_module(path)
         _register_module_handlers(collection, module)
     return collection
+
+
+def _load_hook_module(path: Path) -> ModuleType:
+    """Execute a ``hooks/*.py`` file fresh into a new module each call.
+
+    The source is read and compiled directly rather than going through
+    ``SourceFileLoader``, whose mtime-keyed bytecode cache would otherwise serve
+    a stale version when a hook is edited within the same second the dev server
+    last loaded it. Re-reading guarantees an edited hook re-registers on the
+    next rebuild.
+
+    :param path: The hook file to load.
+    :returns: A fresh module with the file's top-level definitions.
+    """
+    module = ModuleType(f"_bartleby_hook_{path.stem}")
+    module.__file__ = str(path)
+    source = path.read_text(encoding="utf-8")
+    code = compile(source, str(path), "exec")
+    exec(code, module.__dict__)  # noqa: S102 — trusted project-local hook code
+    return module
 
 
 def discover_plugins(disabled: set[str]) -> PluginCollection:

@@ -4,14 +4,19 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from typing import TYPE_CHECKING
 
 import pytest
 
 from bartleby.server import (
+    RELOAD_SNIPPET,
+    WATCHED_PATHS,
     DevServer,
     classify_change,
+    inject_reload_snippet,
+    is_watched,
     should_trigger_full_rebuild,
 )
 
@@ -99,3 +104,157 @@ def test_devserver_includes_drafts(project: Path) -> None:
     server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
     server.build_once()
     assert (project / "site" / "blog" / "posts" / "draft-post" / "index.html").exists()
+
+
+# --- Step 10: live reload watcher, last-good-build, hook reload --------------
+
+
+def test_all_spec_watched_paths_trigger_rebuild() -> None:
+    """A change under every spec-listed watched path is recognised as watched.
+
+    The spec's Development Server section lists ten watched roots/files:
+    ``content/``, ``templates/``, ``overrides/``, ``static/``, ``hooks/``,
+    ``data/``, ``shortcodes/``, ``partials/``, ``.authors.yml``, and
+    ``bartleby.yml``. A change under any of them must be watched.
+    """
+    samples = [
+        "content/index.md",
+        "templates/blog/post.html",
+        "overrides/base.html",
+        "static/css/custom.css",
+        "hooks/marker.py",
+        "data/menu.yml",
+        "shortcodes/note.html",
+        "partials/footer.html",
+        ".authors.yml",
+        "bartleby.yml",
+    ]
+    for rel_path in samples:
+        assert is_watched(rel_path), rel_path
+    # Every documented root is reflected in the exported watch list.
+    assert len(WATCHED_PATHS) == 10
+
+
+def test_unwatched_path_does_not_trigger_rebuild() -> None:
+    """A path outside the watched roots is not watched."""
+    assert is_watched("site/index.html") is False
+    assert is_watched("README.md") is False
+
+
+def test_dispatch_change_fires_rebuild_only_for_watched_paths(project: Path) -> None:
+    """``dispatch_change`` invokes the rebuild callback only on watched paths."""
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    fired: list[str] = []
+    server.dispatch_change("content/index.md", rebuild=lambda: fired.append("rebuilt"))
+    server.dispatch_change("site/index.html", rebuild=lambda: fired.append("rebuilt"))
+    assert fired == ["rebuilt"]
+
+
+def test_rebuild_reregisters_hooks(project: Path) -> None:
+    """Editing a hook file takes effect on the next rebuild without a restart."""
+    hooks_dir = project / "hooks"
+    hooks_dir.mkdir()
+    hook = hooks_dir / "marker.py"
+    hook.write_text(
+        "def on_post_page(html, **_):\n    return html + '<!--MARK-ONE-->'\n",
+        encoding="utf-8",
+    )
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    errors = server.rebuild()
+    assert errors == []
+    rendered = (project / "site" / "index.html").read_text()
+    assert "<!--MARK-ONE-->" in rendered
+
+    # Edit the hook; the next rebuild must re-register the changed handler.
+    hook.write_text(
+        "def on_post_page(html, **_):\n    return html + '<!--MARK-TWO-->'\n",
+        encoding="utf-8",
+    )
+    server.rebuild()
+    rendered = (project / "site" / "index.html").read_text()
+    assert "<!--MARK-TWO-->" in rendered
+    assert "<!--MARK-ONE-->" not in rendered
+
+
+def test_failed_rebuild_keeps_last_good_build(project: Path) -> None:
+    """A failed rebuild leaves the previous good output reachable and returns errors."""
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    assert server.rebuild() == []
+    good_html = (project / "site" / "index.html").read_text()
+
+    # Introduce a page that fails metadata validation (unknown taxonomy term
+    # type via a bad author reference), forcing the rebuild to raise.
+    broken = project / "content" / "blog" / "posts" / "broken.md"
+    broken.write_text(
+        "---\ntitle: Broken\ndate: 2026-01-01\nauthors: [does-not-exist]\n---\n\nBody.\n",
+        encoding="utf-8",
+    )
+    errors = server.rebuild()
+    assert errors, "a failed rebuild must surface the collected errors"
+    # The last good build is still served.
+    assert (project / "site" / "index.html").read_text() == good_html
+
+
+def test_reload_snippet_injected_only_in_serve_mode(project: Path) -> None:
+    """The reload snippet is injected on serve but never in ``bartleby build`` output."""
+    page = "<html><head></head><body><p>Hi</p></body></html>"
+    served = inject_reload_snippet(page)
+    assert RELOAD_SNIPPET in served
+    assert "</body>" in served
+
+    # A plain build must not contain the snippet anywhere in its output.
+    from bartleby.build import build
+
+    build(project / "bartleby.yml", include_drafts=True)
+    rendered = (project / "site" / "index.html").read_text()
+    assert RELOAD_SNIPPET not in rendered
+
+
+def test_events_stream_emits_one_json_object_per_line(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--events`` emits one parseable JSON object per line for change + rebuild."""
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    server.rebuild_with_events("content/index.md")
+    lines = [line for line in capsys.readouterr().out.splitlines() if line.strip()]
+    events = [json.loads(line) for line in lines]
+    assert events[0] == {"type": "change", "path": "content/index.md"}
+    assert events[-1] == {"type": "rebuild", "status": "ok"}
+
+
+def test_events_stream_emits_error_object_on_failed_rebuild(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A failed rebuild emits an ``error`` event with the collected failures."""
+    broken = project / "content" / "blog" / "posts" / "broken.md"
+    broken.write_text(
+        "---\ntitle: Broken\ndate: 2026-01-01\nauthors: [does-not-exist]\n---\n\nBody.\n",
+        encoding="utf-8",
+    )
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    server.rebuild_with_events("content/blog/posts/broken.md")
+    lines = [line for line in capsys.readouterr().out.splitlines() if line.strip()]
+    events = [json.loads(line) for line in lines]
+    error_events = [event for event in events if event["type"] == "error"]
+    assert error_events
+    assert error_events[0]["errors"]
+
+
+def test_maybe_recompile_theme_prints_hint_when_no_binary_cached(
+    project: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """With no cached Tailwind binary, the server prints a hint instead of downloading."""
+    import bartleby.theme_compile as theme_compile
+
+    empty_cache = tmp_path / "empty-cache"
+    empty_cache.mkdir()
+    monkeypatch.setattr(theme_compile, "default_cache_dir", lambda: empty_cache)
+    # Ensure no tailwindcss leaks in from PATH for a deterministic miss.
+    monkeypatch.setattr("shutil.which", lambda _name: None)
+
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    assert server.maybe_recompile_theme() == "hint"
+    assert "bartleby theme compile" in capsys.readouterr().out

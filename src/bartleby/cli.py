@@ -209,6 +209,11 @@ def _build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument(
         "--dirty", action="store_true", help="Only rebuild files that changed"
     )
+    serve_parser.add_argument(
+        "--events",
+        action="store_true",
+        help="Emit structured JSON events (one object per line) for changes and rebuilds",
+    )
     serve_parser.set_defaults(_handler=_cmd_serve)
 
     theme_parser = subparsers.add_parser("theme", help="Theme asset commands")
@@ -329,7 +334,7 @@ def _cmd_serve(args: argparse.Namespace) -> None:
     config = load_config(config_path)
     host = args.host or config.dev_server.host
     port = args.port if args.port is not None else config.dev_server.port
-    DevServer(config_path, host=host, port=port, dirty=args.dirty).run()
+    DevServer(config_path, host=host, port=port, dirty=args.dirty, events=args.events).run()
 
 
 _DEFAULT_CONFIG = """site:

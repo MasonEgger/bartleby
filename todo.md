@@ -76,12 +76,12 @@ prompts and `audit.md` for the findings each step closes. 6 of 18 steps done.
 
 ## Phase 4 — Dev server
 
-- [ ] **Step 10: Live reload with last-good-build and hook reload** (Deferral 6, Design 13)
-  - [ ] 10.1: RED — watcher fires on all watched paths; hook/config reload; last-good-build on failure; reload snippet serve-only
-  - [ ] 10.2: GREEN — DevServer.run() with watchdog + websockets + full rebuild + retention + restart
-  - [ ] 10.3: GREEN — auto theme-recompile when cached, else hint
-  - [ ] 10.4: RED — --events JSON stream shape
-  - [ ] 10.5: REFACTOR — no reload code in production builds; run `just check`
+- [x] **Step 10: Live reload with last-good-build and hook reload** (Deferral 6, Design 13)
+  - [x] 10.1: RED — watcher fires on all watched paths; hook/config reload; last-good-build on failure; reload snippet serve-only
+  - [x] 10.2: GREEN — DevServer.run() with watchdog + websockets + full rebuild + retention + restart
+  - [x] 10.3: GREEN — auto theme-recompile when cached, else hint
+  - [x] 10.4: RED — --events JSON stream shape
+  - [x] 10.5: REFACTOR — no reload code in production builds; run `just check`
 
 ## Phase 5 — Agent surface and CLI (Spec 1)
 

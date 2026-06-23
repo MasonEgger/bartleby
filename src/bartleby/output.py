@@ -188,6 +188,82 @@ class ErrorOutput:
         return f"error [{self.code}]{location} {self.message}"
 
 
+@dataclass(slots=True)
+class RenderOutput:
+    """Result of ``bartleby render <path>`` (spec.md single-page render output).
+
+    Exactly one of ``html`` or ``markdown`` is populated depending on the
+    ``--format`` requested; ``metadata`` mode populates neither. Fields that do
+    not apply to the chosen format are omitted from the JSON contract.
+    """
+
+    path: str
+    url: str
+    metadata: dict[str, object]
+    word_count: int
+    read_time_minutes: int
+    warnings: list[Warning] = field(default_factory=list)
+    html: str | None = None
+    markdown: str | None = None
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_SUCCESS
+
+    def to_dict(self) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "path": self.path,
+            "url": self.url,
+            "metadata": self.metadata,
+            "word_count": self.word_count,
+            "read_time_minutes": self.read_time_minutes,
+            "warnings": [warning.to_dict() for warning in self.warnings],
+        }
+        if self.html is not None:
+            payload["html"] = self.html
+        if self.markdown is not None:
+            payload["markdown"] = self.markdown
+        return payload
+
+    def to_text(self) -> str:
+        if self.html is not None:
+            return self.html
+        if self.markdown is not None:
+            return self.markdown
+        title = self.metadata.get("title", "")
+        return f"{title} ({self.path})"
+
+
+@dataclass(slots=True)
+class LintOutput:
+    """Result of ``bartleby lint`` (spec.md lint JSON output)."""
+
+    issues: list[dict[str, object]]
+    errors: int
+    warnings: int
+    info: int
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_ERROR if self.errors else EXIT_SUCCESS
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "issues": self.issues,
+            "summary": {"errors": self.errors, "warnings": self.warnings, "info": self.info},
+        }
+
+    def to_text(self) -> str:
+        if not self.issues:
+            return "lint: no issues"
+        lines = [
+            f"{issue['severity']} [{issue['rule']}] {issue['file']}: {issue['message']}"
+            for issue in self.issues
+        ]
+        lines.append(f"{self.errors} error(s), {self.warnings} warning(s), {self.info} info")
+        return "\n".join(lines)
+
+
 def render(result: Result, fmt: str) -> str:
     """Serialize ``result`` to ``"json"`` or ``"text"``.
 

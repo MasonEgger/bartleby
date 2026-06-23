@@ -473,3 +473,124 @@ def test_content_get_unknown_path_is_usage_error(
     assert exc.value.code == 2
     payload = _last_json(capsys.readouterr().out)
     assert payload["code"] == "usage_error"
+
+
+def test_render_command_html_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby render <path> --output json`` renders one page to HTML without a build."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    _write_published_post(tmp_path / "mysite")
+    monkeypatch.chdir(tmp_path / "mysite")
+
+    main(["render", "content/blog/posts/hello-world.md", "--output", "json"])
+    payload = _last_json(capsys.readouterr().out)
+    assert payload["path"] == "content/blog/posts/hello-world.md"
+    assert payload["url"]
+    assert "A short body" in str(payload["html"])
+    assert payload["metadata"]["title"] == "Hello World"
+    assert payload["word_count"] >= 1
+    assert isinstance(payload["warnings"], list)
+    assert "site" not in [p.name for p in (tmp_path / "mysite").iterdir()]
+
+
+def test_render_command_no_full_build(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``bartleby render`` does not write the ``site/`` output tree."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    _write_published_post(tmp_path / "mysite")
+    monkeypatch.chdir(tmp_path / "mysite")
+
+    main(["render", "content/blog/posts/hello-world.md"])
+    assert not (tmp_path / "mysite" / "site").exists()
+
+
+def test_render_command_markdown_format(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--format markdown`` returns processed markdown without HTML conversion."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    _write_published_post(tmp_path / "mysite")
+    monkeypatch.chdir(tmp_path / "mysite")
+
+    main(
+        [
+            "render",
+            "content/blog/posts/hello-world.md",
+            "--format",
+            "markdown",
+            "--output",
+            "json",
+        ]
+    )
+    payload = _last_json(capsys.readouterr().out)
+    assert "A short body" in str(payload["markdown"])
+    assert "<p>" not in str(payload["markdown"])
+
+
+def test_render_unknown_path_is_usage_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby render`` for a missing page fails as a usage error."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    monkeypatch.chdir(tmp_path / "mysite")
+
+    with pytest.raises(SystemExit) as exc:
+        main(["render", "content/blog/posts/nope.md", "--output", "json"])
+    assert exc.value.code == 2
+    payload = _last_json(capsys.readouterr().out)
+    assert payload["code"] == "usage_error"
+
+
+def test_lint_command_json_shape(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby lint --output json`` emits issues plus a severity summary."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    monkeypatch.chdir(tmp_path / "mysite")
+    # A post with a broken cross-reference produces an error-level issue.
+    post = tmp_path / "mysite" / "content" / "blog" / "posts" / "broken.md"
+    post.write_text(
+        '---\ntitle: "Broken"\ndate: 2026-05-01\ndraft: false\n---\n\n[gone](missing.md)\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        main(["lint", "--output", "json"])
+    assert exc.value.code == 1
+
+    payload = _last_json(capsys.readouterr().out)
+    assert "issues" in payload
+    assert "summary" in payload
+    assert payload["summary"]["errors"] >= 1
+    rules = {issue["rule"] for issue in payload["issues"]}
+    assert "broken-crossref" in rules
+
+
+def test_lint_check_external_off_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby lint`` does not check external URLs unless --check-external is given."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    monkeypatch.chdir(tmp_path / "mysite")
+    post = tmp_path / "mysite" / "content" / "blog" / "posts" / "ext.md"
+    post.write_text(
+        '---\ntitle: "Ext"\ndate: 2026-05-01\ndraft: false\ndescription: "d"\n---\n\n'
+        "[x](https://example.invalid/missing)\n",
+        encoding="utf-8",
+    )
+
+    called: dict[str, bool] = {"checked": False}
+
+    def fake_checker(url: str) -> bool:
+        called["checked"] = True
+        return False
+
+    monkeypatch.setattr("bartleby.linting.check_external_url", fake_checker)
+    main(["lint", "--output", "json"])
+    assert called["checked"] is False

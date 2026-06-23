@@ -3,6 +3,7 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- Stdlib response attributes are typed `Any` under mypy strict: `http.client.HTTPResponse.status` from `urllib.request.urlopen` triggers `no-any-return` when compared and returned directly; cast with `int(response.status)` before the bool comparison (2026-06-23)
 - Static-artifact builders (schema.json, content-index.json) should filter drafts themselves via `select_published`, not trust the caller to pre-filter; a unit test that passes raw `pages` to `build_schema_json` otherwise inflates taxonomy term counts with draft tags. Filter inside every builder so the contract holds regardless of call site (2026-06-22)
 - `bartleby new post` scaffolds with `draft: true`, so a CLI test that creates a post and asserts it appears in `content list` (which excludes drafts by default) will silently fail; in published-listing tests write a `draft: false` post directly instead of relying on the scaffold default (2026-06-22)
 - For the `bartleby schema` agent surface, derive "in-use" taxonomy terms by calling the existing `build_taxonomies` collector instead of re-walking `page.taxonomy_values`; the schema's notion of a term then matches exactly what the build indexes, and the same derivation function is reusable by the static `schema.json` step (2026-06-22)
@@ -12,8 +13,6 @@
 - When gating existing template markup behind a Jinja global (e.g. a `feature()` helper), grep `tests/` for every assertion string on that markup first — multiple test files build their own bare `jinja2.Environment` and each needs the global registered, or pre-existing assertions on the now-gated markup go red (2026-06-22)
 - In a build test, a project template that exists only to bump the template-tree mtime must not shadow a theme template; `templates/base.html` containing `{% extends 'base.html' %}` self-references through the cascade and hits Jinja's recursion limit. Use a unique non-cascade name like `custom-partial.html` (2026-06-22)
 - When asserting that vendored/minified third-party code does NOT contain a marker, match the exact original stub string, not a generic word — minified Alpine.js contains an internal `__placeholder` token, so a `"placeholder" not in text` check false-positived against the real bundle (2026-06-22)
-- In CLI tests, a scaffolding helper (`new site`) that now prints its own structured result pollutes `capsys` stdout ahead of the command under test; clear capsys after setup, or parse only the last non-empty stdout line, before `json.loads` (2026-06-22)
-
 ## Architecture
 
 - Static-artifact builders (schema.json, content-index.json) should filter drafts themselves via `select_published`, not trust the caller to pre-filter; passing raw `pages` to `build_schema_json` otherwise inflates taxonomy term counts with draft tags. Filter inside every builder so the contract holds regardless of call site (2026-06-22)
@@ -23,6 +22,7 @@
 ## Typing
 
 - When a new render helper forwards args into an existing context builder, copy that builder's param types verbatim (`list[Any]`, `dict[str, Any]`); mypy strict treats `dict`/`list` as invariant, so a "tighter" `list[object]`/`Sequence` annotation breaks the forward (`list[NavItem]` is not a `list[object]`) (2026-06-22)
+- Stdlib response attributes are typed `Any` under mypy strict: `http.client.HTTPResponse.status` from `urllib.request.urlopen` triggers `no-any-return` when compared and returned directly; cast with `int(response.status)` before the bool comparison (2026-06-23)
 
 ## Testing
 

@@ -10,11 +10,17 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from slugify import slugify
 
 from bartleby.authors import AuthorError, load_authors
-from bartleby.build import BuildError, async_build, format_page_error
+from bartleby.build import (
+    BuildError,
+    async_build,
+    calculate_readtime,
+    format_page_error,
+)
 from bartleby.config import ConfigError, load_config
 from bartleby.content import discover_content
 from bartleby.content_query import (
@@ -23,16 +29,23 @@ from bartleby.content_query import (
     ContentQueryError,
     get_content,
     list_content,
+    select_published,
 )
+from bartleby.crossrefs import resolve_page_crossrefs
+from bartleby.linting import lint_site
+from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
 from bartleby.metadata import validate_all_metadata
 from bartleby.output import (
     BuildOutput,
     ErrorOutput,
+    LintOutput,
     NewPostOutput,
     NewSiteOutput,
+    RenderOutput,
     Result,
     ValidateOutput,
     ValidationError,
+    Warning,
     render,
 )
 from bartleby.schema_introspection import (
@@ -41,7 +54,12 @@ from bartleby.schema_introspection import (
     derive_content_type_schema,
     derive_taxonomies_schema,
 )
+from bartleby.shortcodes import ShortcodeError, process_shortcodes
 from bartleby.theme_compile import ThemeCompileError, ThemeCompileResult, compile_theme_css
+from bartleby.urls import generate_all_urls
+
+if TYPE_CHECKING:
+    from bartleby.content import Page
 
 # Stable, machine-recognizable error codes per failure type. These strings are
 # part of the CLI error contract (text and JSON output) and must not change
@@ -261,6 +279,29 @@ def _build_parser() -> argparse.ArgumentParser:
     content_get.add_argument("path", help="Source path of the page (as shown in content list)")
     content_get.set_defaults(_handler=_cmd_content_get)
 
+    render_parser = subparsers.add_parser(
+        "render", help="Render a single content file for fast feedback", parents=[flags]
+    )
+    render_parser.add_argument("path", help="Source path of the page to render")
+    render_parser.add_argument(
+        "--format",
+        dest="render_format",
+        default="html",
+        choices=["html", "markdown", "metadata"],
+        help="Render format: html (default), markdown, or metadata",
+    )
+    render_parser.set_defaults(_handler=_cmd_render)
+
+    lint_parser = subparsers.add_parser(
+        "lint", help="Check content quality (links, descriptions, orphans)", parents=[flags]
+    )
+    lint_parser.add_argument(
+        "--check-external",
+        action="store_true",
+        help="Also verify external URLs (slow, disabled by default)",
+    )
+    lint_parser.set_defaults(_handler=_cmd_lint)
+
     theme_parser = subparsers.add_parser("theme", help="Theme asset commands")
     theme_sub = theme_parser.add_subparsers(dest="theme_command")
     theme_compile = theme_sub.add_parser(
@@ -411,6 +452,132 @@ def _cmd_content_get(args: argparse.Namespace) -> ContentGet:
         return get_content(args.path, pages, config)
     except ContentQueryError as exc:
         raise UsageError(str(exc)) from exc
+
+
+def _cmd_render(args: argparse.Namespace) -> RenderOutput:
+    """Render one content file without a full build (``render <path>``).
+
+    Resolves shortcodes and cross-references and runs markdown rendering for the
+    single page, never touching the ``site/`` output tree. ``--format`` selects
+    HTML (default), processed markdown, or just the parsed metadata.
+
+    :raises UsageError: When ``path`` names a page that does not exist.
+    """
+    config_path = _resolve_config_path(args)
+    project_dir = config_path.parent
+    config = load_config(config_path)
+    content_dir = project_dir / "content"
+    pages, _assets = discover_content(config, content_dir)
+    page = _find_page(args.path, pages)
+    if page is None:
+        raise UsageError(f"no content page at {args.path!r}")
+
+    generate_all_urls(pages, config)
+    metadata = _render_metadata(page)
+    word_count = len(page.raw_content.split())
+    read_time = calculate_readtime(page.raw_content)
+
+    render_format: str = args.render_format
+    if render_format == "metadata":
+        return RenderOutput(
+            path=args.path,
+            url=page.output_url,
+            metadata=metadata,
+            word_count=word_count,
+            read_time_minutes=read_time,
+        )
+
+    from bartleby.templates import create_jinja_env
+
+    env = create_jinja_env(config, project_dir)
+    try:
+        processed = process_shortcodes(page.raw_content, {"page": page}, env)
+    except ShortcodeError as exc:
+        raise UsageError(str(exc)) from exc
+
+    if render_format == "markdown":
+        return RenderOutput(
+            path=args.path,
+            url=page.output_url,
+            metadata=metadata,
+            word_count=word_count,
+            read_time_minutes=read_time,
+            markdown=processed,
+        )
+
+    md_renderer = create_markdown_renderer(config)
+    html = render_markdown(processed, md_renderer).html
+    html, crossref_errors = resolve_page_crossrefs(html, page, pages, content_dir)
+    warnings = [
+        Warning(file=error.source_path, message=error.message, code="broken-crossref")
+        for error in crossref_errors
+    ]
+    return RenderOutput(
+        path=args.path,
+        url=page.output_url,
+        metadata=metadata,
+        word_count=word_count,
+        read_time_minutes=read_time,
+        warnings=warnings,
+        html=html,
+    )
+
+
+def _cmd_lint(args: argparse.Namespace) -> LintOutput:
+    """Check content quality (``lint``): broken links, missing desc, orphans.
+
+    Renders every published page in-memory (no ``site/`` output) so cross-
+    reference and inbound-link analysis has rendered HTML to scan, then runs the
+    linting checks. ``--check-external`` opts into (slow) external URL probing.
+    """
+    config_path = _resolve_config_path(args)
+    project_dir = config_path.parent
+    config = load_config(config_path)
+    content_dir = project_dir / "content"
+    pages, _assets = discover_content(config, content_dir)
+    pages = select_published(pages)
+    generate_all_urls(pages, config)
+
+    from bartleby.templates import create_jinja_env
+
+    env = create_jinja_env(config, project_dir)
+    md_renderer = create_markdown_renderer(config)
+    for page in pages:
+        try:
+            processed = process_shortcodes(page.raw_content, {"page": page}, env)
+        except ShortcodeError:
+            processed = page.raw_content
+        page.rendered_content = render_markdown(processed, md_renderer).html
+
+    findings = lint_site(pages, config, content_dir, check_external=args.check_external)
+    issues = [finding.to_dict() for finding in findings]
+    errors = sum(1 for finding in findings if finding.severity == "error")
+    warnings = sum(1 for finding in findings if finding.severity == "warning")
+    info = sum(1 for finding in findings if finding.severity == "info")
+    return LintOutput(issues=issues, errors=errors, warnings=warnings, info=info)
+
+
+def _find_page(path: str, pages: list[Page]) -> Page | None:
+    """Return the page whose source path matches ``path`` (content-relative ok)."""
+    from bartleby.content_query import normalise_source_path
+
+    target = normalise_source_path(path)
+    for page in pages:
+        if normalise_source_path(page.source_path.as_posix()) == target:
+            return page
+    return None
+
+
+def _render_metadata(page: Page) -> dict[str, object]:
+    """Build the metadata map for a single rendered page."""
+    metadata: dict[str, object] = {"title": page.title}
+    if page.date is not None:
+        metadata["date"] = page.date.isoformat()
+    if page.description is not None:
+        metadata["description"] = page.description
+    if page.author_keys:
+        metadata["authors"] = list(page.author_keys)
+    return metadata
 
 
 def _cmd_theme_compile(args: argparse.Namespace) -> ThemeCompileResult:

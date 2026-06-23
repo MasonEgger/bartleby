@@ -102,12 +102,12 @@ prompts and `audit.md` for the findings each step closes. 6 of 18 steps done.
   - [x] 13.3: GREEN — ai.agent_surface config + collision detection
   - [x] 13.4: REFACTOR — one curation function; run `just check`
 
-- [ ] **Step 14: render and lint commands**
-  - [ ] 14.1: RED — render single page to HTML + json
-  - [ ] 14.2: RED — lint broken links/missing desc/orphans; --check-external opt-in
-  - [ ] 14.3: GREEN — render in cli.py reusing pipeline
-  - [ ] 14.4: GREEN — linting.py + lint command
-  - [ ] 14.5: REFACTOR — share link resolution with crossrefs; run `just check`
+- [x] **Step 14: render and lint commands**
+  - [x] 14.1: RED — render single page to HTML + json
+  - [x] 14.2: RED — lint broken links/missing desc/orphans; --check-external opt-in
+  - [x] 14.3: GREEN — render in cli.py reusing pipeline
+  - [x] 14.4: GREEN — linting.py + lint command
+  - [x] 14.5: REFACTOR — share link resolution with crossrefs; run `just check`
 
 - [ ] **Step 15: export, generate-skill, build --dry-run**
   - [ ] 15.1: RED — JSONL/JSON/CSV export

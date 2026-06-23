@@ -134,9 +134,9 @@ def get_content(path: str, pages: list[Page], config: BartlebyConfig) -> Content
     :returns: A :class:`ContentGet` with the page's metadata, body, and word count.
     :raises ContentQueryError: When no page has the given source path.
     """
-    target = _normalise_path(path)
+    target = normalise_source_path(path)
     for page in pages:
-        if _normalise_path(page.source_path.as_posix()) == target:
+        if normalise_source_path(page.source_path.as_posix()) == target:
             return _build_get(page, config)
     raise ContentQueryError(f"no content page at {path!r}")
 
@@ -196,7 +196,7 @@ def _sort_pages(pages: list[Page], sort: str) -> list[Page]:
     )
 
 
-def _normalise_path(path: str) -> str:
+def normalise_source_path(path: str) -> str:
     """Normalise a source path for comparison (strip a leading ``content/``)."""
     cleaned = path.replace("\\", "/").lstrip("/")
     return cleaned[len("content/") :] if cleaned.startswith("content/") else cleaned

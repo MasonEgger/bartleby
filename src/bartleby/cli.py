@@ -17,6 +17,13 @@ from bartleby.authors import AuthorError, load_authors
 from bartleby.build import BuildError, async_build, format_page_error
 from bartleby.config import ConfigError, load_config
 from bartleby.content import discover_content
+from bartleby.content_query import (
+    ContentGet,
+    ContentList,
+    ContentQueryError,
+    get_content,
+    list_content,
+)
 from bartleby.metadata import validate_all_metadata
 from bartleby.output import (
     BuildOutput,
@@ -233,6 +240,27 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     schema_parser.set_defaults(_handler=_cmd_schema)
 
+    content_parser = subparsers.add_parser("content", help="Query site content")
+    content_sub = content_parser.add_subparsers(dest="content_command")
+    content_list = content_sub.add_parser(
+        "list", help="List published content with metadata", parents=[flags]
+    )
+    content_list.add_argument("--type", default=None, help="Filter by content type")
+    content_list.add_argument(
+        "--sort",
+        default="date",
+        choices=["date", "title", "path"],
+        help="Sort field (default: date)",
+    )
+    content_list.add_argument("--limit", type=int, default=None, help="Limit number of results")
+    content_list.set_defaults(_handler=_cmd_content_list)
+
+    content_get = content_sub.add_parser(
+        "get", help="Get one page's metadata and content", parents=[flags]
+    )
+    content_get.add_argument("path", help="Source path of the page (as shown in content list)")
+    content_get.set_defaults(_handler=_cmd_content_get)
+
     theme_parser = subparsers.add_parser("theme", help="Theme asset commands")
     theme_sub = theme_parser.add_subparsers(dest="theme_command")
     theme_compile = theme_sub.add_parser(
@@ -354,6 +382,34 @@ def _cmd_schema(args: argparse.Namespace) -> Result:
     try:
         return derive_content_type_schema(target, config)
     except SchemaError as exc:
+        raise UsageError(str(exc)) from exc
+
+
+def _cmd_content_list(args: argparse.Namespace) -> ContentList:
+    """List published content (``content list``) with curated fields."""
+    config_path = _resolve_config_path(args)
+    config = load_config(config_path)
+    pages, _assets = discover_content(config, config.config_dir / "content")
+    return list_content(
+        pages,
+        config,
+        content_type=args.type,
+        sort=args.sort,
+        limit=args.limit,
+    )
+
+
+def _cmd_content_get(args: argparse.Namespace) -> ContentGet:
+    """Return one page's metadata and body (``content get <path>``).
+
+    :raises UsageError: When ``path`` names a page that does not exist.
+    """
+    config_path = _resolve_config_path(args)
+    config = load_config(config_path)
+    pages, _assets = discover_content(config, config.config_dir / "content")
+    try:
+        return get_content(args.path, pages, config)
+    except ContentQueryError as exc:
         raise UsageError(str(exc)) from exc
 
 

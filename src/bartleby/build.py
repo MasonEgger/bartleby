@@ -21,6 +21,7 @@ from bartleby.assets import copy_colocated_assets, copy_static_files
 from bartleby.authors import load_authors
 from bartleby.config import load_config
 from bartleby.content import discover_content
+from bartleby.content_query import select_published
 from bartleby.crossrefs import resolve_all_crossrefs
 from bartleby.feeds import generate_feeds
 from bartleby.icons import tree_shake_icons
@@ -149,7 +150,7 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
     pages, assets = discover_content(config, content_dir)
 
     if not include_drafts:
-        pages = [page for page in pages if not page.draft]
+        pages = select_published(pages)
 
     # Dispatch on_files only after drafts are filtered out so plugins never
     # operate on pages that the build is about to discard.

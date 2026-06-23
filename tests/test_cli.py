@@ -402,3 +402,74 @@ def test_schema_unknown_content_type_is_usage_error(
     assert exc.value.code == 2
     payload = _last_json(capsys.readouterr().out)
     assert payload["code"] == "usage_error"
+
+
+def _write_published_post(project_dir: Path) -> None:
+    """Write a non-draft blog post into the scaffolded site for content-query tests."""
+    post = project_dir / "content" / "blog" / "posts" / "hello-world.md"
+    post.write_text(
+        '---\ntitle: "Hello World"\ndate: 2026-05-01\ndraft: false\n---\n\nA short body.\n',
+        encoding="utf-8",
+    )
+
+
+def test_content_list_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby content list --output json`` lists published pages with curated fields."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    _write_published_post(tmp_path / "mysite")
+    monkeypatch.chdir(tmp_path / "mysite")
+
+    main(["content", "list", "--output", "json"])
+    payload = _last_json(capsys.readouterr().out)
+    assert payload["count"] >= 1
+    titles = {entry["title"] for entry in payload["content"]}
+    assert "Hello World" in titles
+
+
+def test_content_list_excludes_drafts_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby content list`` omits draft posts by default."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    monkeypatch.chdir(tmp_path / "mysite")
+    main(["new", "post", "Secret Draft", "--type", "blog"])
+
+    main(["content", "list", "--output", "json"])
+    payload = _last_json(capsys.readouterr().out)
+    titles = {entry["title"] for entry in payload["content"]}
+    assert "Secret Draft" not in titles
+
+
+def test_content_get_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby content get <path> --output json`` returns one page's metadata and body."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    _write_published_post(tmp_path / "mysite")
+    monkeypatch.chdir(tmp_path / "mysite")
+
+    main(["content", "get", "content/blog/posts/hello-world.md", "--output", "json"])
+    payload = _last_json(capsys.readouterr().out)
+    assert payload["content_type"] == "blog"
+    assert payload["metadata"]["title"] == "Hello World"
+    assert "word_count" in payload
+
+
+def test_content_get_unknown_path_is_usage_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby content get`` for a missing page fails as a usage error."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    monkeypatch.chdir(tmp_path / "mysite")
+
+    with pytest.raises(SystemExit) as exc:
+        main(["content", "get", "content/blog/posts/nope.md", "--output", "json"])
+    assert exc.value.code == 2
+    payload = _last_json(capsys.readouterr().out)
+    assert payload["code"] == "usage_error"

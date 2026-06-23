@@ -215,6 +215,7 @@ class BartlebyConfig:
     ai: AIConfig
     dev_server: DevServerConfig
     config_dir: Path
+    output_dir: str = "site"
     disabled_plugins: set[str] = field(default_factory=set)
 
 
@@ -288,6 +289,7 @@ def _parse_config(raw: dict[str, Any], config_dir: Path) -> BartlebyConfig:
         ai=_parse_ai(raw.get("ai")),
         dev_server=_parse_dev_server(raw.get("dev_server")),
         config_dir=config_dir,
+        output_dir=str(raw.get("output_dir", "site")),
     )
 
 

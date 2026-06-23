@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from jinja2 import TemplateNotFound
 from slugify import slugify
 
 from bartleby.authors import AuthorError, load_authors
@@ -65,6 +66,7 @@ from bartleby.theme_compile import ThemeCompileError, ThemeCompileResult, compil
 from bartleby.urls import generate_all_urls
 
 if TYPE_CHECKING:
+    from bartleby.config import BartlebyConfig
     from bartleby.content import Page
 
 # Stable, machine-recognizable error codes per failure type. These strings are
@@ -432,26 +434,93 @@ def _cmd_build(args: argparse.Namespace) -> BuildOutput | DryRunOutput:
 
 
 def _cmd_validate(args: argparse.Namespace) -> ValidateOutput:
-    """Validate the config and page metadata without running a full build."""
+    """Validate the config and content without running a full build.
+
+    Beyond metadata validation this dry-runs URL generation, checks that every
+    page-level ``template:`` override resolves to an existing template, and scans
+    rendered HTML for broken cross-references (Design 17).
+    """
     config_path = _resolve_config_path(args)
+    project_dir = config_path.parent
     config = load_config(config_path)
+    content_dir = project_dir / "content"
     authors = load_authors(config.config_dir / config.authors_file)
-    pages, _assets = discover_content(config, config.config_dir / "content")
-    errors = validate_all_metadata(pages, config, authors)
-    return ValidateOutput(
-        valid=not errors,
-        files_checked=len(pages),
-        errors=[
+    pages, _assets = discover_content(config, content_dir)
+
+    errors: list[ValidationError] = [
+        ValidationError(file=error.file_path, line=0, field="", message=error.message, code="E001")
+        for error in validate_all_metadata(pages, config, authors)
+    ]
+    errors += _validate_urls(pages, config)
+    errors += _validate_template_overrides(pages, config, project_dir)
+    errors += _validate_crossrefs(pages, config, project_dir, content_dir)
+
+    return ValidateOutput(valid=not errors, files_checked=len(pages), errors=errors)
+
+
+def _validate_urls(pages: list[Page], config: BartlebyConfig) -> list[ValidationError]:
+    """Dry-run URL generation, reporting any page whose URL cannot be built."""
+    errors: list[ValidationError] = []
+    try:
+        generate_all_urls(pages, config)
+    except ValueError as exc:
+        errors.append(ValidationError(file="", line=0, field="url", message=str(exc), code="E002"))
+    return errors
+
+
+def _validate_template_overrides(
+    pages: list[Page], config: BartlebyConfig, project_dir: Path
+) -> list[ValidationError]:
+    """Report pages whose ``template:`` override does not resolve to a real template."""
+    from bartleby.templates import create_jinja_env
+
+    env = create_jinja_env(config, project_dir)
+    errors: list[ValidationError] = []
+    for page in pages:
+        if page.template_override is None:
+            continue
+        try:
+            env.get_template(page.template_override)
+        except TemplateNotFound:
+            errors.append(
+                ValidationError(
+                    file=str(page.source_path),
+                    line=0,
+                    field="template",
+                    message=f"template override not found: {page.template_override}",
+                    code="E003",
+                )
+            )
+    return errors
+
+
+def _validate_crossrefs(
+    pages: list[Page], config: BartlebyConfig, project_dir: Path, content_dir: Path
+) -> list[ValidationError]:
+    """Render every page and report markdown links that resolve to no page."""
+    from bartleby.templates import create_jinja_env
+
+    env = create_jinja_env(config, project_dir)
+    md_renderer = create_markdown_renderer(config)
+    errors: list[ValidationError] = []
+    for page in pages:
+        try:
+            processed = process_shortcodes(page.raw_content, {"page": page}, env)
+        except ShortcodeError:
+            continue
+        html = render_markdown(processed, md_renderer).html
+        _rewritten, crossref_errors = resolve_page_crossrefs(html, page, pages, content_dir)
+        errors += [
             ValidationError(
-                file=error.file_path,
+                file=error.source_path,
                 line=0,
                 field="",
                 message=error.message,
-                code="E001",
+                code="E004",
             )
-            for error in errors
-        ],
-    )
+            for error in crossref_errors
+        ]
+    return errors
 
 
 def _cmd_schema(args: argparse.Namespace) -> Result:

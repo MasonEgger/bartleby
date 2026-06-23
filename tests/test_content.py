@@ -6,8 +6,11 @@ from __future__ import annotations
 import datetime
 from typing import TYPE_CHECKING
 
+import pytest
+
 from bartleby.content import (
     ColocatedAsset,
+    ContentError,
     Page,
     discover_content,
     parse_front_matter,
@@ -42,6 +45,29 @@ def test_parse_front_matter_empty_front_matter() -> None:
     metadata, body = parse_front_matter(text)
     assert metadata == {}
     assert body.strip() == ""
+
+
+def test_parse_front_matter_requires_newline_after_opening_delimiter() -> None:
+    """An opening ``---`` not followed by a newline is body text, not front matter.
+
+    A document like ``---draft---`` (a horizontal rule or emphasis run) must not
+    be misread as an unterminated front matter block (Design 1).
+    """
+    text = "---draft outline---\nReal body content.\n"
+    metadata, body = parse_front_matter(text)
+    assert metadata == {}
+    assert body == text
+
+
+def test_parse_front_matter_non_dict_yaml_raises() -> None:
+    """Front matter whose YAML is a non-mapping raises a clear error (Design 2).
+
+    A scalar or list between the delimiters is almost always an authoring
+    mistake; swallowing it silently hides the bug.
+    """
+    text = "---\n- just\n- a\n- list\n---\nBody.\n"
+    with pytest.raises(ContentError, match="front matter"):
+        parse_front_matter(text)
 
 
 def test_discover_content_finds_markdown_files(

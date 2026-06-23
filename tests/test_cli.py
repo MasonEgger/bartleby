@@ -105,6 +105,60 @@ def test_validate_command_zero_exit(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     main(["validate"])
 
 
+def test_validate_flags_missing_template_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``validate`` reports a page whose ``template:`` override does not exist (Design 17)."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    page = tmp_path / "mysite" / "content" / "index.md"
+    page.write_text(
+        "---\ntitle: Home\ntemplate: nonexistent.html\n---\nWelcome.\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        main(["validate", "--output", "json"])
+    assert exc.value.code == 1
+
+    payload = _last_json(capsys.readouterr().out)
+    assert payload["valid"] is False
+    errors = payload["errors"]
+    assert isinstance(errors, list)
+    assert any("nonexistent.html" in str(error["message"]) for error in errors)
+
+
+def test_validate_flags_broken_crossref(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``validate`` reports a markdown link to a non-existent page (Design 17)."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    page = tmp_path / "mysite" / "content" / "index.md"
+    page.write_text(
+        "---\ntitle: Home\n---\nSee [the void](does-not-exist.md).\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        main(["validate", "--output", "json"])
+    assert exc.value.code == 1
+
+    payload = _last_json(capsys.readouterr().out)
+    assert payload["valid"] is False
+    errors = payload["errors"]
+    assert isinstance(errors, list)
+    assert any("does-not-exist.md" in str(error["message"]) for error in errors)
+
+
+def test_validate_clean_site_still_passes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A freshly scaffolded site with no broken refs validates clean (Design 17 regression)."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["validate", "--output", "json"])
+    payload = _last_json(capsys.readouterr().out)
+    assert payload["valid"] is True
+
+
 def test_parse_args_help_exits_zero(monkeypatch: pytest.MonkeyPatch) -> None:
     """``bartleby --help`` exits with SystemExit code 0."""
     with pytest.raises(SystemExit) as exc:

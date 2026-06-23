@@ -204,9 +204,9 @@ def build(
     data = load_data_files(project_dir)
     build_info = BuildInfo(date=datetime.date.today(), bartleby_version=bartleby.__version__)
 
-    final_output_dir = project_dir / "site"
+    final_output_dir = project_dir / config.output_dir
     # Render into a sibling temp directory and swap it into place only on full
-    # success, so a failed build never touches the previous good site/.
+    # success, so a failed build never touches the previous good output dir.
     build_dir = Path(tempfile.mkdtemp(prefix=".bartleby-build-", dir=project_dir))
     output_dir = build_dir
 

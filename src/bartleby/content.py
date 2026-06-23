@@ -22,6 +22,17 @@ FRONT_MATTER_DELIMITER = "---"
 PageMetadataValue = str | int | bool | list[str] | datetime.date | object
 
 
+class ContentError(Exception):
+    """Raised when a content file's front matter is malformed.
+
+    :ivar source_path: The offending file path, when known.
+    """
+
+    def __init__(self, message: str, source_path: str | None = None) -> None:
+        super().__init__(message)
+        self.source_path = source_path
+
+
 @dataclass(slots=True)
 class Page:
     """A single content page discovered under ``content/``.
@@ -107,8 +118,15 @@ def parse_front_matter(text: str) -> tuple[dict[str, Any], str]:
     :param text: Full text of a markdown file.
     :returns: A ``(metadata, body)`` tuple. When no front matter is present the
         metadata dict is empty and the body is the input text unchanged.
+    :raises ContentError: When the front matter block parses to a non-mapping
+        YAML value (e.g. a scalar or list), which is almost always an authoring
+        mistake.
     """
-    if not text.startswith(FRONT_MATTER_DELIMITER):
+    # The opening delimiter must be a line on its own: `---` followed by a
+    # newline. A run like `---draft---` is body text (a horizontal rule or
+    # emphasis), not an unterminated front matter block (Design 1).
+    opening_marker = f"{FRONT_MATTER_DELIMITER}\n"
+    if not text.startswith(opening_marker):
         return {}, text
 
     after_opening = text[len(FRONT_MATTER_DELIMITER) :]
@@ -130,7 +148,7 @@ def parse_front_matter(text: str) -> tuple[dict[str, Any], str]:
     if parsed is None:
         return {}, body
     if not isinstance(parsed, dict):
-        return {}, body
+        raise ContentError(f"front matter must be a YAML mapping, got {type(parsed).__name__}")
     return parsed, body
 
 
@@ -208,7 +226,10 @@ def _build_page(
 ) -> Page:
     """Parse one markdown file into a :class:`Page` with front matter applied."""
     raw_text = abs_path.read_text(encoding="utf-8")
-    metadata, body = parse_front_matter(raw_text)
+    try:
+        metadata, body = parse_front_matter(raw_text)
+    except ContentError as exc:
+        raise ContentError(str(exc), source_path=relative.as_posix()) from exc
 
     content_type_name = _content_type_for(relative.as_posix(), config)
     title = str(metadata.get("title", abs_path.stem))

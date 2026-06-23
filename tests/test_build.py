@@ -35,6 +35,24 @@ def test_build_produces_output_directory(project: Path) -> None:
     assert (project / "site").is_dir()
 
 
+def test_build_honors_configured_output_dir(project: Path) -> None:
+    """A non-default ``output_dir`` in config is where the site is written (Design 10).
+
+    The output directory must not be hardcoded to ``site/``; setting
+    ``output_dir: public`` makes the build write there instead.
+    """
+    config_path = project / "bartleby.yml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8") + "\noutput_dir: public\n",
+        encoding="utf-8",
+    )
+    result = build(config_path)
+    assert (project / "public" / "index.html").exists()
+    assert not (project / "site").exists()
+    assert isinstance(result, BuildResult)
+    assert result.output_dir == "public/"
+
+
 def test_build_renders_index_page(project: Path) -> None:
     """The top-level ``index.md`` becomes ``site/index.html``."""
     build(project / "bartleby.yml")

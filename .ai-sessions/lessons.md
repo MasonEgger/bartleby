@@ -3,6 +3,7 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- Adding a second loop over the same collection inside one function and reusing the prior loop's variable name trips mypy: the first `for _, content_type in config.content_types.items()` types `content_type` non-optional, so `content_type = config.content_types.get(name)` (which is `... | None`) is an incompatible-assignment error. Pick a fresh variable name for the new loop (2026-06-23)
 - Widening a function's return type to a union (adding `dry_run` so `build()` returns `BuildResult | DryRunResult`) breaks existing callers that assumed the narrow type; mypy flagged `asyncio.to_thread(build, ...)` in `async_build`. Grep call sites and add a narrowing `assert isinstance(result, BuildResult)` where the caller never exercises the new branch (2026-06-23)
 - Stdlib response attributes are typed `Any` under mypy strict: `http.client.HTTPResponse.status` from `urllib.request.urlopen` triggers `no-any-return` when compared and returned directly; cast with `int(response.status)` before the bool comparison (2026-06-23)
 - Static-artifact builders (schema.json, content-index.json) should filter drafts themselves via `select_published`, not trust the caller to pre-filter; a unit test that passes raw `pages` to `build_schema_json` otherwise inflates taxonomy term counts with draft tags. Filter inside every builder so the contract holds regardless of call site (2026-06-22)
@@ -12,7 +13,7 @@
 - A value-threading hook dispatch (`run_event`: item-first, non-None return replaces) does not fit every spec hook. Query hooks whose first positional is real data (`on_page_read_source(page, config)`) need a kwargs-only first-non-None dispatch; zero-arg lifecycle hooks (`on_shutdown()`) need a no-item dispatch. Forcing them through `run_event` collides on the threaded item (2026-06-22)
 - When a new render helper forwards args into an existing context builder, copy that builder's param types verbatim (`list[Any]`, `dict[str, Any]`); mypy strict treats `dict`/`list` as invariant, so a "tighter" `list[object]`/`Sequence` annotation breaks the forward (`list[NavItem]` is not a `list[object]`) (2026-06-22)
 - When gating existing template markup behind a Jinja global (e.g. a `feature()` helper), grep `tests/` for every assertion string on that markup first — multiple test files build their own bare `jinja2.Environment` and each needs the global registered, or pre-existing assertions on the now-gated markup go red (2026-06-22)
-- In a build test, a project template that exists only to bump the template-tree mtime must not shadow a theme template; `templates/base.html` containing `{% extends 'base.html' %}` self-references through the cascade and hits Jinja's recursion limit. Use a unique non-cascade name like `custom-partial.html` (2026-06-22)
+
 ## Architecture
 
 - Static-artifact builders (schema.json, content-index.json) should filter drafts themselves via `select_published`, not trust the caller to pre-filter; passing raw `pages` to `build_schema_json` otherwise inflates taxonomy term counts with draft tags. Filter inside every builder so the contract holds regardless of call site (2026-06-22)
@@ -24,6 +25,7 @@
 - When a new render helper forwards args into an existing context builder, copy that builder's param types verbatim (`list[Any]`, `dict[str, Any]`); mypy strict treats `dict`/`list` as invariant, so a "tighter" `list[object]`/`Sequence` annotation breaks the forward (`list[NavItem]` is not a `list[object]`) (2026-06-22)
 - Stdlib response attributes are typed `Any` under mypy strict: `http.client.HTTPResponse.status` from `urllib.request.urlopen` triggers `no-any-return` when compared and returned directly; cast with `int(response.status)` before the bool comparison (2026-06-23)
 - Widening a function's return type to a union (adding `dry_run` so `build()` returns `BuildResult | DryRunResult`) breaks existing callers that assumed the narrow type; mypy flagged `asyncio.to_thread(build, ...)` in `async_build`. Grep call sites and add a narrowing `assert isinstance(result, BuildResult)` where the caller never exercises the new branch (2026-06-23)
+- Adding a second loop over the same collection inside one function and reusing the prior loop's variable name trips mypy: the first loop types the variable non-optional, so reassigning a `... | None` from `dict.get()` is an incompatible-assignment error. Pick a fresh variable name for the new loop (2026-06-23)
 
 ## Testing
 

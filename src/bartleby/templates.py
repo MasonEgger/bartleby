@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 import jinja2
 import yaml
 
+from bartleby.feeds import feed_links_for_page
 from bartleby.seo import generate_all_meta_tags
 from bartleby.theme import get_theme_templates_dir
 
@@ -173,9 +174,9 @@ def build_page_context(
         are exposed as the raw key string.
     :returns: Mapping with the standard Bartleby context keys: ``site``,
         ``page``, ``nav``, ``pages``, ``taxonomies``, ``config``, ``build``,
-        ``data``, ``extra_css``, ``extra_js``, ``seo``. The ``page`` value is
-        the :class:`Page` dataclass itself, so every page attribute is reachable
-        in templates without this builder enumerating it.
+        ``data``, ``extra_css``, ``extra_js``, ``seo``, ``feed_links``. The
+        ``page`` value is the :class:`Page` dataclass itself, so every page
+        attribute is reachable in templates without this builder enumerating it.
     """
     page.authors = _resolve_author_objects(page.author_keys, authors or {})
     return {
@@ -193,6 +194,7 @@ def build_page_context(
         "extra_css": list(config.extra_css),
         "extra_js": list(config.extra_js),
         "seo": generate_all_meta_tags(page, site_config),
+        "feed_links": feed_links_for_page(page, config),
     }
 
 

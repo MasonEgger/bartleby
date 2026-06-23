@@ -5,6 +5,12 @@ site:
   author: "Test Author"
   default_image: /images/default-social.png
   twitter: "@example"
+  feed:
+    enabled: true
+    formats: [rss, atom]
+    include: [blog]
+    limit: 25
+    title: "Full Test Firehose"
 
 nav:
   - Home: index.md

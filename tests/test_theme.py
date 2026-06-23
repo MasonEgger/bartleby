@@ -91,6 +91,28 @@ def test_base_template_includes_alpine() -> None:
     assert "/js/lunr.min.js" in rendered
 
 
+def test_base_template_advertises_feed_links() -> None:
+    """``feed_links`` in the context become ``rel="alternate"`` feed tags in the head."""
+    feed_links = [
+        {"href": "/blog/feed.xml", "type": "application/rss+xml", "title": "Blog RSS"},
+        {"href": "/feed.xml", "type": "application/rss+xml", "title": "All RSS"},
+    ]
+    rendered = _env().get_template("base.html").render(**_base_context(feed_links=feed_links))
+    head = rendered.split("</head>")[0]
+    assert 'rel="alternate"' in head
+    assert 'type="application/rss+xml"' in head
+    assert 'href="/blog/feed.xml"' in head
+    assert 'href="/feed.xml"' in head
+    # Order matters: the type feed is advertised before the aggregate.
+    assert head.index('href="/blog/feed.xml"') < head.index('href="/feed.xml"')
+
+
+def test_base_template_no_feed_links_without_context() -> None:
+    """No feed ``rel="alternate"`` tags render when ``feed_links`` is absent."""
+    rendered = _env().get_template("base.html").render(**_base_context())
+    assert 'type="application/rss+xml"' not in rendered
+
+
 def test_header_has_site_title() -> None:
     """The header partial renders the site title."""
     rendered = _env().get_template("base.html").render(**_base_context())

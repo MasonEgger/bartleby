@@ -38,6 +38,11 @@ def test_load_full_config() -> None:
     assert "All code examples must be runnable" in config.ai.agent_context.constraints
     assert config.dev_server.host == "0.0.0.0"
     assert config.dev_server.port == 9000
+    assert config.site.feed.enabled is True
+    assert config.site.feed.formats == ["rss", "atom"]
+    assert config.site.feed.include == ["blog"]
+    assert config.site.feed.limit == 25
+    assert config.site.feed.title == "Full Test Firehose"
 
 
 def test_missing_site_title_raises() -> None:
@@ -190,3 +195,82 @@ def test_plugins_mapping_form_disables_named_plugin(tmp_path: Path) -> None:
     config = load_config(config_path)
     assert config.disabled_plugins == {"legacy-redirects"}
     assert config.plugins == ["search"]
+
+
+def _config_with_feed(tmp_path: Path, feed_block: str, *, with_news: bool = False) -> Path:
+    """Write a config that has a blog (with feeds) plus an optional news type."""
+    news = "  news:\n    path: news/posts\n    feeds: [rss]\n" if with_news else ""
+    config_path = tmp_path / "feed.yml"
+    config_path.write_text(
+        "site:\n"
+        "  title: Site\n"
+        "  url: https://example.com\n"
+        f"{feed_block}"
+        "content_types:\n"
+        "  blog:\n"
+        "    path: blog/posts\n"
+        "    feeds: [rss, atom]\n"
+        f"{news}"
+    )
+    return config_path
+
+
+def test_site_feed_defaults_when_absent(tmp_path: Path) -> None:
+    """A config with no ``site.feed`` block gets enabled defaults."""
+    config = load_config(_config_with_feed(tmp_path, ""))
+    feed = config.site.feed
+    assert feed.enabled is True
+    assert feed.formats == ["rss", "atom"]
+    assert feed.include == []
+    assert feed.limit == 50
+    assert feed.title is None
+
+
+def test_site_feed_block_is_parsed(tmp_path: Path) -> None:
+    """An explicit ``site.feed`` block overrides every default."""
+    feed_block = (
+        "  feed:\n"
+        "    enabled: false\n"
+        "    formats: [rss]\n"
+        "    include: [blog]\n"
+        "    limit: 20\n"
+        "    title: Firehose\n"
+    )
+    config = load_config(_config_with_feed(tmp_path, feed_block))
+    feed = config.site.feed
+    assert feed.enabled is False
+    assert feed.formats == ["rss"]
+    assert feed.include == ["blog"]
+    assert feed.limit == 20
+    assert feed.title == "Firehose"
+
+
+def test_site_feed_include_unknown_type_raises(tmp_path: Path) -> None:
+    """An ``include`` entry naming an undefined content type is a config error."""
+    feed_block = "  feed:\n    include: [ghost]\n"
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(_config_with_feed(tmp_path, feed_block))
+    assert "ghost" in str(excinfo.value)
+    assert excinfo.value.key_path == "site.feed.include"
+
+
+def test_site_feed_include_type_without_own_feed_raises(tmp_path: Path) -> None:
+    """Including a content type that has no ``feeds`` of its own is a config error."""
+    feed_block = "  feed:\n    include: [pages]\n"
+    config_path = tmp_path / "feed-no-own.yml"
+    config_path.write_text(
+        "site:\n"
+        "  title: Site\n"
+        "  url: https://example.com\n"
+        f"{feed_block}"
+        "content_types:\n"
+        "  blog:\n"
+        "    path: blog/posts\n"
+        "    feeds: [rss]\n"
+        "  pages:\n"
+        "    path: pages\n"
+    )
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(config_path)
+    assert "pages" in str(excinfo.value)
+    assert excinfo.value.key_path == "site.feed.include"

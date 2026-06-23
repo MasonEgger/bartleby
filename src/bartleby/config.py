@@ -59,6 +59,29 @@ class ConfigError(Exception):
 
 
 @dataclass(slots=True)
+class FeedConfig:
+    """Site-wide aggregate feed settings loaded from ``site.feed``.
+
+    The aggregate is the homepage firehose: one feed merging items across
+    content types. See spec.md "Feed Generation > Site-wide aggregate feed".
+
+    :ivar enabled: Whether the aggregate feed is generated at all.
+    :ivar formats: Which feed formats to emit at the site root (``rss``, ``atom``).
+    :ivar include: Content types to aggregate. Empty means every content type
+        that has its own ``feeds`` enabled; a non-empty list restricts to exactly
+        those types.
+    :ivar limit: Maximum number of items in the merged feed.
+    :ivar title: Channel title override; ``None`` falls back to ``site.title``.
+    """
+
+    enabled: bool = True
+    formats: list[str] = field(default_factory=lambda: ["rss", "atom"])
+    include: list[str] = field(default_factory=list)
+    limit: int = 50
+    title: str | None = None
+
+
+@dataclass(slots=True)
 class SiteConfig:
     """Global site metadata loaded from the ``site`` section."""
 
@@ -68,6 +91,7 @@ class SiteConfig:
     author: str = ""
     default_image: str | None = None
     twitter: str | None = None
+    feed: FeedConfig = field(default_factory=FeedConfig)
 
 
 @dataclass(slots=True)
@@ -305,6 +329,28 @@ def _parse_site(raw: Any) -> SiteConfig:
         author=str(raw.get("author", "")),
         default_image=_optional_str(raw.get("default_image")),
         twitter=_optional_str(raw.get("twitter")),
+        feed=_parse_feed(raw.get("feed")),
+    )
+
+
+def _parse_feed(raw: Any) -> FeedConfig:
+    """Parse the ``site.feed`` section, returning enabled defaults when absent."""
+    if raw is None:
+        return FeedConfig()
+    if not isinstance(raw, dict):
+        raise ConfigError("site.feed must be a mapping", key_path="site.feed")
+    formats_raw = raw.get("formats", ["rss", "atom"])
+    if not isinstance(formats_raw, list):
+        raise ConfigError("site.feed.formats must be a list", key_path="site.feed.formats")
+    include_raw = raw.get("include", [])
+    if not isinstance(include_raw, list):
+        raise ConfigError("site.feed.include must be a list", key_path="site.feed.include")
+    return FeedConfig(
+        enabled=bool(raw.get("enabled", True)),
+        formats=[str(fmt) for fmt in formats_raw],
+        include=[str(name) for name in include_raw],
+        limit=int(raw.get("limit", 50)),
+        title=_optional_str(raw.get("title")),
     )
 
 
@@ -511,6 +557,19 @@ def _validate_config(config: BartlebyConfig) -> None:
                     f"references undefined taxonomy {taxonomy_name!r}",
                     key_path=f"content_types.{content_type_name}.taxonomies",
                 )
+
+    for include_name in config.site.feed.include:
+        included_type = config.content_types.get(include_name)
+        if included_type is None:
+            raise ConfigError(
+                f"references undefined content type {include_name!r}",
+                key_path="site.feed.include",
+            )
+        if not included_type.feeds:
+            raise ConfigError(
+                f"content type {include_name!r} has no feeds of its own to aggregate",
+                key_path="site.feed.include",
+            )
 
 
 def _optional_str(value: Any) -> str | None:

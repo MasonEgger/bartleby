@@ -118,13 +118,13 @@ prompts and `audit.md` for the findings each step closes. 6 of 18 steps done.
 
 ## Phase 6 — Feeds
 
-- [ ] **Step 16: Site-wide aggregate feed** (site.feed)
-  - [ ] 16.1: RED — include scope rule (empty=all, list restricts, no-feed type = error); merge/sort/limit; category per item; root paths
-  - [ ] 16.2: RED — contextual auto-discovery (homepage = aggregate; section = type first, aggregate second)
-  - [ ] 16.3: GREEN — site.feed config parse + validation
-  - [ ] 16.4: GREEN — aggregate builder + contextual link selection
-  - [ ] 16.5: GREEN — wire into feed pipeline step
-  - [ ] 16.6: REFACTOR — share item construction; run `just check`
+- [x] **Step 16: Site-wide aggregate feed** (site.feed)
+  - [x] 16.1: RED — include scope rule (empty=all, list restricts, no-feed type = error); merge/sort/limit; category per item; root paths
+  - [x] 16.2: RED — contextual auto-discovery (homepage = aggregate; section = type first, aggregate second)
+  - [x] 16.3: GREEN — site.feed config parse + validation
+  - [x] 16.4: GREEN — aggregate builder + contextual link selection
+  - [x] 16.5: GREEN — wire into feed pipeline step
+  - [x] 16.6: REFACTOR — share item construction; run `just check`
 
 ## Phase 7 — Release readiness
 

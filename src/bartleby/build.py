@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, NoReturn
 from jinja2 import TemplateError
 
 import bartleby
+from bartleby.agent_surface import write_agent_surface
 from bartleby.assets import copy_colocated_assets, copy_static_files
 from bartleby.authors import load_authors
 from bartleby.config import load_config
@@ -304,6 +305,8 @@ def build(config_path: Path, *, include_drafts: bool = False, strict: bool = Fal
             generate_llms_full_txt(pages, config), encoding="utf-8"
         )
     write_sitemap(all_pages, config.site, output_dir)
+    if config.ai.agent_surface:
+        write_agent_surface(pages, config, authors, output_dir)
     static_robots_exists = (project_dir / "static" / "robots.txt").exists()
     write_robots_txt(
         config.site, config.ai, output_dir, static_override_exists=static_robots_exists

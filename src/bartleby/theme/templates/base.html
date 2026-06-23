@@ -6,6 +6,9 @@
   <title>{{ page.title }} — {{ site.title }}</title>
   <link rel="stylesheet" href="/css/main.css">
   {% include "partials/seo_meta.html" %}
+  {% if page.url %}
+  <link rel="alternate" type="text/markdown" href="/{{ (page.url.strip('/') ~ '/index.md') if page.url.strip('/') else 'index.md' }}">
+  {% endif %}
   {% for css in extra_css %}
   <link rel="stylesheet" href="/{{ css.lstrip('/') }}">
   {% endfor %}

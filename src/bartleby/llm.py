@@ -22,6 +22,19 @@ def generate_llms_txt(pages: list[Page], config: BartlebyConfig) -> str:
     :returns: The full ``llms.txt`` body as a UTF-8 string.
     """
     lines: list[str] = [f"# {config.site.title}", "", config.site.description or "", ""]
+    # llms.txt is the discovery root for the whole machine-readable surface, so it
+    # opens with absolute links to the static manifests an agent would otherwise
+    # have no convention for finding.
+    if config.ai.agent_surface:
+        from bartleby.agent_surface import content_index_url, schema_json_url
+
+        lines.append("## Machine-readable")
+        lines.append("")
+        lines.append(f"- [schema.json]({schema_json_url(config.site)}): site manifest")
+        lines.append(
+            f"- [content-index.json]({content_index_url(config.site)}): published content index"
+        )
+        lines.append("")
     grouped = _group_by_content_type(pages, config)
     for type_name, group in grouped.items():
         if not group:

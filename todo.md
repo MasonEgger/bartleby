@@ -96,11 +96,11 @@ prompts and `audit.md` for the findings each step closes. 6 of 18 steps done.
   - [x] 12.2: GREEN — content_query.py + commands
   - [x] 12.3: REFACTOR — share published-page selection with build; run `just check`
 
-- [ ] **Step 13: Static agent surface (schema.json + content-index.json)**
-  - [ ] 13.1: RED — both artifacts; field curation rule; llms.txt discovery section; per-page alternate links; collision error; agent_surface toggle
-  - [ ] 13.2: GREEN — emit artifacts (pipeline step 24a); reuse schema derivation; alternate-link injection
-  - [ ] 13.3: GREEN — ai.agent_surface config + collision detection
-  - [ ] 13.4: REFACTOR — one curation function; run `just check`
+- [x] **Step 13: Static agent surface (schema.json + content-index.json)**
+  - [x] 13.1: RED — both artifacts; field curation rule; llms.txt discovery section; per-page alternate links; collision error; agent_surface toggle
+  - [x] 13.2: GREEN — emit artifacts (pipeline step 24a); reuse schema derivation; alternate-link injection
+  - [x] 13.3: GREEN — ai.agent_surface config + collision detection
+  - [x] 13.4: REFACTOR — one curation function; run `just check`
 
 - [ ] **Step 14: render and lint commands**
   - [ ] 14.1: RED — render single page to HTML + json

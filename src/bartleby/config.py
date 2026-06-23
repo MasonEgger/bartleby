@@ -132,6 +132,7 @@ class AIConfig:
     llms_txt: bool = True
     llms_full_txt: bool = True
     markdown_variants: bool = True
+    agent_surface: bool = True
     robots: dict[str, list[str]] = field(default_factory=dict)
 
 
@@ -404,6 +405,7 @@ def _parse_ai(raw: Any) -> AIConfig:
         llms_txt=bool(raw.get("llms_txt", True)),
         llms_full_txt=bool(raw.get("llms_full_txt", True)),
         markdown_variants=bool(raw.get("markdown_variants", True)),
+        agent_surface=bool(raw.get("agent_surface", True)),
         robots=robots,
     )
 

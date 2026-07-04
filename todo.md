@@ -1,144 +1,151 @@
-# Bartleby v0.1.0 Hardening — Progress
+# Bartleby v1 Remediation: Progress
 
-Delta plan over the 27-step initial build. See `plan.md` for the full TDD
-prompts and `audit.md` for the findings each step closes. 6 of 18 steps done.
+Read `handoff.md` first, then `plan.md` for the full TDD prompts and `spec.md` (R1-R17) for required behavior and acceptance criteria. 0 of 19 steps done.
+Each phase ends at an optional Fable checkpoint (safe commit and review boundary); the markers live in `plan.md`.
 
-## Phase 1 — Foundations
+## Phase 1: Unblock the Suite
 
-- [x] **Step 1: Pass the Page dataclass into template context** (Design 3, 4)
-  - [x] 1.1: RED — template-context tests (Page reachable, new field renders, bylines resolve)
-  - [x] 1.2: RED — draft-filter ordering test (on_pages sees only published)
-  - [x] 1.3: GREEN — build_page_context passes Page; templates read page.<attr>
-  - [x] 1.4: GREEN — move on_pages after the draft filter
-  - [x] 1.5: REFACTOR — remove dict-adapter dead code
-  - [x] 1.6: Confirm spec Template Context section; run `just check`
+- [ ] **Step 1: Fix the linting.py SyntaxError and add an import health gate** (R1)
+  - [ ] 1.1: RED: tests/test_import_health.py: all bartleby modules import; check_external_url returns False on URLError/ValueError/OSError
+  - [ ] 1.2: GREEN: parenthesize the except tuple at linting.py:205
+  - [ ] 1.3: Investigate the smoke-test gap; make smoke invoke cli.main() if it bypasses the entry point
+  - [ ] 1.4: Run `just check` (first full-suite run); record unexpected failures
 
-- [x] **Step 2: Build failure semantics and clean error reporting** (Design 5, 14, 15)
-  - [x] 2.1: RED — collect-all errors, untouched site/ on failure, atomic swap, fail-fast on config
-  - [x] 2.2: RED — clean error (no traceback) + BARTLEBY_DEBUG re-enables it
-  - [x] 2.3: GREEN — accumulate per-page errors; temp-dir build + swap
-  - [x] 2.4: GREEN — top-level CLI error boundary
-  - [x] 2.5: GREEN — logging.getLogger for non-essential output
-  - [x] 2.6: RED — on_build_error fires once with the collected list
-  - [x] 2.7: REFACTOR — shared error formatting; run `just check`
+- [ ] **Step 2: Populate the Tailwind release checksum map** (R2)
+  - [ ] 2.1: RED: map key set equals the six asset names; values match ^[0-9a-f]{64}$; map path installs via _download_binary
+  - [ ] 2.2: GREEN: populate _RELEASE_SHA256 with official digests for PINNED_TAILWIND_VERSION
+  - [ ] 2.3: RED: checksum-mismatch abort regression guard still passes
+  - [ ] 2.4: Run `just check`
 
-- [x] **Step 3: Structured output layer (--output json)**
-  - [x] 3.1: RED — formatter tests (build/error/text shapes, exit codes)
-  - [x] 3.2: GREEN — output.py result dataclasses + formatter
-  - [x] 3.3: GREEN — global flags; route build/validate/new through it
-  - [x] 3.4: RED — build/validate json is valid and parseable
-  - [x] 3.5: REFACTOR — one path, both formats; run `just check`
+- [ ] **Fable checkpoint (optional): Phase 1 done (R1, R2, critical); suite runs, `just check` green**
 
-## Phase 2 — Theme reality
+## Phase 2: Error Contract
 
-- [x] **Step 4: Vendor real Alpine, HTMX, lunr bundles** (Deferral 1)
-  - [x] 4.1: RED — size/signature tests + THIRD-PARTY-NOTICES + build copies them
-  - [x] 4.2: GREEN — vendor pinned minified bundles; record versions/licenses
-  - [x] 4.3: RED — rendered output wires markup to the bundles
-  - [x] 4.4: GREEN — base.html/partials reference real bundles
-  - [x] 4.5: REFACTOR — remove stub comments; run `just check`
+- [ ] **Step 3: Route ContentError and build validation failures through the error contract** (R3)
+  - [ ] 3.1: RED: strict-crossref test expects BuildError (update test_build.py:306); metadata failure raises BuildError with PageErrors
+  - [ ] 3.2: RED: ContentError via lint: exit 1, no traceback; json ErrorOutput with content_error + source path; BARTLEBY_DEBUG re-raises
+  - [ ] 3.3: GREEN: build.py raises BuildError at both sites; docstrings updated
+  - [ ] 3.4: GREEN: cli.py catches ContentError; _ERROR_CODES gets content_error
+  - [ ] 3.5: REFACTOR: one catch site covers all content-discovering commands
+  - [ ] 3.6: Run `just check`
 
-- [x] **Step 5: Hybrid Tailwind pipeline and `bartleby theme compile`** (Deferral 2)
-  - [x] 5.1: RED — resolver order, checksum-abort, compiled-CSS preference
-  - [x] 5.2: GREEN — package-build CSS from templates + safelist
-  - [x] 5.3: GREEN — theme compile command (PATH/cache/download, SHA-256, --refresh)
-  - [x] 5.4: GREEN — build prefers .bartleby/theme.css
-  - [x] 5.5: RED — theme compile --output json shape
-  - [x] 5.6: REFACTOR — no implicit download in build; run `just check`
+- [ ] **Step 4: Guarantee temp build directory cleanup on every failure path** (R16)
+  - [ ] 4.1: RED: no .bartleby-build-* remains after strict failure or _emit_outputs exception; success guard still passes
+  - [ ] 4.2: GREEN: try/finally (or context manager) owns the temp dir lifetime
+  - [ ] 4.3: REFACTOR: single removal site; docstring contracts stay accurate
+  - [ ] 4.4: Run `just check`
 
-- [x] **Step 6: Feature toggle enforcement** (Spec 2)
-  - [x] 6.1: RED — unknown feature name is a validation error
-  - [x] 6.2: RED — enabling/disabling adds/removes markup entirely
-  - [x] 6.3: GREEN — feature() helper + template gating
-  - [x] 6.4: GREEN — known-feature validation in config.py
-  - [x] 6.5: REFACTOR — one known-feature list; run `just check`
+- [ ] **Fable checkpoint (optional): Phase 2 done (R3, R16); error contract catches every failure, no temp-dir leaks**
 
-- [x] **Step 7: Full icon packs and standalone 404** (Deferral 3, Spec 3)
-  - [x] 7.1: RED — resolve icons across all four packs; tree-shake; unused pack = 0 files
-  - [x] 7.2: RED — build renders site/404.html
-  - [x] 7.3: GREEN — vendor complete packs; get_icon_path resolves full set
-  - [x] 7.4: GREEN — 404 render in pipeline
-  - [x] 7.5: REFACTOR — tree-shake scans HTML + templates; run `just check`
+## Phase 3: Build Pipeline Correctness
 
-## Phase 3 — Plugins
+- [ ] **Step 5: Enforce draft exclusion for co-located assets and the taxonomy schema** (R7)
+  - [ ] 5.1: RED: draft page + asset both absent from production build; include_drafts writes both; published asset regression guard
+  - [ ] 5.2: RED: derive_taxonomies_schema omits draft-only terms; CLI schema taxonomies omits them
+  - [ ] 5.3: GREEN: filter state.assets against surviving pages before copy
+  - [ ] 5.4: GREEN: select_published inside derive_taxonomies_schema; agent_surface output unchanged
+  - [ ] 5.5: REFACTOR: one shared published-page helper
+  - [ ] 5.6: Run `just check`
 
-- [x] **Step 8: All hook events fire; BasePlugin parity** (Deferral 7, Design 6)
-  - [x] 8.1: RED — each of the 16 events dispatched once with correct args; return-value semantics; BasePlugin parity
-  - [x] 8.2: GREEN — add missing dispatch call sites in build.py/server.py
-  - [x] 8.3: GREEN — reconcile KNOWN_EVENTS and BasePlugin
-  - [x] 8.4: REFACTOR — priority-then-registration for every event; run `just check`
+- [ ] **Step 6: Detect co-located asset collisions in shared directories** (R8)
+  - [ ] 6.1: RED: two pages + asset in one dir raises error naming dir and pages; no-asset case builds; single-bundle regression guards
+  - [ ] 6.2: GREEN: dict[str, list[Page]] index; collision raises through BuildError
+  - [ ] 6.3: REFACTOR: check fires only when an asset hits a multi-page dir
+  - [ ] 6.4: Run `just check`
 
-- [x] **Step 9: Entry-point plugin discovery**
-  - [x] 9.1: RED — bartleby.plugins discovery; ordering internal/plugins/hooks; config disable
-  - [x] 9.2: GREEN — entry-point discovery merged with hooks/*.py; honor disable list
-  - [x] 9.3: GREEN — wire into hook-discovery pipeline step
-  - [x] 9.4: REFACTOR — single registration path; run `just check`
+- [ ] **Step 7: Merge icon pack defaults instead of replacing them** (R10)
+  - [ ] 7.1: RED: {simple: false} leaves other three enabled; empty config = all four; two-false case exact
+  - [ ] 7.2: GREEN: overlay config entries on the all-True default dict
+  - [ ] 7.3: REFACTOR: one canonical pack-list constant
+  - [ ] 7.4: Run `just check`
 
-## Phase 4 — Dev server
+- [ ] **Step 8: Count only copied files in static_file_count** (R17)
+  - [ ] 8.1: RED: count equals N static + M assets despite generated artifacts present; ai.llms_txt toggle does not change count
+  - [ ] 8.2: GREEN: sum copy counts from copy_static_files/copy_colocated_assets, no re-glob
+  - [ ] 8.3: REFACTOR: BuildResult docstring accurate
+  - [ ] 8.4: Run `just check`
 
-- [x] **Step 10: Live reload with last-good-build and hook reload** (Deferral 6, Design 13)
-  - [x] 10.1: RED — watcher fires on all watched paths; hook/config reload; last-good-build on failure; reload snippet serve-only
-  - [x] 10.2: GREEN — DevServer.run() with watchdog + websockets + full rebuild + retention + restart
-  - [x] 10.3: GREEN — auto theme-recompile when cached, else hint
-  - [x] 10.4: RED — --events JSON stream shape
-  - [x] 10.5: REFACTOR — no reload code in production builds; run `just check`
+- [ ] **Fable checkpoint (optional): Phase 3 done (R7, R8, R10, R17); draft exclusion, loud asset-collision error, icon-pack merge, honest static count**
 
-## Phase 5 — Agent surface and CLI (Spec 1)
+## Phase 4: Rendering Correctness
 
-- [x] **Step 11: Schema introspection**
-  - [x] 11.1: RED — schema for type/authors/taxonomies; public author fields only
-  - [x] 11.2: GREEN — schema_introspection.py + `bartleby schema` command
-  - [x] 11.3: RED — json matches the manifest field shape
-  - [x] 11.4: REFACTOR — reusable schema derivation; run `just check`
+- [ ] **Step 9: Render listing intro content as HTML** (R11)
+  - [ ] 9.1: RED: strengthen test_listings.py:120 to assert <h2>/<strong>, not literal markdown
+  - [ ] 9.2: GREEN: render index.md body through the markdown pipeline before storing intro_content
+  - [ ] 9.3: REFACTOR: accept the build's renderer instance; one renderer per build
+  - [ ] 9.4: Run `just check`
 
-- [x] **Step 12: Content query**
-  - [x] 12.1: RED — content list (filter/sort), content get, drafts excluded
-  - [x] 12.2: GREEN — content_query.py + commands
-  - [x] 12.3: REFACTOR — share published-page selection with build; run `just check`
+- [ ] **Step 10: Emit valid JSON-LD from one generator** (R9)
+  - [ ] 10.1: RED: quoted/backslash/< title renders an ld+json block that json.loads and round-trips; equals generate_jsonld output
+  - [ ] 10.2: GREEN: context carries generate_jsonld output; partial emits it; hand-built lines deleted
+  - [ ] 10.3: REFACTOR: generator covers all fields the partial emitted; special-char tests on the generator too
+  - [ ] 10.4: Run `just check`
 
-- [x] **Step 13: Static agent surface (schema.json + content-index.json)**
-  - [x] 13.1: RED — both artifacts; field curation rule; llms.txt discovery section; per-page alternate links; collision error; agent_surface toggle
-  - [x] 13.2: GREEN — emit artifacts (pipeline step 24a); reuse schema derivation; alternate-link injection
-  - [x] 13.3: GREEN — ai.agent_surface config + collision detection
-  - [x] 13.4: REFACTOR — one curation function; run `just check`
+- [ ] **Step 11: Protect multi-backtick inline code from shortcode expansion** (R12)
+  - [ ] 11.1: RED: shortcode literal inside double-backtick span; inside span containing a single backtick; single-backtick regression guard
+  - [ ] 11.2: GREEN: CommonMark N-backtick span matching replaces _INLINE_CODE_RE
+  - [ ] 11.3: REFACTOR: docstring accurate
+  - [ ] 11.4: Run `just check`
 
-- [x] **Step 14: render and lint commands**
-  - [x] 14.1: RED — render single page to HTML + json
-  - [x] 14.2: RED — lint broken links/missing desc/orphans; --check-external opt-in
-  - [x] 14.3: GREEN — render in cli.py reusing pipeline
-  - [x] 14.4: GREEN — linting.py + lint command
-  - [x] 14.5: REFACTOR — share link resolution with crossrefs; run `just check`
+- [ ] **Fable checkpoint (optional): Phase 4 done (R11, R9, R12); listing intros render, valid JSON-LD, multi-backtick code protected**
 
-- [x] **Step 15: export, generate-skill, build --dry-run**
-  - [x] 15.1: RED — JSONL/JSON/CSV export
-  - [x] 15.2: RED — three deterministic skills; agent_context verbatim; analyze_content reserved error
-  - [x] 15.3: RED — build --dry-run reports without writing
-  - [x] 15.4: GREEN — export.py, skills.py, dry-run
-  - [x] 15.5: REFACTOR — reuse schema derivation + content selection; run `just check`
+## Phase 5: Dev Server
 
-## Phase 6 — Feeds
+- [ ] **Step 12: Serve the configured output directory** (R4)
+  - [ ] 12.1: RED: output_dir: public served correctly; default site/ regression guard
+  - [ ] 12.2: GREEN: resolve serve dir from loaded config; share config between build and handler
+  - [ ] 12.3: REFACTOR: no other hardcoded "site" in server.py
+  - [ ] 12.4: Run `just check`
 
-- [x] **Step 16: Site-wide aggregate feed** (site.feed)
-  - [x] 16.1: RED — include scope rule (empty=all, list restricts, no-feed type = error); merge/sort/limit; category per item; root paths
-  - [x] 16.2: RED — contextual auto-discovery (homepage = aggregate; section = type first, aggregate second)
-  - [x] 16.3: GREEN — site.feed config parse + validation
-  - [x] 16.4: GREEN — aggregate builder + contextual link selection
-  - [x] 16.5: GREEN — wire into feed pipeline step
-  - [x] 16.6: REFACTOR — share item construction; run `just check`
+- [ ] **Step 13: Wire the file watcher into DevServer.run()** (R5, part 1)
+  - [ ] 13.1: RED: watched change rebuilds (visible over HTTP, bounded wait); unwatched change does not
+  - [ ] 13.2: GREEN: watchdog Observer in run() routing through existing primitives; clean shutdown; dependency confirmed in pyproject.toml
+  - [ ] 13.3: GREEN: last-good-build retention holds via a real watcher-triggered failure
+  - [ ] 13.4: REFACTOR: compose primitives, no duplicated decision logic; module docstring accurate
+  - [ ] 13.5: Run `just check`
 
-## Phase 7 — Release readiness
+- [ ] **Step 14: Serve the reload snippet and WebSocket channel** (R5, part 2)
+  - [ ] 14.1: RED: served HTML contains RELOAD_SNIPPET; WS client at /__bartleby_reload gets signal after rebuild; build output snippet-free
+  - [ ] 14.2: GREEN: serve-path snippet injection + websockets endpoint broadcasting on successful rebuild; dependency confirmed
+  - [ ] 14.3: REFACTOR: reload code lives only on the serve path; route/URL defined once
+  - [ ] 14.4: Run `just check`
 
-- [x] **Step 17: Smoke test and test-quality hardening** (TestGap 1-5)
-  - [x] 17.1: RED — e2e smoke (scaffold/post/build, grep title + byline + listing)
-  - [x] 17.2: RED — render list + taxonomy templates and assert posts appear
-  - [x] 17.3: RED — theme tests render-and-inspect HTML, not raw CSS strings
-  - [x] 17.4: RED — DevServer.run() integration test
-  - [x] 17.5: GREEN — fix underlying code, not the tests
-  - [x] 17.6: Add smoke test to CI; run `just check`
+- [ ] **Fable checkpoint (optional): Phase 5 done (R4, R5); serves configured output dir, rebuilds on change, live-reloads**
 
-- [x] **Step 18: Packaging and polish** (Meta 1-2, Design 1, 2, 7-12, 16, 17)
-  - [x] 18.1: RED — front-matter newline (Design 1) + non-dict YAML error (Design 2) + configurable output dir (Design 10) + expanded validate (Design 17)
-  - [x] 18.2: GREEN — implement those behavior changes
-  - [x] 18.3: REFACTOR — magic-string enum (7), docstring/fall-through (8, 9), import to top (11), hooks sys.path (12), split build() (16)
-  - [x] 18.4: Packaging — LICENSE (MIT), pyproject license, README, CHANGELOG (Meta 1, 2)
-  - [x] 18.5: Run `just check`
+## Phase 6: CLI and Agent Surface
+
+- [ ] **Step 15: Resolve crossrefs before the lint orphan pass** (R6)
+  - [ ] 15.1: RED: .md-linked page not orphaned via CLI lint; nav page never orphaned; existing lint JSON test asserts no spurious orphans
+  - [ ] 15.2: GREEN: _cmd_lint calls resolve_all_crossrefs before lint_site
+  - [ ] 15.3: REFACTOR: remove redundant re-resolution in _lint_crossrefs if dead; unit tests unchanged
+  - [ ] 15.4: Run `just check`
+
+- [ ] **Step 16: Discover shortcodes across all three lookup locations** (R13)
+  - [ ] 16.1: RED: project-root, templates/, and theme shortcodes all discovered; de-duplicated; generate-skill includes project-root shortcode
+  - [ ] 16.2: GREEN: _discover_shortcode_names scans the loader's cascade
+  - [ ] 16.3: REFACTOR: one shared source for the search roots where feasible
+  - [ ] 16.4: Run `just check`
+
+- [ ] **Step 17: Advertise the aggregate feed in schema.json** (R14)
+  - [ ] 17.1: RED: aggregate feed.xml/atom.xml present per formats; absent when site.feed disabled
+  - [ ] 17.2: GREEN: _resource_locations reads config.site.feed and appends aggregate URLs
+  - [ ] 17.3: REFACTOR: shared feed-URL helper so advertised and written URLs cannot drift
+  - [ ] 17.4: Run `just check`
+
+- [ ] **Step 18: Scope the hooks sys.path insertion** (R15)
+  - [ ] 18.1: RED: sys.path restored after discover_hooks; double call does not grow it; sibling-import regression guard
+  - [ ] 18.2: GREEN: try/finally scopes the insertion to the load loop
+  - [ ] 18.3: REFACTOR: docstring notes discovery-time-only sibling resolution
+  - [ ] 18.4: Run `just check`
+
+- [ ] **Fable checkpoint (optional): Phase 6 done (R6, R13, R14, R15); lint orphans fixed, shortcode discovery, aggregate feed, scoped sys.path**
+
+## Phase 7: Cycle Verification
+
+- [ ] **Step 19: Extend the e2e smoke test and close the cycle**
+  - [ ] 19.1: RED: smoke covers custom output_dir + quoted title + draft-with-asset + .md crossref, through build and serve
+  - [ ] 19.2: GREEN: fix composition defects only if surfaced; otherwise no production change
+  - [ ] 19.3: Final gate: `just check`; all todo steps checked; R1-R17 closed
+  - [ ] 19.4: CHANGELOG.md remediation entry
+
+- [ ] **Fable checkpoint (optional): Phase 7 done; cycle verified, R1-R17 closed, `just check` green, ready to ship**

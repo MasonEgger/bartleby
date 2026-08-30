@@ -3,6 +3,8 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- For a "build on their thing vs build our own" call, the load-bearing research axis is extensibility: check whether a shipped, stable third-party plugin/module API actually exists, not whether one is promised. Zensical had a designed module system (ZAP-007) that explicitly declined to define a public API, so "build plugins for it" was a non-option despite the project being real and MIT (2026-08-30)
+- Record a positioning/strategy decision in BOTH the memory system and the project CLAUDE.md: CLAUDE.md steers future in-repo edits (e.g. the README one-liner), while memory carries the rationale across sessions. Editing one without the other lets a later session drift back (2026-08-30)
 - For PEP 639 license metadata in pyproject.toml, use the SPDX expression string (`license = "MIT"`) plus `license-files = ["LICENSE"]`, not the deprecated table form (`license = { text = ... }`) or `License ::` classifiers; hatchling supports it and it is the current documented shape (2026-06-23)
 - Swapping magic strings for a `StrEnum` is a zero-risk refactor when the values flow through a string-keyed dict (e.g. `page.custom_metadata["taxonomy_kind"]` read by templates): `StrEnum` members compare equal to their string value, so producers can write the enum member while existing string consumers (templates, `==` checks) keep working untouched. Only the comparison sites in your own code need updating (2026-06-23)
 - To split a god-function under mypy strict without a 15-arg helper explosion, thread one underscore-prefixed `_BuildState` dataclass through small one-arg phase helpers. Fields set in later phases are typed `X | None` with `field(default_factory=...)`; each downstream phase opens with `assert state.x is not None` (which both narrows for mypy and documents the phase-ordering contract). Bind the narrowed value to a local before reusing it, since mypy does not narrow attribute access across calls (2026-06-23)
@@ -11,8 +13,6 @@
 - To integration-test a blocking `serve_forever()` server (`DevServer.run`), add an optional `ready` callback fired right after the socket binds, passing the live `TCPServer`; the test runs `run` in a daemon thread, learns the ephemeral port and calls `shutdown()` from the callback handle, then joins. This exercises the previously `# pragma: no cover` path with zero behavior change when `ready=None` (2026-06-23)
 - `pytest` imported at a test module's top trips ruff `TC002` when it is only used for the `pytest.MonkeyPatch` type annotation (no `pytest.fixture`/`pytest.raises`/`capsys` at runtime); move it into the `if TYPE_CHECKING:` block. Files that use a pytest runtime symbol still import it at top (2026-06-23)
 - Adding a second loop over the same collection inside one function and reusing the prior loop's variable name trips mypy: the first `for _, content_type in config.content_types.items()` types `content_type` non-optional, so `content_type = config.content_types.get(name)` (which is `... | None`) is an incompatible-assignment error. Pick a fresh variable name for the new loop (2026-06-23)
-- Static-artifact builders (schema.json, content-index.json) should filter drafts themselves via `select_published`, not trust the caller to pre-filter; a unit test that passes raw `pages` to `build_schema_json` otherwise inflates taxonomy term counts with draft tags. Filter inside every builder so the contract holds regardless of call site (2026-06-22)
-- `bartleby new post` scaffolds with `draft: true`, so a CLI test that creates a post and asserts it appears in `content list` (which excludes drafts by default) will silently fail; in published-listing tests write a `draft: false` post directly instead of relying on the scaffold default (2026-06-22)
 
 ## Packaging
 
@@ -21,6 +21,9 @@
 
 ## Workflow
 
+- For a "build on their thing vs build our own" call, the load-bearing research axis is extensibility: check whether a shipped, stable third-party plugin/module API actually exists, not whether one is promised (Zensical's ZAP-007 declined to define a public API, so "build plugins for it" was a non-option) (2026-08-30)
+- Record a positioning/strategy decision in BOTH the memory system and the project CLAUDE.md: CLAUDE.md steers future in-repo edits, memory carries the rationale across sessions; editing one without the other lets a later session drift back (2026-08-30)
+- For a competitive/strategic review, fan out one web-research subagent per axis (architecture, features, extensibility, business) in parallel and read the local codebase yourself at the same time; keeps the comparison grounded and fast (2026-08-30)
 - When a BPE plan splits one TDD cycle into separate RED and GREEN todo items but the step-executor contract forbids committing a red suite, fold the matching GREEN into the same dispatch and check off both items. The "never commit a red suite" rule wins over strict one-item-per-dispatch, and this repo's history is already one-green-commit-per-cycle (2026-06-23)
 
 ## Architecture

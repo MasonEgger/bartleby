@@ -1,6 +1,6 @@
 # Bartleby
 
-A batteries-included Python static site generator built for humans and agents.
+An agents-first, batteries-included Python static site generator: every page published for humans and the agents that read them.
 
 Bartleby takes Markdown content and turns it into a fast, search-indexed, agent-readable website — with no plugin ecosystem to chase and no JavaScript build chain to maintain. Every feature most documentation sites want — feeds, sitemap, search, taxonomies, syntax highlighting, admonitions, JSON-LD, Open Graph tags, llms.txt — ships in the core.
 

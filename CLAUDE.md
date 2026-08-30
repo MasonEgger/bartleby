@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Bartleby is a batteries-included Python static site generator. The full specification is in `spec.md`. No code has been written yet — the project is in the implementation phase.
+Bartleby is an agents-first, batteries-included Python static site generator. The full specification is in `spec.md`.
+
+**Positioning (confirmed 2026-08-08):** Bartleby leads as an *agents-first* SSG. Its differentiator is treating AI crawlers and coding agents as a first-class audience alongside humans: per-page Markdown variants, `llms.txt`/`llms-full.txt`, `schema.json`, `content-index.json`, JSON-LD, and deterministic skill generation. This is a deliberate choice not to compete with Zensical (the Material for MkDocs team's Rust-core, docs-focused rewrite) on build performance or docs-team ergonomics. Solid docs/blog output is table stakes; the agent surface is where the work goes. Bartleby stays MIT and free (see the strategic-direction note in memory).
 
 ## Architecture
 

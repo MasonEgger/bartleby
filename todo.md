@@ -29,11 +29,11 @@ Each phase ends at an optional Fable checkpoint (safe commit and review boundary
   - [x] 3.5: REFACTOR: one catch site covers all content-discovering commands
   - [x] 3.6: Run `just check`
 
-- [ ] **Step 4: Guarantee temp build directory cleanup on every failure path** (R16)
-  - [ ] 4.1: RED: no .bartleby-build-* remains after strict failure or _emit_outputs exception; success guard still passes
-  - [ ] 4.2: GREEN: try/finally (or context manager) owns the temp dir lifetime
-  - [ ] 4.3: REFACTOR: single removal site; docstring contracts stay accurate
-  - [ ] 4.4: Run `just check`
+- [x] **Step 4: Guarantee temp build directory cleanup on every failure path** (R16)
+  - [x] 4.1: RED: no .bartleby-build-* remains after strict failure or _emit_outputs exception; success guard still passes
+  - [x] 4.2: GREEN: try/finally (or context manager) owns the temp dir lifetime
+  - [x] 4.3: REFACTOR: single removal site; docstring contracts stay accurate
+  - [x] 4.4: Run `just check`
 
 - [ ] **Fable checkpoint (optional): Phase 2 done (R3, R16); error contract catches every failure, no temp-dir leaks**
 

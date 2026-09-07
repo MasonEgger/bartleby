@@ -191,15 +191,28 @@ def build(
         :class:`DryRunResult` when ``dry_run`` is set.
     :raises BuildError: When metadata validation fails, or when ``strict``
         is on and any cross-reference cannot be resolved.
+
+    The temp build directory created partway through this pipeline is removed
+    on every exit path that does not swap it into place, regardless of which
+    phase raises; see the ``finally`` block below.
     """
     started = time.perf_counter()
 
     state = _load_inputs(config_path)
-    _filter_and_validate(state, include_drafts=include_drafts)
-    rendered_html = _render_all_pages(state, strict=strict)
-    _emit_outputs(state, rendered_html)
+    try:
+        _filter_and_validate(state, include_drafts=include_drafts)
+        rendered_html = _render_all_pages(state, strict=strict)
+        _emit_outputs(state, rendered_html)
 
-    return _finish_build(state, started=started, dry_run=dry_run)
+        return _finish_build(state, started=started, dry_run=dry_run)
+    finally:
+        # Backstop for every exit path that did not swap or discard the temp
+        # dir itself (a raised BuildError, or any other exception out of the
+        # pipeline). On the success and dry-run paths the temp dir is already
+        # gone by this point (renamed away or explicitly removed), so this is
+        # a no-op; the existence check makes the double-removal safe.
+        if state.output_dir is not None and state.output_dir.exists():
+            shutil.rmtree(state.output_dir, ignore_errors=True)
 
 
 def _load_inputs(config_path: Path) -> _BuildState:
@@ -338,7 +351,7 @@ def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
             page.excerpt = extract_excerpt(page.raw_content, content_type.excerpt_separator)
 
     if page_errors:
-        _fail_build(page_errors, output_dir, plugins)
+        _fail_build(page_errors, plugins)
 
     # Cross-reference resolution needs every page rendered before any rewriting,
     # so it lives between the markdown loop above and the template loop below.
@@ -392,7 +405,7 @@ def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
             page_errors.append(PageError(file_path=str(page.source_path), message=str(exc)))
 
     if page_errors:
-        _fail_build(page_errors, output_dir, plugins)
+        _fail_build(page_errors, plugins)
 
     not_found_html = _render_404(
         env=env,
@@ -519,21 +532,19 @@ def _apply_compiled_theme_css(project_dir: Path, output_dir: Path) -> None:
     shutil.copy2(compiled, destination)
 
 
-def _fail_build(
-    page_errors: list[PageError], build_dir: Path, plugins: PluginCollection
-) -> NoReturn:
-    """Discard the partial build, fire ``on_build_error`` once, and raise.
+def _fail_build(page_errors: list[PageError], plugins: PluginCollection) -> NoReturn:
+    """Fire ``on_build_error`` once and raise, discarding the partial build.
 
     The hook receives the assembled :class:`BuildError` so a plugin can inspect
-    every collected :class:`PageError` in a single call. The temp build
-    directory is removed first so a failed build never leaves output behind.
+    every collected :class:`PageError` in a single call. This function does not
+    remove the temp build directory itself; :func:`build`'s ``finally`` block
+    is the single removal site and cleans it up once this raise propagates out
+    of it, so a failed build never leaves output behind.
 
     :param page_errors: Every page-level failure collected during the pass.
-    :param build_dir: The temp directory holding the partial build output.
     :param plugins: The active plugin collection to dispatch the hook through.
     :raises BuildError: Always, carrying ``page_errors``.
     """
-    shutil.rmtree(build_dir, ignore_errors=True)
     error = BuildError(page_errors)
     plugins.run_event("on_build_error", error)
     plugins.run_lifecycle("on_shutdown")

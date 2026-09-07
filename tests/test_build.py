@@ -424,6 +424,63 @@ def test_successful_build_swaps_output_atomically(project: Path) -> None:
     assert leftover_temp == [], f"build left a temp directory behind: {leftover_temp}"
 
 
+def _leftover_temp_dirs(project: Path) -> list[Path]:
+    """Return any ``.bartleby-build-*`` temp directories left directly under ``project``."""
+    return [
+        child
+        for child in project.iterdir()
+        if child.is_dir() and child.name.startswith(".bartleby-build-")
+    ]
+
+
+def test_strict_mode_failure_leaves_no_temp_dir(
+    project: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A strict-mode crossref failure (BuildError) leaves no ``.bartleby-build-*`` dir behind.
+
+    Strict-crossref failures raise directly from ``_render_all_pages`` without
+    routing through ``_fail_build``, so this exercises the failure path a
+    per-helper cleanup would miss.
+    """
+    post_path = project / "content" / "blog" / "posts" / "first-post.md"
+    text = post_path.read_text(encoding="utf-8")
+    post_path.write_text(text + "\nSee [missing page](missing-target.md).\n", encoding="utf-8")
+
+    with caplog.at_level("WARNING", logger="bartleby"), pytest.raises(BuildError):
+        build(project / "bartleby.yml", strict=True)
+
+    leftover = _leftover_temp_dirs(project)
+    assert leftover == [], f"strict-mode failure left a temp directory behind: {leftover}"
+
+
+def test_exception_in_emit_outputs_leaves_no_temp_dir(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An exception raised deep in the emit phase still cleans up the temp build dir.
+
+    ``_emit_outputs`` has no error handling of its own, so any exception raised
+    inside it (a plugin, a write, anything) must still be cleaned up by the
+    pipeline's cleanup, not by a helper local to a known failure mode.
+    """
+    site_dir = project / "site"
+    site_dir.mkdir()
+    sentinel = site_dir / "sentinel.html"
+    sentinel.write_text("previous good build", encoding="utf-8")
+
+    def _boom(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("emit failure")
+
+    monkeypatch.setattr("bartleby.build.write_sitemap", _boom)
+
+    with pytest.raises(RuntimeError):
+        build(project / "bartleby.yml")
+
+    assert sentinel.exists(), "an emit-phase failure must not touch the existing site/"
+    assert sentinel.read_text(encoding="utf-8") == "previous good build"
+    leftover = _leftover_temp_dirs(project)
+    assert leftover == [], f"emit-phase exception left a temp directory behind: {leftover}"
+
+
 def test_invalid_config_fails_before_render(project: Path) -> None:
     """An invalid config raises ConfigError immediately, before any render pass."""
     site_dir = project / "site"

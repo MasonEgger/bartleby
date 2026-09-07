@@ -59,11 +59,11 @@ Each phase ends at an optional Fable checkpoint (safe commit and review boundary
   - [x] 7.3: REFACTOR: one canonical pack-list constant
   - [x] 7.4: Run `just check`
 
-- [ ] **Step 8: Count only copied files in static_file_count** (R17)
-  - [ ] 8.1: RED: count equals N static + M assets despite generated artifacts present; ai.llms_txt toggle does not change count
-  - [ ] 8.2: GREEN: sum copy counts from copy_static_files/copy_colocated_assets, no re-glob
-  - [ ] 8.3: REFACTOR: BuildResult docstring accurate
-  - [ ] 8.4: Run `just check`
+- [x] **Step 8: Count only copied files in static_file_count** (R17)
+  - [x] 8.1: RED: count equals N static + M assets despite generated artifacts present; ai.llms_txt toggle does not change count
+  - [x] 8.2: GREEN: sum copy counts from copy_static_files/copy_colocated_assets, no re-glob
+  - [x] 8.3: REFACTOR: BuildResult docstring accurate
+  - [x] 8.4: Run `just check`
 
 - [ ] **Fable checkpoint (optional): Phase 3 done (R7, R8, R10, R17); draft exclusion, loud asset-collision error, icon-pack merge, honest static count**
 

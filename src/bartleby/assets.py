@@ -36,14 +36,17 @@ class AssetCollisionError(Exception):
         )
 
 
-def copy_static_files(static_dir: Path, output_dir: Path) -> None:
+def copy_static_files(static_dir: Path, output_dir: Path) -> int:
     """Recursively copy ``static_dir`` into ``output_dir``.
 
     Missing or empty ``static_dir`` is a no-op so callers don't need a
     pre-check.
+
+    :returns: The number of files copied.
     """
     if not static_dir.exists():
-        return
+        return 0
+    copied = 0
     for source in static_dir.rglob("*"):
         if source.is_dir():
             continue
@@ -51,6 +54,8 @@ def copy_static_files(static_dir: Path, output_dir: Path) -> None:
         destination = output_dir / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination)
+        copied += 1
+    return copied
 
 
 def copy_colocated_assets(
@@ -58,7 +63,7 @@ def copy_colocated_assets(
     pages: list[Page],
     content_dir: Path,
     output_dir: Path,
-) -> None:
+) -> int:
     """Copy each co-located asset to follow its associated page's output URL.
 
     :param assets: Assets discovered alongside content (e.g. images, PDFs).
@@ -66,6 +71,7 @@ def copy_colocated_assets(
     :param content_dir: The site's ``content/`` directory (only used for
         parity with the spec; kept for future page-by-source-path lookups).
     :param output_dir: The build's ``site/`` directory.
+    :returns: The number of assets copied.
     :raises AssetCollisionError: When an asset's directory holds more than
         one page (see :class:`AssetCollisionError`).
     """
@@ -73,11 +79,14 @@ def copy_colocated_assets(
     pages_by_dir: dict[str, list[Page]] = {}
     for page in pages:
         pages_by_dir.setdefault(page.source_path.parent.as_posix(), []).append(page)
+    copied = 0
     for asset in assets:
         associated_page = _find_associated_page(asset, pages_by_dir)
         destination = _destination_for(asset, associated_page, output_dir)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(asset.abs_source_path, destination)
+        copied += 1
+    return copied
 
 
 def drop_draft_only_assets(

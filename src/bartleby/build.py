@@ -94,6 +94,7 @@ class _BuildState:
     build_info: BuildInfo | None = None
     output_dir: Path | None = None
     final_output_dir: Path | None = None
+    static_file_count: int = 0
 
 
 @dataclass(slots=True)
@@ -102,7 +103,11 @@ class BuildResult:
 
     :ivar page_count: Number of pages written (content + generated pages).
     :ivar duration_seconds: Wall-clock build time.
-    :ivar static_file_count: Non-HTML asset files copied into the output tree.
+    :ivar static_file_count: Static files and co-located assets copied into the
+        output tree (theme static, project ``static/``, and co-located
+        assets). Excludes generated artifacts (search index, feeds, markdown
+        variants, llms.txt files, sitemap, agent-surface JSON, robots.txt,
+        tree-shaken icon SVGs).
     :ivar output_dir: The directory the finished site was written to.
     """
 
@@ -445,11 +450,13 @@ def _emit_outputs(state: _BuildState, rendered_html: list[str]) -> None:
     project_dir = state.project_dir
 
     theme_static = get_theme_templates_dir().parent / "static"
-    copy_static_files(theme_static, output_dir)
-    copy_static_files(project_dir / "static", output_dir)
+    static_file_count = copy_static_files(theme_static, output_dir)
+    static_file_count += copy_static_files(project_dir / "static", output_dir)
     _apply_compiled_theme_css(project_dir, output_dir)
     try:
-        copy_colocated_assets(state.assets, state.pages, state.content_dir, output_dir)
+        static_file_count += copy_colocated_assets(
+            state.assets, state.pages, state.content_dir, output_dir
+        )
     except AssetCollisionError as exc:
         raise BuildError(
             [
@@ -493,6 +500,7 @@ def _emit_outputs(state: _BuildState, rendered_html: list[str]) -> None:
     write_robots_txt(
         config.site, config.ai, output_dir, static_override_exists=static_robots_exists
     )
+    state.static_file_count = static_file_count
 
 
 def _finish_build(
@@ -522,16 +530,11 @@ def _finish_build(
     plugins.run_event("on_post_build", config)
     plugins.run_lifecycle("on_shutdown")
 
-    static_file_count = sum(
-        1
-        for path in final_output_dir.rglob("*")
-        if path.is_file() and path.suffix.lower() != ".html"
-    )
     duration = time.perf_counter() - started
     return BuildResult(
         page_count=len(state.all_pages),
         duration_seconds=duration,
-        static_file_count=static_file_count,
+        static_file_count=state.static_file_count,
         output_dir=f"{final_output_dir.name}/",
     )
 

@@ -18,6 +18,7 @@ from bartleby.build import (
     extract_excerpt,
 )
 from bartleby.config import ConfigError
+from bartleby.theme import get_theme_static_dir
 
 
 @pytest.fixture
@@ -342,6 +343,59 @@ def test_build_returns_result(project: Path) -> None:
     assert isinstance(result, BuildResult)
     assert result.page_count > 0
     assert result.duration_seconds >= 0.0
+
+
+def test_static_file_count_excludes_generated_artifacts(project: Path) -> None:
+    """``static_file_count`` counts only copied static files and co-located assets.
+
+    The expected count is every file under the built-in theme's static
+    directory, plus every file under the project's ``static/`` (``logo.png``,
+    ``css/custom.css``), plus the two co-located assets that survive draft
+    filtering (``published-with-asset/photo.png`` and the orphaned
+    ``media/diagram.png``).
+    The default config also emits a search index, feeds, a sitemap, a
+    ``robots.txt``, ``llms.txt`` files, markdown variants, and agent-surface
+    JSON; those generated artifacts must not inflate the count. This test
+    asserts each of those artifacts actually exists in the tree, so it proves
+    they are excluded rather than merely absent.
+    """
+    result = build(project / "bartleby.yml")
+    site_dir = project / "site"
+
+    # Prove the generated artifacts are present, so their exclusion is real.
+    assert (site_dir / "search" / "search_index.json").exists()
+    assert (site_dir / "feed.xml").exists()
+    assert (site_dir / "atom.xml").exists()
+    assert (site_dir / "sitemap.xml").exists()
+    assert (site_dir / "robots.txt").exists()
+    assert (site_dir / "llms.txt").exists()
+    assert (site_dir / "llms-full.txt").exists()
+    assert (site_dir / "index.md").exists()  # markdown variant of the homepage
+    assert (site_dir / "schema.json").exists()
+    assert (site_dir / "content-index.json").exists()
+
+    theme_static_count = sum(1 for path in get_theme_static_dir().rglob("*") if path.is_file())
+    project_static_count = sum(1 for path in (project / "static").rglob("*") if path.is_file())
+    colocated_asset_count = 2  # published-with-asset/photo.png + orphaned media/diagram.png
+    expected_count = theme_static_count + project_static_count + colocated_asset_count
+
+    assert isinstance(result, BuildResult)
+    assert result.static_file_count == expected_count
+
+
+def test_static_file_count_unaffected_by_llms_txt_toggle(project: Path) -> None:
+    """Toggling a generated artifact (``ai.llms_txt``) does not change the count."""
+    config_path = project / "bartleby.yml"
+    baseline = config_path.read_text(encoding="utf-8")
+
+    result_with_llms_txt = build(config_path)
+    shutil.rmtree(project / "site")
+
+    config_path.write_text(baseline + "\nai:\n  llms_txt: false\n", encoding="utf-8")
+    result_without_llms_txt = build(config_path)
+    assert not (project / "site" / "llms.txt").exists()
+
+    assert result_with_llms_txt.static_file_count == result_without_llms_txt.static_file_count
 
 
 def test_dry_run_reports_all_added_on_fresh_build(project: Path) -> None:

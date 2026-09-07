@@ -120,11 +120,11 @@ Each phase ends at an optional Fable checkpoint (safe commit and review boundary
   - [x] 15.3: REFACTOR: _lint_crossrefs's re-resolution stays; it is the sole source of broken-crossref findings, not dead weight
   - [x] 15.4: Run `just check`
 
-- [ ] **Step 16: Discover shortcodes across all three lookup locations** (R13)
-  - [ ] 16.1: RED: project-root, templates/, and theme shortcodes all discovered; de-duplicated; generate-skill includes project-root shortcode
-  - [ ] 16.2: GREEN: _discover_shortcode_names scans the loader's cascade
-  - [ ] 16.3: REFACTOR: one shared source for the search roots where feasible
-  - [ ] 16.4: Run `just check`
+- [x] **Step 16: Discover shortcodes across all three lookup locations** (R13)
+  - [x] 16.1: RED: project-root, templates/, and theme shortcodes all discovered; de-duplicated; generate-skill includes project-root shortcode
+  - [x] 16.2: GREEN: _discover_shortcode_names scans the loader's cascade
+  - [x] 16.3: REFACTOR: one shared source for the search roots where feasible
+  - [x] 16.4: Run `just check`
 
 - [ ] **Step 17: Advertise the aggregate feed in schema.json** (R14)
   - [ ] 17.1: RED: aggregate feed.xml/atom.xml present per formats; absent when site.feed disabled

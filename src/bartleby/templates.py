@@ -56,6 +56,29 @@ def make_feature_checker(features: list[str]) -> Callable[[str], bool]:
     return feature
 
 
+def template_search_bases(project_dir: Path) -> list[Path]:
+    """Return the base directories the Jinja loader searches, in cascade order.
+
+    Single source of truth for the template search cascade: both
+    :func:`create_jinja_env` (the whole-file template loader) and
+    :func:`shortcode_search_roots` (shortcode discovery) build their search
+    locations from this one list, so adding or reordering a location here
+    updates both automatically and they cannot drift apart.
+
+    :param project_dir: Directory containing the user's site (where
+        ``overrides/``, ``templates/``, ``partials/``, ``shortcodes/``, and
+        ``data/`` live).
+    :returns: Candidate base directories, in cascade order (most specific
+        override first, built-in theme last).
+    """
+    return [
+        project_dir / "overrides",
+        project_dir / "templates",
+        project_dir,
+        get_theme_templates_dir(),
+    ]
+
+
 def create_jinja_env(config: BartlebyConfig, project_dir: Path) -> jinja2.Environment:
     """Build the project's Jinja2 environment with the 6-level search cascade.
 
@@ -66,12 +89,7 @@ def create_jinja_env(config: BartlebyConfig, project_dir: Path) -> jinja2.Enviro
     :returns: A configured :class:`jinja2.Environment` with autoescaping on
         for ``.html`` files.
     """
-    search_paths: list[str] = [
-        str(project_dir / "overrides"),
-        str(project_dir / "templates"),
-        str(project_dir),
-        str(get_theme_templates_dir()),
-    ]
+    search_paths = [str(base) for base in template_search_bases(project_dir)]
     loader = jinja2.FileSystemLoader(search_paths)
     env = jinja2.Environment(
         loader=loader,
@@ -80,6 +98,25 @@ def create_jinja_env(config: BartlebyConfig, project_dir: Path) -> jinja2.Enviro
     )
     env.globals["feature"] = make_feature_checker(config.theme.features)
     return env
+
+
+def shortcode_search_roots(project_dir: Path) -> list[Path]:
+    """Return the directories searched for ``shortcodes/{name}.html`` templates.
+
+    Derived from :func:`template_search_bases`, the same base list
+    :func:`create_jinja_env` uses to build the Jinja loader's search path.
+    This guarantees discovery covers every location the loader can actually
+    resolve ``shortcodes/{name}.html`` against, including
+    ``overrides/shortcodes``. Template resolution and shortcode discovery
+    (``bartleby.cli._discover_shortcode_names``) share this one source, so
+    they cannot drift.
+
+    :param project_dir: Directory containing the user's site.
+    :returns: Candidate shortcode directories, in cascade order. Callers
+        should check :meth:`Path.is_dir` before globbing; none of these are
+        guaranteed to exist.
+    """
+    return [base / "shortcodes" for base in template_search_bases(project_dir)]
 
 
 def resolve_template_name(page: Page, template_type: str, project_dir: Path) -> str:

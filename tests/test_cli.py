@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from bartleby.cli import main
+from bartleby.cli import _discover_shortcode_names, main
 from bartleby.config import load_config
 
 if TYPE_CHECKING:
@@ -804,7 +804,10 @@ def test_generate_skill_writes_three_skills(
     """``bartleby generate-skill`` writes the three skills under the configured output dir."""
     monkeypatch.chdir(tmp_path)
     main(["new", "site", "mysite"])
-    monkeypatch.chdir(tmp_path / "mysite")
+    site = tmp_path / "mysite"
+    (site / "shortcodes").mkdir()
+    (site / "shortcodes" / "callout.html").write_text("{{ text }}\n", encoding="utf-8")
+    monkeypatch.chdir(site)
     capsys.readouterr()
     main(["generate-skill", "--output", "json"])
     captured = capsys.readouterr()
@@ -816,6 +819,8 @@ def test_generate_skill_writes_three_skills(
     assert (skills_dir / "bartleby-write.md").exists()
     assert (skills_dir / "bartleby-review.md").exists()
     assert (skills_dir / "bartleby-ops.md").exists()
+    write_content = (skills_dir / "bartleby-write.md").read_text(encoding="utf-8")
+    assert "callout" in write_content
 
 
 def _write_malformed_front_matter(project_dir: Path) -> Path:
@@ -877,3 +882,91 @@ def test_content_error_traceback_reenabled_by_debug_env(
 
     with pytest.raises(ContentError):
         main(["lint"])
+
+
+def test_discover_shortcode_names_finds_project_root_location(tmp_path: Path) -> None:
+    """A shortcode at ``<project>/shortcodes/foo.html`` is discovered."""
+    (tmp_path / "shortcodes").mkdir()
+    (tmp_path / "shortcodes" / "foo.html").write_text("foo\n", encoding="utf-8")
+
+    assert _discover_shortcode_names(tmp_path) == ["foo"]
+
+
+def test_discover_shortcode_names_finds_templates_shortcodes_location(tmp_path: Path) -> None:
+    """A shortcode at ``<project>/templates/shortcodes/bar.html`` is still discovered."""
+    (tmp_path / "templates" / "shortcodes").mkdir(parents=True)
+    (tmp_path / "templates" / "shortcodes" / "bar.html").write_text("bar\n", encoding="utf-8")
+
+    assert _discover_shortcode_names(tmp_path) == ["bar"]
+
+
+def test_discover_shortcode_names_includes_builtin_theme_shortcodes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Built-in theme shortcodes (``get_theme_templates_dir()/shortcodes/*.html``) are included."""
+    theme_dir = tmp_path / "theme"
+    (theme_dir / "shortcodes").mkdir(parents=True)
+    (theme_dir / "shortcodes" / "baked_in.html").write_text("baked in\n", encoding="utf-8")
+    monkeypatch.setattr("bartleby.templates.get_theme_templates_dir", lambda: theme_dir)
+
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+
+    assert _discover_shortcode_names(project_dir) == ["baked_in"]
+
+
+def test_discover_shortcode_names_finds_overrides_shortcodes_location(
+    tmp_path: Path,
+) -> None:
+    """A shortcode at ``<project>/overrides/shortcodes/onlyoverride.html`` is discovered.
+
+    Regression test for R13: a shortcode placed only under ``overrides/shortcodes``
+    renders fine through the Jinja loader, so discovery must cover it too.
+    """
+    (tmp_path / "overrides" / "shortcodes").mkdir(parents=True)
+    (tmp_path / "overrides" / "shortcodes" / "onlyoverride.html").write_text(
+        "only in overrides\n", encoding="utf-8"
+    )
+
+    assert _discover_shortcode_names(tmp_path) == ["onlyoverride"]
+
+
+def test_generate_skill_includes_overrides_only_shortcode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A shortcode defined only under ``overrides/shortcodes`` reaches the generated skill."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    site = tmp_path / "mysite"
+    (site / "overrides" / "shortcodes").mkdir(parents=True)
+    (site / "overrides" / "shortcodes" / "onlyoverride.html").write_text(
+        "{{ text }}\n", encoding="utf-8"
+    )
+    monkeypatch.chdir(site)
+    capsys.readouterr()
+    main(["generate-skill", "--output", "json"])
+    capsys.readouterr()
+    skills_dir = tmp_path / "mysite" / ".claude" / "skills"
+    write_content = (skills_dir / "bartleby-write.md").read_text(encoding="utf-8")
+    assert "onlyoverride" in write_content
+
+
+def test_discover_shortcode_names_deduplicates_across_locations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A name defined in multiple locations appears once, sorted."""
+    theme_dir = tmp_path / "theme"
+    (theme_dir / "shortcodes").mkdir(parents=True)
+    (theme_dir / "shortcodes" / "note.html").write_text("theme note\n", encoding="utf-8")
+    monkeypatch.setattr("bartleby.templates.get_theme_templates_dir", lambda: theme_dir)
+
+    project_dir = tmp_path / "project"
+    (project_dir / "shortcodes").mkdir(parents=True)
+    (project_dir / "shortcodes" / "note.html").write_text("project note\n", encoding="utf-8")
+    (project_dir / "shortcodes" / "warning.html").write_text("warning\n", encoding="utf-8")
+    (project_dir / "templates" / "shortcodes").mkdir(parents=True)
+    (project_dir / "templates" / "shortcodes" / "note.html").write_text(
+        "alt note\n", encoding="utf-8"
+    )
+
+    assert _discover_shortcode_names(project_dir) == ["note", "warning"]

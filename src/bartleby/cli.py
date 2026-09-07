@@ -745,11 +745,19 @@ def _cmd_generate_skill(args: argparse.Namespace) -> GenerateSkillOutput:
 
 
 def _discover_shortcode_names(project_dir: Path) -> list[str]:
-    """Return the names of the project's shortcode templates, sorted."""
-    shortcodes_dir = project_dir / "templates" / "shortcodes"
-    if not shortcodes_dir.is_dir():
-        return []
-    return sorted(path.stem for path in shortcodes_dir.glob("*.html"))
+    """Return the names of the project's shortcode templates, sorted.
+
+    Scans every location ``shortcode_search_roots`` mirrors from the Jinja
+    loader's cascade (``overrides/shortcodes``, ``templates/shortcodes``,
+    project root, then the built-in theme) and de-duplicates by stem.
+    """
+    from bartleby.templates import shortcode_search_roots
+
+    names: set[str] = set()
+    for directory in shortcode_search_roots(project_dir):
+        if directory.is_dir():
+            names.update(path.stem for path in directory.glob("*.html"))
+    return sorted(names)
 
 
 def _load_style_guide(project_dir: Path, style_guide: str | None) -> str | None:

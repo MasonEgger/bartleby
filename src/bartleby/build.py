@@ -293,14 +293,16 @@ def _filter_and_validate(state: _BuildState, *, include_drafts: bool) -> None:
     generate_all_urls(pages, config)
     state.taxonomy_data = build_taxonomies(pages, config)
     taxonomy_pages = generate_taxonomy_pages(state.taxonomy_data, config)
-    listing_pages = generate_listing_pages(pages, config, state.content_dir)
+    # Built before listing generation so listing intro content (content/{type}/index.md)
+    # renders through the same renderer instance the page render loop uses below.
+    state.md_renderer = create_markdown_renderer(config)
+    listing_pages = generate_listing_pages(pages, config, state.content_dir, state.md_renderer)
     state.all_pages = pages + taxonomy_pages + listing_pages
 
     nav = build_navigation(config, pages)
     link_pages(nav)
     state.nav = plugins.run_event("on_nav", nav, config=config)
 
-    state.md_renderer = create_markdown_renderer(config)
     env = create_jinja_env(config, state.project_dir)
     state.env = plugins.run_event("on_env", env, config=config)
 

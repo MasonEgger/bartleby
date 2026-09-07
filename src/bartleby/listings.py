@@ -8,9 +8,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from bartleby.content import Page, parse_front_matter
+from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
 from bartleby.pagination import paginate
 
 if TYPE_CHECKING:
+    import markdown
+
     from bartleby.config import BartlebyConfig
 
 #: ``custom_metadata`` key carrying the listing page kind.
@@ -32,6 +35,7 @@ def generate_listing_pages(
     pages: list[Page],
     config: BartlebyConfig,
     content_dir: Path,
+    renderer: markdown.Markdown | None = None,
 ) -> list[Page]:
     """Produce listing :class:`Page` objects for each content type.
 
@@ -39,9 +43,15 @@ def generate_listing_pages(
     :param config: Parsed Bartleby config.
     :param content_dir: The site's ``content/`` directory (used to read
         each content type's optional ``index.md`` intro file).
+    :param renderer: The build's shared markdown renderer, used to render
+        each content type's ``index.md`` intro content to HTML. When not
+        given (standalone calls, tests), one renderer is built here and
+        reused across every content type, so a single call to this
+        function never creates more than one renderer.
     :returns: List of virtual listing pages — one per listing URL (multiple
         when pagination is enabled).
     """
+    active_renderer = renderer if renderer is not None else create_markdown_renderer(config)
     listings: list[Page] = []
     pages_by_content_type: dict[str, list[Page]] = {}
     for page in pages:
@@ -53,7 +63,7 @@ def generate_listing_pages(
 
     for content_type_name, content_type in config.content_types.items():
         ordered = _sort_posts_newest_first(pages_by_content_type.get(content_type_name, []))
-        intro_content = _read_intro_content(content_dir, content_type_name)
+        intro_content = _read_intro_content(content_dir, content_type_name, active_renderer)
         base_url = "/" + content_type_name + "/"
 
         if content_type.pagination.enabled:
@@ -100,13 +110,15 @@ def _sort_posts_newest_first(posts: list[Page]) -> list[Page]:
     return dated + undated
 
 
-def _read_intro_content(content_dir: Path, content_type_name: str) -> str:
-    """Read ``content/{type}/index.md`` body if present, otherwise empty string."""
+def _read_intro_content(
+    content_dir: Path, content_type_name: str, renderer: markdown.Markdown
+) -> str:
+    """Read and render ``content/{type}/index.md`` body if present, otherwise empty string."""
     intro_path = content_dir / content_type_name / "index.md"
     if not intro_path.exists():
         return ""
     _metadata, body = parse_front_matter(intro_path.read_text(encoding="utf-8"))
-    return body
+    return render_markdown(body, renderer).html
 
 
 def _build_listing_page(

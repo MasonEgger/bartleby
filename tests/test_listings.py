@@ -118,13 +118,22 @@ def test_listing_posts_reverse_chronological(content_dir: Path) -> None:
 
 
 def test_listing_includes_index_md_content(content_dir: Path) -> None:
-    """A ``content/{type}/index.md`` provides the listing's intro content."""
+    """A ``content/{type}/index.md`` provides the listing's intro content, rendered as HTML."""
     (content_dir / "blog").mkdir()
-    (content_dir / "blog" / "index.md").write_text("---\ntitle: Blog\n---\nIntro paragraph.\n")
+    (content_dir / "blog" / "index.md").write_text(
+        "---\ntitle: Blog\n---\n## Welcome\n\nThis is **bold** text.\n"
+    )
     posts = [_post(source="blog/posts/a.md", title="A", date=datetime.date(2026, 3, 1))]
     listings = generate_listing_pages(posts, _config(), content_dir)
     listing = next(page for page in listings if page.output_url == "/blog/")
-    assert "Intro paragraph" in str(listing.custom_metadata.get("intro_content", ""))
+    intro_content = str(listing.custom_metadata.get("intro_content", ""))
+    # The toc extension adds an id attribute to headings, so check the tag and
+    # text rather than the exact opening tag (matches test_markdown_pipeline.py's
+    # convention for asserting rendered heading output).
+    assert "<h2" in intro_content
+    assert "Welcome</h2>" in intro_content
+    assert "<strong>bold</strong>" in intro_content
+    assert "## Welcome" not in intro_content
 
 
 def test_listing_without_index_md(content_dir: Path) -> None:

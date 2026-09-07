@@ -65,15 +65,15 @@ Each phase ends at an optional Fable checkpoint (safe commit and review boundary
   - [x] 8.3: REFACTOR: BuildResult docstring accurate
   - [x] 8.4: Run `just check`
 
-- [ ] **Fable checkpoint (optional): Phase 3 done (R7, R8, R10, R17); draft exclusion, loud asset-collision error, icon-pack merge, honest static count**
+- [x] **Fable checkpoint (optional): Phase 3 done (R7, R8, R10, R17); draft exclusion, loud asset-collision error, icon-pack merge, honest static count**
 
 ## Phase 4: Rendering Correctness
 
-- [ ] **Step 9: Render listing intro content as HTML** (R11)
-  - [ ] 9.1: RED: strengthen test_listings.py:120 to assert <h2>/<strong>, not literal markdown
-  - [ ] 9.2: GREEN: render index.md body through the markdown pipeline before storing intro_content
-  - [ ] 9.3: REFACTOR: accept the build's renderer instance; one renderer per build
-  - [ ] 9.4: Run `just check`
+- [x] **Step 9: Render listing intro content as HTML** (R11)
+  - [x] 9.1: RED: strengthen test_listings.py:120 to assert <h2>/<strong>, not literal markdown
+  - [x] 9.2: GREEN: render index.md body through the markdown pipeline before storing intro_content
+  - [x] 9.3: REFACTOR: accept the build's renderer instance; one renderer per build
+  - [x] 9.4: Run `just check`
 
 - [ ] **Step 10: Emit valid JSON-LD from one generator** (R9)
   - [ ] 10.1: RED: quoted/backslash/< title renders an ld+json block that json.loads and round-trips; equals generate_jsonld output

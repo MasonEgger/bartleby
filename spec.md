@@ -7,6 +7,8 @@ A multi-agent code review of the `v1` branch on 2026-07-01 surfaced 34 candidate
 20 survived adversarial verification in the review, and all 20 were independently re-confirmed against this working tree with exact file and line references before this spec was written.
 This spec defines the required behavior for fixing every confirmed defect, stated as TDD-ready requirements: each has a failing-test description, the correct behavior with a citation into the v1 product spec, and acceptance criteria a pytest test can assert.
 
+**Re-verification (2026-09-06).** All 20 defects were re-checked against the working tree on the project's own pinned interpreter (Python 3.14.3). R2 through R17 all still reproduce, with citations accurate (only R3's `content.py:231-232` collapsed to a single line 232). R1 does not reproduce on Python 3.14 and is dispositioned as not-a-defect: see its section below. The original review that produced this spec was run against a pre-3.14 interpreter, which is why R1's premise did not survive; no other item depended on interpreter version.
+
 The v1 product spec remains the canonical description of product behavior.
 It is preserved in git and readable with `git show 2a4dd91:spec.md`.
 Citations below in the form "v1 spec, Section Name (line N)" refer to that file.
@@ -72,6 +74,14 @@ This is a `SyntaxError` in Python 3 (verified with `py_compile`).
 
 **Test notes.** No existing test imports `linting.py` (which is how this shipped).
 Add an import-level smoke assertion so a future syntax error in any module fails the suite; the e2e smoke test from v1 step 17 should already do this once the CLI is importable, so verify why it did not catch this.
+
+**Disposition (2026-09-06): not a defect on Python 3.14.**
+The project pins `requires-python = ">=3.14"`, and Python 3.14 shipped PEP 758, which legalizes unparenthesized multiple exception types in `except` clauses.
+On 3.14.3, `import bartleby.linting` succeeds and `check_external_url` already catches `URLError`, `ValueError`, and `OSError` with the file unchanged; the `SyntaxError` reproduces only on pre-3.14 interpreters (confirmed on system 3.12.3), which is what the original review used.
+Applying the parenthesized "fix" would break `just check`: `ruff format` (target `py314`) canonicalizes the tuple back to the unparenthesized PEP 758 form, so `ruff format --check` would fail.
+`linting.py` is therefore left unchanged.
+The durable deliverable of this requirement is the import-health gate `tests/test_import_health.py`, which walks every `bartleby` module and imports it (catching any real future module-level syntax/import error) and asserts `check_external_url`'s three-exception contract directly.
+The v1 smoke-test gap (R1's original test note) does not exist: `tests/test_smoke.py` already drives `bartleby.cli.main()`, so collecting it exercises the full module-level import chain.
 
 ### R2: Populate Tailwind Release Checksums (Critical)
 

@@ -61,6 +61,13 @@ Re-read that requirement section in `spec.md` before writing the step's tests; t
 Nothing else can be verified until this lands.
 Also investigate why the v1 e2e smoke test passed with an unimportable CLI.
 
+**DISPOSITION (2026-09-06): done, not as originally planned.**
+R1 does not reproduce on Python 3.14 (PEP 758 legalizes the syntax); see spec.md's R1 Disposition.
+Sub-step 2 (parenthesize) is intentionally NOT applied: `ruff format` reverts it and `just check` would fail.
+`linting.py` stays unchanged. The kept deliverable is the import-health gate `tests/test_import_health.py`.
+Sub-step 3's smoke gap does not exist: `tests/test_smoke.py` already drives `cli.main()`.
+`just check` is green after the prerequisite markdown-dependency migration (do-markdown -> markwright).
+
 ```text
 1. RED: Write import-health tests first:
    - Create tests/test_import_health.py:

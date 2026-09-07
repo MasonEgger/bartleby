@@ -18,7 +18,7 @@ from jinja2 import TemplateError
 
 import bartleby
 from bartleby.agent_surface import write_agent_surface
-from bartleby.assets import copy_colocated_assets, copy_static_files
+from bartleby.assets import copy_colocated_assets, copy_static_files, drop_draft_only_assets
 from bartleby.authors import load_authors
 from bartleby.config import load_config
 from bartleby.content import discover_content
@@ -262,7 +262,9 @@ def _filter_and_validate(state: _BuildState, *, include_drafts: bool) -> None:
     pages = state.pages
 
     if not include_drafts:
-        pages = select_published(pages)
+        published_pages = select_published(pages)
+        state.assets = drop_draft_only_assets(state.assets, pages, published_pages)
+        pages = published_pages
 
     # Dispatch on_files only after drafts are filtered out so plugins never
     # operate on pages that the build is about to discard.

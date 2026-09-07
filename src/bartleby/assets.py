@@ -52,6 +52,32 @@ def copy_colocated_assets(
         shutil.copy2(asset.abs_source_path, destination)
 
 
+def drop_draft_only_assets(
+    assets: list[ColocatedAsset], all_pages: list[Page], published_pages: list[Page]
+) -> list[ColocatedAsset]:
+    """Drop assets whose directory held only pages that draft filtering removed.
+
+    An asset survives when its directory still contains a published page, or
+    when it never had any associated page to begin with (a genuine orphan,
+    unaffected by draft filtering — see the fallback in
+    :func:`copy_colocated_assets`). Without this, a draft's co-located asset
+    falls through that same orphan fallback and leaks into the output at its
+    source path once the draft page itself is filtered out.
+
+    :param assets: Every discovered co-located asset, before draft filtering.
+    :param all_pages: Every discovered page, drafts included.
+    :param published_pages: The subset of ``all_pages`` surviving draft filtering.
+    :returns: The assets whose directory still has a published page, or never
+        had a page at all.
+    """
+    published_dirs = {page.source_path.parent.as_posix() for page in published_pages}
+    all_dirs = {page.source_path.parent.as_posix() for page in all_pages}
+    draft_only_dirs = all_dirs - published_dirs
+    return [
+        asset for asset in assets if asset.source_path.parent.as_posix() not in draft_only_dirs
+    ]
+
+
 def _find_associated_page(asset: ColocatedAsset, page_by_dir: dict[str, Page]) -> Page | None:
     """Return the page that lives in the same directory as ``asset``, if any."""
     asset_dir = asset.source_path.parent.as_posix()

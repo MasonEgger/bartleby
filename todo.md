@@ -35,17 +35,17 @@ Each phase ends at an optional Fable checkpoint (safe commit and review boundary
   - [x] 4.3: REFACTOR: single removal site; docstring contracts stay accurate
   - [x] 4.4: Run `just check`
 
-- [ ] **Fable checkpoint (optional): Phase 2 done (R3, R16); error contract catches every failure, no temp-dir leaks**
+- [x] **Fable checkpoint (optional): Phase 2 done (R3, R16); error contract catches every failure, no temp-dir leaks**
 
 ## Phase 3: Build Pipeline Correctness
 
-- [ ] **Step 5: Enforce draft exclusion for co-located assets and the taxonomy schema** (R7)
-  - [ ] 5.1: RED: draft page + asset both absent from production build; include_drafts writes both; published asset regression guard
-  - [ ] 5.2: RED: derive_taxonomies_schema omits draft-only terms; CLI schema taxonomies omits them
-  - [ ] 5.3: GREEN: filter state.assets against surviving pages before copy
-  - [ ] 5.4: GREEN: select_published inside derive_taxonomies_schema; agent_surface output unchanged
-  - [ ] 5.5: REFACTOR: one shared published-page helper
-  - [ ] 5.6: Run `just check`
+- [x] **Step 5: Enforce draft exclusion for co-located assets and the taxonomy schema** (R7)
+  - [x] 5.1: RED: draft page + asset both absent from production build; include_drafts writes both; published asset regression guard
+  - [x] 5.2: RED: derive_taxonomies_schema omits draft-only terms; CLI schema taxonomies omits them
+  - [x] 5.3: GREEN: filter state.assets against surviving pages before copy
+  - [x] 5.4: GREEN: select_published inside derive_taxonomies_schema; agent_surface output unchanged
+  - [x] 5.5: REFACTOR: one shared published-page helper
+  - [x] 5.6: Run `just check`
 
 - [ ] **Step 6: Detect co-located asset collisions in shared directories** (R8)
   - [ ] 6.1: RED: two pages + asset in one dir raises error naming dir and pages; no-asset case builds; single-bundle regression guards

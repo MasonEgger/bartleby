@@ -443,6 +443,36 @@ def test_schema_taxonomies_json(
     assert any(tax["name"] == "tags" for tax in taxonomies)
 
 
+def test_schema_taxonomies_json_omits_draft_only_terms(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby schema taxonomies`` never lists a term contributed only by a draft."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    project = tmp_path / "mysite"
+    monkeypatch.chdir(project)
+
+    published = project / "content" / "blog" / "posts" / "published.md"
+    published.write_text(
+        '---\ntitle: "Published"\ndate: 2026-05-01\ndraft: false\ntags: [python]\n---\n\nBody.\n',
+        encoding="utf-8",
+    )
+    draft = project / "content" / "blog" / "posts" / "draft.md"
+    draft.write_text(
+        '---\ntitle: "Draft"\ndate: 2026-05-02\ndraft: true\ntags: [python, draft-only]\n---\n\n'
+        "Body.\n",
+        encoding="utf-8",
+    )
+
+    main(["schema", "taxonomies", "--output", "json"])
+    payload = _last_json(capsys.readouterr().out)
+    taxonomies = payload["taxonomies"]
+    tags = next(tax for tax in taxonomies if tax["name"] == "tags")
+    terms = {term["term"]: term["count"] for term in tags["terms"]}
+    assert "draft-only" not in terms
+    assert terms["python"] == 1
+
+
 def test_schema_unknown_content_type_is_usage_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

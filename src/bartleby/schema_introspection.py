@@ -6,6 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from bartleby.content_query import select_published
 from bartleby.taxonomies import build_taxonomies
 
 if TYPE_CHECKING:
@@ -169,12 +170,14 @@ def derive_taxonomies_schema(pages: list[Page], config: BartlebyConfig) -> Taxon
 
     Term collection reuses :func:`bartleby.taxonomies.build_taxonomies` so the
     schema's notion of an in-use term matches what the build itself indexes.
+    Drafts are filtered here so "in use" means in published use, matching the
+    build's own publication boundary; callers do not need to pre-filter.
 
-    :param pages: Discovered content pages.
+    :param pages: Discovered content pages, drafts included.
     :param config: The loaded site configuration.
     :returns: A :class:`TaxonomiesSchema` listing taxonomies and their terms.
     """
-    collected = build_taxonomies(pages, config)
+    collected = build_taxonomies(select_published(pages), config)
     taxonomies: list[dict[str, object]] = []
     for taxonomy_name, taxonomy_config in config.taxonomies.items():
         data = collected.global_taxonomies.get(taxonomy_name)

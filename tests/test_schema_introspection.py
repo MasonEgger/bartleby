@@ -171,6 +171,36 @@ def test_taxonomies_schema_lists_in_use_terms_with_counts() -> None:
     assert cat_terms["tutorials"] == 1
 
 
+def test_taxonomies_schema_omits_draft_only_terms() -> None:
+    """A term contributed only by a draft page is absent; counts reflect published pages only."""
+    pages = [
+        Page(
+            source_path=Path("blog/posts/a.md"),
+            abs_source_path=Path("/tmp/site/content/blog/posts/a.md"),
+            title="A",
+            content_type_name="blog",
+            taxonomy_values={"tags": ["python"]},
+        ),
+        Page(
+            source_path=Path("blog/posts/b.md"),
+            abs_source_path=Path("/tmp/site/content/blog/posts/b.md"),
+            title="B",
+            draft=True,
+            content_type_name="blog",
+            taxonomy_values={"tags": ["python", "draft-only-tag"]},
+        ),
+    ]
+    schema = derive_taxonomies_schema(pages, _config())
+    payload = schema.to_dict()
+    taxonomies = payload["taxonomies"]
+    assert isinstance(taxonomies, list)
+    by_name = {tax["name"]: tax for tax in taxonomies}
+
+    tag_terms = {term["term"]: term["count"] for term in by_name["tags"]["terms"]}
+    assert "draft-only-tag" not in tag_terms
+    assert tag_terms["python"] == 1
+
+
 def test_schema_results_render_json_through_output_formatter() -> None:
     """Schema results render as stable JSON through the shared output formatter."""
     from bartleby.output import render

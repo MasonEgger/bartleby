@@ -199,6 +199,34 @@ def test_build_includes_drafts_when_requested(project: Path) -> None:
     assert draft_dir.exists()
 
 
+def test_build_excludes_draft_colocated_asset(project: Path) -> None:
+    """A draft's co-located asset is dropped from the output along with the page.
+
+    ``draft-with-asset/`` is a bundle occupied solely by a draft page, so a
+    production build must write neither the page nor ``photo.png`` next to it.
+    """
+    build(project / "bartleby.yml")
+    draft_dir = project / "site" / "blog" / "posts" / "draft-with-asset"
+    assert not draft_dir.exists()
+    assert not (draft_dir / "photo.png").exists()
+
+
+def test_build_includes_draft_colocated_asset_when_requested(project: Path) -> None:
+    """``include_drafts=True`` writes a draft's co-located asset alongside the page."""
+    build(project / "bartleby.yml", include_drafts=True)
+    draft_dir = project / "site" / "blog" / "posts" / "draft-with-asset"
+    assert draft_dir.exists()
+    assert (draft_dir / "photo.png").exists()
+
+
+def test_build_still_copies_a_published_pages_colocated_asset(project: Path) -> None:
+    """Regression guard: a published page's co-located asset still copies."""
+    build(project / "bartleby.yml")
+    published_dir = project / "site" / "blog" / "posts" / "published-with-asset"
+    assert published_dir.exists()
+    assert (published_dir / "photo.png").exists()
+
+
 def test_build_cleans_output_dir(project: Path) -> None:
     """``site/`` is cleaned at the start of each build — stale files vanish."""
     site_dir = project / "site"

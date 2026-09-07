@@ -75,11 +75,11 @@ Each phase ends at an optional Fable checkpoint (safe commit and review boundary
   - [x] 9.3: REFACTOR: accept the build's renderer instance; one renderer per build
   - [x] 9.4: Run `just check`
 
-- [ ] **Step 10: Emit valid JSON-LD from one generator** (R9)
-  - [ ] 10.1: RED: quoted/backslash/< title renders an ld+json block that json.loads and round-trips; equals generate_jsonld output
-  - [ ] 10.2: GREEN: context carries generate_jsonld output; partial emits it; hand-built lines deleted
-  - [ ] 10.3: REFACTOR: generator covers all fields the partial emitted; special-char tests on the generator too
-  - [ ] 10.4: Run `just check`
+- [x] **Step 10: Emit valid JSON-LD from one generator** (R9)
+  - [x] 10.1: RED: quoted/backslash/< title renders an ld+json block that json.loads and round-trips; equals generate_jsonld output
+  - [x] 10.2: GREEN: context carries generate_jsonld output; partial emits it; hand-built lines deleted
+  - [x] 10.3: REFACTOR: generator covers all fields the partial emitted; special-char tests on the generator too
+  - [x] 10.4: Run `just check`
 
 - [ ] **Step 11: Protect multi-backtick inline code from shortcode expansion** (R12)
   - [ ] 11.1: RED: shortcode literal inside double-backtick span; inside span containing a single backtick; single-backtick regression guard

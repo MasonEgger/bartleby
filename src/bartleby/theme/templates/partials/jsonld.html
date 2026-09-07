@@ -1,12 +1,3 @@
-{% set canonical = site.url ~ page.url if page.url and site.url else (site.url or '') %}
-{% set jsonld_type = "Article" if page.date else "WebPage" %}
 <script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "{{ jsonld_type }}",
-  "headline": "{{ page.title }}",
-  "description": "{{ page.description or site.description or '' }}",
-  "url": "{{ canonical }}"{% if page.date %},
-  "datePublished": "{{ page.date }}"{% endif %}
-}
+{{ jsonld | safe }}
 </script>

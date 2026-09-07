@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import datetime
+import json
+import re
 from pathlib import Path
 
 import pytest
@@ -20,6 +22,7 @@ from bartleby.config import (
     ThemeConfig,
 )
 from bartleby.content import Page
+from bartleby.llm import generate_jsonld
 from bartleby.templates import (
     BuildInfo,
     build_page_context,
@@ -28,6 +31,18 @@ from bartleby.templates import (
     make_feature_checker,
     resolve_template_name,
 )
+
+_JSONLD_SCRIPT_RE = re.compile(
+    r'<script type="application/ld\+json">\n?(.*?)\n?</script>', re.DOTALL
+)
+
+
+def _extract_jsonld(rendered: str) -> str:
+    """Return the raw contents of the page's ``ld+json`` script block."""
+    match = _JSONLD_SCRIPT_RE.search(rendered)
+    assert match is not None, "no application/ld+json script block found"
+    return match.group(1)
+
 
 FIXTURE_TEMPLATES = Path(__file__).parent / "fixtures" / "templates"
 FIXTURE_OVERRIDES_SITE = Path(__file__).parent / "fixtures" / "site_with_overrides"
@@ -412,6 +427,61 @@ def test_built_in_theme_base_renders_seo_meta() -> None:
     assert 'property="og:title"' in rendered
     assert 'name="twitter:card"' in rendered
     assert "application/ld+json" in rendered
+
+
+def _render_base_with_jsonld(page: Page, site_config: SiteConfig) -> str:
+    """Render the built-in ``base.html`` through the real page-context pipeline."""
+    config = _empty_config()
+    env = create_jinja_env(config, Path("/nonexistent-project"))
+    context = build_page_context(
+        page=page,
+        site_config=site_config,
+        nav=[],
+        all_pages=[page],
+        taxonomy_data={},
+        config=config,
+        build_info=BuildInfo(date=datetime.date(2026, 5, 23), bartleby_version="0.1.0"),
+        data={},
+    )
+    return env.get_template("base.html").render(**context)
+
+
+def test_jsonld_partial_produces_valid_json_with_special_characters() -> None:
+    """A title/description with a quote, a backslash, and a < still parses as JSON."""
+    page = _page(title='The "Best" \\ <Way>')
+    page.description = 'A "great" \\ <thing>'
+    site_config = _empty_config().site
+
+    rendered = _render_base_with_jsonld(page, site_config)
+
+    payload = json.loads(_extract_jsonld(rendered))
+    assert payload["headline"] == 'The "Best" \\ <Way>'
+    assert payload["description"] == 'A "great" \\ <thing>'
+
+
+def test_jsonld_partial_matches_generator_output() -> None:
+    """The rendered ld+json block is the same parsed object as generate_jsonld's output."""
+    page = _page(title='The "Best" \\ <Way>')
+    page.description = 'A "great" \\ <thing>'
+    site_config = _empty_config().site
+
+    rendered = _render_base_with_jsonld(page, site_config)
+
+    payload = json.loads(_extract_jsonld(rendered))
+    assert payload == json.loads(generate_jsonld(page, site_config))
+
+
+def test_jsonld_partial_escapes_script_close_tag() -> None:
+    """A title containing a literal </script> cannot break out of the inline script block."""
+    page = _page(title="A </script> B")
+    site_config = _empty_config().site
+
+    rendered = _render_base_with_jsonld(page, site_config)
+
+    ld_json_block = _extract_jsonld(rendered)
+    assert "</script>" not in ld_json_block
+    payload = json.loads(ld_json_block)
+    assert payload["headline"] == "A </script> B"
 
 
 def test_feature_checker_reports_enabled_and_disabled() -> None:

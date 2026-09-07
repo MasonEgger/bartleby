@@ -86,7 +86,16 @@ def generate_jsonld(page: Page, site: SiteConfig) -> str:
     }
     if jsonld_type == "Article" and page.date is not None:
         payload["datePublished"] = page.date.isoformat()
-    return json.dumps(payload, ensure_ascii=False, indent=2)
+    # Escape characters that could close an inline <script> tag when this
+    # value is emitted through `| safe` in the ld+json partial. The escapes
+    # are valid JSON string content and round trip through json.loads back
+    # to the original characters, so callers see the unescaped text again.
+    return (
+        json.dumps(payload, ensure_ascii=False, indent=2)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
 
 
 def _group_by_content_type(pages: list[Page], config: BartlebyConfig) -> dict[str, list[Page]]:

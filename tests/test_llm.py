@@ -149,3 +149,29 @@ def test_jsonld_fields_populated() -> None:
     assert payload["headline"] == "A"
     assert payload["description"] == "A desc"
     assert payload["url"] == "https://example.com/blog/posts/a/"
+
+
+def test_jsonld_round_trips_special_characters() -> None:
+    """Headline and description survive a double quote, a backslash, and a < character."""
+    page = _page(
+        source="blog/posts/a.md",
+        title='The "Best" \\ <Way>',
+        date=datetime.date(2026, 3, 1),
+        description='A "great" \\ <thing>',
+    )
+    payload = json.loads(generate_jsonld(page, _config().site))
+    assert payload["headline"] == 'The "Best" \\ <Way>'
+    assert payload["description"] == 'A "great" \\ <thing>'
+
+
+def test_jsonld_escapes_script_close_tag() -> None:
+    """A title containing a literal </script> cannot break out of the inline script block.
+
+    The output still round trips through json.loads back to the original title
+    (this is the scenario the jsonld partial emits via ``| safe``).
+    """
+    page = _page(source="blog/posts/a.md", title="A </script> B")
+    output = generate_jsonld(page, _config().site)
+    assert "</script>" not in output
+    payload = json.loads(output)
+    assert payload["headline"] == "A </script> B"

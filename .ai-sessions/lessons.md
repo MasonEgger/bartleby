@@ -3,6 +3,7 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- A value rendered into an inline `<script type="application/ld+json">` block via `| safe` needs its own escaping pass beyond "is this valid JSON": a title containing a literal `</script>` closes the tag early and breaks out into HTML/script context. Escape `<`, `>`, and `&` as `<`/`>`/`&` after `json.dumps`; these are valid JSON string escapes so `json.loads` round-trips them back unchanged, and only the raw HTML context sees the escaped form (2026-09-06)
 - For a "build on their thing vs build our own" call, the load-bearing research axis is extensibility: check whether a shipped, stable third-party plugin/module API actually exists, not whether one is promised. Zensical had a designed module system (ZAP-007) that explicitly declined to define a public API, so "build plugins for it" was a non-option despite the project being real and MIT (2026-08-30)
 - Record a positioning/strategy decision in BOTH the memory system and the project CLAUDE.md: CLAUDE.md steers future in-repo edits (e.g. the README one-liner), while memory carries the rationale across sessions. Editing one without the other lets a later session drift back (2026-08-30)
 - For PEP 639 license metadata in pyproject.toml, use the SPDX expression string (`license = "MIT"`) plus `license-files = ["LICENSE"]`, not the deprecated table form (`license = { text = ... }`) or `License ::` classifiers; hatchling supports it and it is the current documented shape (2026-06-23)
@@ -12,7 +13,6 @@
 - Making a hardcoded output path configurable: change it once at the source of truth and let derived values follow. `build()` hardcoded `project_dir / "site"`; the result's `output_dir` already came from `final_output_dir.name`, so adding `BartlebyConfig.output_dir` and one line `project_dir / config.output_dir` made the whole contract configurable with zero downstream churn (2026-06-23)
 - To integration-test a blocking `serve_forever()` server (`DevServer.run`), add an optional `ready` callback fired right after the socket binds, passing the live `TCPServer`; the test runs `run` in a daemon thread, learns the ephemeral port and calls `shutdown()` from the callback handle, then joins. This exercises the previously `# pragma: no cover` path with zero behavior change when `ready=None` (2026-06-23)
 - `pytest` imported at a test module's top trips ruff `TC002` when it is only used for the `pytest.MonkeyPatch` type annotation (no `pytest.fixture`/`pytest.raises`/`capsys` at runtime); move it into the `if TYPE_CHECKING:` block. Files that use a pytest runtime symbol still import it at top (2026-06-23)
-- Adding a second loop over the same collection inside one function and reusing the prior loop's variable name trips mypy: the first `for _, content_type in config.content_types.items()` types `content_type` non-optional, so `content_type = config.content_types.get(name)` (which is `... | None`) is an incompatible-assignment error. Pick a fresh variable name for the new loop (2026-06-23)
 
 ## Packaging
 
@@ -56,6 +56,10 @@
 - When migrating output from `print(..., file=sys.stderr)` to `logging.getLogger`, rewrite the asserting tests from `capsys` to `caplog` (with `caplog.at_level("WARNING", logger="bartleby")`) in the same dispatch — the suite otherwise goes red because capsys can no longer see logger output (2026-06-22)
 - Integration tests that only check file *existence* miss content bugs. After `bartleby new site && bartleby new post && bartleby build`, the post template rendered an empty author byline and the listing page rendered an empty post list, yet every test passed because they stopped at `(site / "blog" / "index.html").exists()` (2026-06-02)
 - Dogfooding documentation against the tool is a high-signal integration test — writing the docs for Bartleby's shortcode feature immediately surfaced a real bug where the preprocessor didn't respect fenced code blocks or inline `code` spans (2026-06-02)
+
+## Security
+
+- A value rendered into an inline `<script type="application/ld+json">` block via `| safe` needs its own escaping pass beyond "is this valid JSON": a title containing a literal `</script>` closes the tag early and breaks out into HTML/script context. Escape `<`, `>`, and `&` as `<`/`>`/`&` after `json.dumps`; these are valid JSON string escapes so `json.loads` round-trips them back unchanged, and only the raw HTML context sees the escaped form (2026-09-06)
 
 ## Tooling
 

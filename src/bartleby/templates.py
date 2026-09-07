@@ -12,6 +12,7 @@ import jinja2
 import yaml
 
 from bartleby.feeds import feed_links_for_page
+from bartleby.llm import generate_jsonld
 from bartleby.seo import generate_all_meta_tags
 from bartleby.theme import get_theme_templates_dir
 
@@ -190,9 +191,12 @@ def build_page_context(
         are exposed as the raw key string.
     :returns: Mapping with the standard Bartleby context keys: ``site``,
         ``page``, ``nav``, ``pages``, ``taxonomies``, ``config``, ``build``,
-        ``data``, ``extra_css``, ``extra_js``, ``seo``, ``feed_links``. The
-        ``page`` value is the :class:`Page` dataclass itself, so every page
-        attribute is reachable in templates without this builder enumerating it.
+        ``data``, ``extra_css``, ``extra_js``, ``seo``, ``feed_links``,
+        ``jsonld``. The ``page`` value is the :class:`Page` dataclass itself,
+        so every page attribute is reachable in templates without this
+        builder enumerating it. ``jsonld`` is the pre-serialized JSON-LD
+        string from :func:`bartleby.llm.generate_jsonld`, so the template and
+        Python paths cannot diverge.
     """
     page.authors = _resolve_author_objects(page.author_keys, authors or {})
     return {
@@ -211,6 +215,7 @@ def build_page_context(
         "extra_js": list(config.extra_js),
         "seo": generate_all_meta_tags(page, site_config),
         "feed_links": feed_links_for_page(page, config),
+        "jsonld": generate_jsonld(page, site_config),
     }
 
 

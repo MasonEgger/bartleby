@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import sys
 import types
 from pathlib import Path
 from unittest.mock import patch
@@ -167,6 +168,46 @@ def test_hook_can_import_sibling_module(tmp_path: Path) -> None:
 
     result = collection.run_event("on_page_markdown", "src: ")
     assert result == "src: hi from sibling"
+
+
+def test_discover_hooks_restores_sys_path(tmp_path: Path) -> None:
+    """``discover_hooks`` removes its ``hooks/`` insertion from ``sys.path`` before returning.
+
+    The insertion exists only so a hook can import an underscore-prefixed
+    sibling during discovery (see ``test_hook_can_import_sibling_module``);
+    it must not shadow imports for the rest of the process.
+    """
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "greet.py").write_text(
+        "def on_page_markdown(source, **_):\n    return source\n",
+        encoding="utf-8",
+    )
+    path_before = list(sys.path)
+
+    discover_hooks(tmp_path)
+
+    assert sys.path == path_before
+
+
+def test_discover_hooks_twice_does_not_grow_sys_path(tmp_path: Path) -> None:
+    """Calling ``discover_hooks`` twice in a row leaves ``sys.path`` unchanged.
+
+    Regression guard for repeated dev-server rebuilds, which re-discover hooks
+    on every rebuild (R5).
+    """
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "greet.py").write_text(
+        "def on_page_markdown(source, **_):\n    return source\n",
+        encoding="utf-8",
+    )
+    path_before = list(sys.path)
+
+    discover_hooks(tmp_path)
+    discover_hooks(tmp_path)
+
+    assert sys.path == path_before
 
 
 def test_event_priority_works_on_methods() -> None:

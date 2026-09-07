@@ -132,13 +132,13 @@ Each phase ends at an optional Fable checkpoint (safe commit and review boundary
   - [x] 17.3: REFACTOR: shared feed-URL helper so advertised and written URLs cannot drift
   - [x] 17.4: Run `just check`
 
-- [ ] **Step 18: Scope the hooks sys.path insertion** (R15)
-  - [ ] 18.1: RED: sys.path restored after discover_hooks; double call does not grow it; sibling-import regression guard
-  - [ ] 18.2: GREEN: try/finally scopes the insertion to the load loop
-  - [ ] 18.3: REFACTOR: docstring notes discovery-time-only sibling resolution
-  - [ ] 18.4: Run `just check`
+- [x] **Step 18: Scope the hooks sys.path insertion** (R15)
+  - [x] 18.1: RED: sys.path restored after discover_hooks; double call does not grow it; sibling-import regression guard
+  - [x] 18.2: GREEN: try/finally scopes the insertion to the load loop
+  - [x] 18.3: REFACTOR: docstring notes discovery-time-only sibling resolution
+  - [x] 18.4: Run `just check`
 
-- [ ] **Fable checkpoint (optional): Phase 6 done (R6, R13, R14, R15); lint orphans fixed, shortcode discovery, aggregate feed, scoped sys.path**
+- [x] **Fable checkpoint (optional): Phase 6 done (R6, R13, R14, R15); lint orphans fixed, shortcode discovery, aggregate feed, scoped sys.path**
 
 ## Phase 7: Cycle Verification
 

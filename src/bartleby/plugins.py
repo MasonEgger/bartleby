@@ -140,6 +140,11 @@ class PluginCollection:
 def discover_hooks(project_dir: Path) -> PluginCollection:
     """Glob-load ``project_dir/hooks/*.py`` and register module-level ``on_<event>`` handlers.
 
+    ``hooks/`` is put on ``sys.path`` only for the duration of this call, so a
+    hook can import an underscore-prefixed sibling module at its top level
+    (import-time resolution, per house style); a hook that defers the sibling
+    import to call time will not find it, which is intended.
+
     :param project_dir: The user's project directory.
     :returns: A PluginCollection populated from the loaded modules. Returns
         an empty collection when ``hooks/`` does not exist.
@@ -151,16 +156,22 @@ def discover_hooks(project_dir: Path) -> PluginCollection:
 
     # Put hooks/ on sys.path so a hook can import an underscore-prefixed sibling
     # helper module (which discovery itself skips) instead of being forced to
-    # install shared logic as a separate package.
+    # install shared logic as a separate package. Scoped to the load loop and
+    # removed in the finally block so the insertion does not outlive this call.
     hooks_path = str(hooks_dir)
-    if hooks_path not in sys.path:
+    added_hooks_path = hooks_path not in sys.path
+    if added_hooks_path:
         sys.path.insert(0, hooks_path)
 
-    for path in sorted(hooks_dir.glob("*.py")):
-        if path.name.startswith("_"):
-            continue
-        module = _load_hook_module(path)
-        _register_module_handlers(collection, module)
+    try:
+        for path in sorted(hooks_dir.glob("*.py")):
+            if path.name.startswith("_"):
+                continue
+            module = _load_hook_module(path)
+            _register_module_handlers(collection, module)
+    finally:
+        if added_hooks_path:
+            sys.path.remove(hooks_path)
     return collection
 
 

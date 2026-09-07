@@ -24,7 +24,7 @@ The rendered site lands in `mysite/site/`. For a live-reload preview, run `bartl
 
 ## Features
 
-- **Markdown** with do-markdown, pymdownx, and the standard Python-Markdown extensions
+- **Markdown** with markwright, pymdownx, and the standard Python-Markdown extensions
 - **Built-in Material-style theme** with Tailwind-friendly CSS, Alpine.js interactivity, dark mode
 - **Search** via a JSON index lunr.js consumes client-side
 - **Feeds** — RSS 2.0 and Atom 1.0 per content type

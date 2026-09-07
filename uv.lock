@@ -17,9 +17,9 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
-    { name = "do-markdown" },
     { name = "jinja2" },
     { name = "markdown" },
+    { name = "markwright" },
     { name = "pygments" },
     { name = "pymdown-extensions" },
     { name = "python-slugify" },
@@ -42,9 +42,9 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiofiles", specifier = ">=23.0" },
-    { name = "do-markdown", editable = "../do-markdown" },
     { name = "jinja2", specifier = ">=3.1" },
     { name = "markdown", specifier = ">=3.4" },
+    { name = "markwright", editable = "../do-markdown" },
     { name = "pygments", specifier = ">=2.17" },
     { name = "pymdown-extensions", specifier = ">=10.0" },
     { name = "python-slugify", specifier = ">=8.0" },
@@ -71,29 +71,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d8/53/6f443c9a4a8358a93a6792e2acffb9d9d5cb0a5cfd8802644b7b1c9a02e4/colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44", size = 27697, upload-time = "2022-10-25T02:36:22.414Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6", size = 25335, upload-time = "2022-10-25T02:36:20.889Z" },
-]
-
-[[package]]
-name = "do-markdown"
-version = "0.1.0"
-source = { editable = "../do-markdown" }
-dependencies = [
-    { name = "markdown" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "markdown", specifier = ">=3.4" }]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mkdocs", specifier = ">=1.6,<2" },
-    { name = "mkdocs-material", specifier = ">=9.7.5" },
-    { name = "mypy", specifier = ">=1.10" },
-    { name = "pymdown-extensions", specifier = ">=10.5" },
-    { name = "pytest", specifier = ">=8.0" },
-    { name = "pytest-cov", specifier = ">=7.0" },
-    { name = "ruff", specifier = ">=0.5" },
-    { name = "types-markdown", specifier = ">=3.10.2.20260211" },
 ]
 
 [[package]]
@@ -188,6 +165,29 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/fb/df/5bd7a48c256faecd1d36edc13133e51397e41b73bb77e1a69deab746ebac/markupsafe-3.0.3-cp314-cp314t-win32.whl", hash = "sha256:915c04ba3851909ce68ccc2b8e2cd691618c4dc4c4232fb7982bca3f41fd8c3d", size = 14819, upload-time = "2025-09-27T18:37:26.285Z" },
     { url = "https://files.pythonhosted.org/packages/1a/8a/0402ba61a2f16038b48b39bccca271134be00c5c9f0f623208399333c448/markupsafe-3.0.3-cp314-cp314t-win_amd64.whl", hash = "sha256:4faffd047e07c38848ce017e8725090413cd80cbc23d86e55c587bf979e579c9", size = 15426, upload-time = "2025-09-27T18:37:27.316Z" },
     { url = "https://files.pythonhosted.org/packages/70/bc/6f1c2f612465f5fa89b95bead1f44dcb607670fd42891d8fdcd5d039f4f4/markupsafe-3.0.3-cp314-cp314t-win_arm64.whl", hash = "sha256:32001d6a8fc98c8cb5c947787c5d08b0a50663d139f1305bac5885d98d9b40fa", size = 14146, upload-time = "2025-09-27T18:37:28.327Z" },
+]
+
+[[package]]
+name = "markwright"
+version = "0.1.0"
+source = { editable = "../do-markdown" }
+dependencies = [
+    { name = "markdown" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "markdown", specifier = ">=3.4" }]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mkdocs", specifier = ">=1.6,<2" },
+    { name = "mkdocs-material", specifier = ">=9.7.5" },
+    { name = "mypy", specifier = ">=1.10" },
+    { name = "pymdown-extensions", specifier = ">=10.5" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-cov", specifier = ">=7.0" },
+    { name = "ruff", specifier = ">=0.5" },
+    { name = "types-markdown", specifier = ">=3.10.2.20260211" },
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 ---
 title: "Markdown pipeline"
-description: "The extensions Bartleby loads and the ordering that makes do-markdown and pymdownx coexist."
+description: "The extensions Bartleby loads and the ordering that makes markwright and pymdownx coexist."
 ---
 
 Bartleby uses [Python-Markdown](https://python-markdown.github.io/) with every extension you'd normally need to enable yourself loaded by default. The user-facing surface area is just `markdown_extensions` in `bartleby.yml`, which lets you override individual extension configs.
@@ -9,21 +9,21 @@ Bartleby uses [Python-Markdown](https://python-markdown.github.io/) with every e
 
 Order matters when multiple extensions touch the same content. The key invariant Bartleby maintains:
 
-1. `do_markdown.fence` preprocessor (priority 40) extracts `[label script.py]`, `[secondary_label]`, and `[environment]` directives from code blocks
+1. `markwright.fence` preprocessor (priority 40) extracts `[label script.py]`, `[secondary_label]`, and `[environment]` directives from code blocks
 2. `pymdownx.superfences` preprocessor (priority 25) converts fenced blocks to HTML
-3. `do_markdown.fence` postprocessor (priority 25) injects the extracted labels and environment classes back into the HTML
+3. `markwright.fence` postprocessor (priority 25) injects the extracted labels and environment classes back into the HTML
 
-This is why directives like `[label]` survive the fence processing: do-markdown gets the first and last word.
+This is why directives like `[label]` survive the fence processing: markwright gets the first and last word.
 
 ## Bundled extensions
 
-**do-markdown** (first-class):
+**markwright** (first-class):
 
-- `do_markdown.fence` — code block labels, secondary labels, environment tags, line numbers, command prefixes
-- `do_markdown.highlight` — inline `<^>text<^>` highlights
-- `do_markdown.youtube`, `do_markdown.codepen`, `do_markdown.twitter`, `do_markdown.instagram` — embed blocks
-- `do_markdown.slideshow` — image slideshows
-- `do_markdown.image_compare` — before/after image sliders
+- `markwright.fence` — code block labels, secondary labels, environment tags, line numbers, command prefixes
+- `markwright.highlight` — inline `<^>text<^>` highlights
+- `markwright.youtube`, `markwright.codepen`, `markwright.twitter`, `markwright.instagram` — embed blocks
+- `markwright.slideshow` — image slideshows
+- `markwright.image_compare` — before/after image sliders
 
 **pymdownx**:
 

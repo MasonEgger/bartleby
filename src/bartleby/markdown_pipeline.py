@@ -1,5 +1,5 @@
 # ABOUTME: Markdown rendering pipeline with all default extensions configured.
-# Wires do-markdown, pymdownx, and standard extensions into Python-Markdown.
+# Wires markwright, pymdownx, and standard extensions into Python-Markdown.
 
 from __future__ import annotations
 
@@ -13,17 +13,17 @@ if TYPE_CHECKING:
 
 
 _DEFAULT_EXTENSIONS: tuple[str, ...] = (
-    # do-markdown — fence must load before superfences so its preprocessor
+    # markwright — fence must load before superfences so its preprocessor
     # (priority 40) extracts directives before superfences's preprocessor
     # (priority 25) processes the fenced block.
-    "do_markdown.fence",
-    "do_markdown.highlight",
-    "do_markdown.youtube",
-    "do_markdown.codepen",
-    "do_markdown.twitter",
-    "do_markdown.instagram",
-    "do_markdown.slideshow",
-    "do_markdown.image_compare",
+    "markwright.fence",
+    "markwright.highlight",
+    "markwright.youtube",
+    "markwright.codepen",
+    "markwright.twitter",
+    "markwright.instagram",
+    "markwright.slideshow",
+    "markwright.image_compare",
     # pymdownx
     "pymdownx.superfences",
     "pymdownx.highlight",

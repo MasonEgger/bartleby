@@ -87,8 +87,8 @@ def test_toc_extracted() -> None:
     assert result.toc_tokens[0]["name"] == "H1"
 
 
-def test_do_markdown_highlight() -> None:
-    """do-markdown's ``<^>text<^>`` inline highlight renders as ``<mark>``."""
+def test_markwright_highlight() -> None:
+    """markwright's ``<^>text<^>`` inline highlight renders as ``<mark>``."""
     source = "Some <^>highlighted<^> text.\n"
     renderer = create_markdown_renderer(_config())
     html = render_markdown(source, renderer).html
@@ -105,7 +105,7 @@ def test_pymdownx_tasklist() -> None:
 
 
 def test_extension_ordering_fence_before_superfences() -> None:
-    """A do-markdown fence directive survives superfences processing in the same block."""
+    """A markwright fence directive survives superfences processing in the same block."""
     source = "```python\n[label script.py]\nprint('hi')\n```\n"
     renderer = create_markdown_renderer(_config())
     html = render_markdown(source, renderer).html

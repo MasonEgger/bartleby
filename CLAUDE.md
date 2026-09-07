@@ -15,12 +15,12 @@ Bartleby has 27 independently testable components (see spec.md "Component Bounda
 - **Frontend stack**: Tailwind CSS + Alpine.js + HTMX + lunr.js (reimplemented, NOT ported from mkdocs-material)
 - **Async build**: asyncio orchestrator with `ProcessPoolExecutor` for CPU-bound markdown rendering. All plugin hooks run in the main process — only `markdown.convert()` is dispatched to workers.
 - **Co-located assets**: Non-markdown files in `content/` follow the page's output URL, not the source path (Hugo-style page bundles)
-- **Extension ordering**: do_markdown.fence preprocessor (priority 40) runs BEFORE pymdownx.superfences (priority 25). The fence postprocessor then injects results AFTER superfences generates HTML.
+- **Extension ordering**: markwright.fence preprocessor (priority 40) runs BEFORE pymdownx.superfences (priority 25). The fence postprocessor then injects results AFTER superfences generates HTML.
 
 ## Tech Stack
 
 - Python 3.14+, uv for package management
-- Python-Markdown + pymdownx + do-markdown for rendering
+- Python-Markdown + pymdownx + markwright for rendering
 - Jinja2 for templates, argparse for CLI
 - pytest for testing, ruff for linting, mypy (strict) for type checking
 - Tailwind CSS standalone CLI for theme compilation (no Node dependency for users)

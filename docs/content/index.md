@@ -13,7 +13,7 @@ For human authors, the surface area is small: write Markdown with YAML front mat
 
 ## What's in the box
 
-- **Markdown rendering** with do-markdown, pymdownx, and the standard Python-Markdown extensions
+- **Markdown rendering** with markwright, pymdownx, and the standard Python-Markdown extensions
 - **Built-in Material-style theme** with Tailwind-friendly CSS, Alpine.js interactivity, and dark mode
 - **Search** via a JSON index lunr.js consumes client-side
 - **Feeds** — RSS 2.0 and Atom 1.0 per content type

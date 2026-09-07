@@ -14,7 +14,7 @@ requires-python = ">=3.14"
 dependencies = [
     "markdown>=3.4",
     "pymdown-extensions>=10.0",
-    "do-markdown>=0.1.0",
+    "markwright>=0.1.0",
     "jinja2>=3.1",
     "pyyaml>=6.0",
     "pygments>=2.17",
@@ -59,7 +59,7 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 
 [tool.uv.sources]
-do-markdown = { path = "../do-markdown", editable = true }
+markwright = { path = "../do-markdown", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bartleby"]

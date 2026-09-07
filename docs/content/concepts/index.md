@@ -10,7 +10,7 @@ These pages explain the model Bartleby uses internally. Read them in order if yo
 - [Content organization](content-organization.md) — how `content/`, content types, and co-located assets fit together
 - [Front matter](front-matter.md) — standard fields, taxonomy values, and custom metadata
 - [URL generation](urls.md) — path-based defaults, `url_format` placeholders, and per-page overrides
-- [Markdown pipeline](markdown-pipeline.md) — the extensions Bartleby loads and the ordering that makes do-markdown + pymdownx coexist
+- [Markdown pipeline](markdown-pipeline.md) — the extensions Bartleby loads and the ordering that makes markwright + pymdownx coexist
 - [Templates and the lookup cascade](templates.md) — the six-level template search Jinja2 walks for every page
 - [Customization seams](customization-seams.md) — `overrides/`, `partials/`, `data/`, `shortcodes/`, and `hooks/`
 - [Taxonomies](taxonomies.md) — collecting terms and generating taxonomy pages

@@ -222,3 +222,6 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 goal.md
+
+# BPE step-executor scratch file (absorbed into session summaries, never committed)
+.ai-sessions/implementation-notes.md

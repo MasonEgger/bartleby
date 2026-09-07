@@ -408,6 +408,126 @@ def test_run_ignores_changes_outside_watched_paths(project: Path) -> None:
     assert not worker.is_alive()
 
 
+# --- Step 14: serve the reload snippet and the WebSocket channel -----------
+
+
+def test_run_serves_html_with_reload_snippet(project: Path) -> None:
+    """HTML served by ``run()`` carries the live-reload snippet (serve mode only)."""
+    body = _run_and_fetch_root(project)
+    assert RELOAD_SNIPPET in body
+
+
+def test_cli_build_output_is_snippet_free(project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``bartleby build`` through the real CLI entry point never emits RELOAD_SNIPPET."""
+    from bartleby.cli import main
+
+    monkeypatch.chdir(project)
+    main(["build"])
+    rendered = (project / "site" / "index.html").read_text(encoding="utf-8")
+    assert RELOAD_SNIPPET not in rendered
+
+
+def test_run_broadcasts_reload_over_websocket_after_rebuild(project: Path) -> None:
+    """A client connected to ``/__bartleby_reload`` gets a signal after a successful rebuild."""
+    from websockets.sync.client import connect
+
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    worker, _port, httpd = _start_running_server(server)
+    try:
+        ws_port = server.reload_ws_port
+        assert ws_port is not None, "the WebSocket reload channel never started"
+        with connect(f"ws://127.0.0.1:{ws_port}/__bartleby_reload", open_timeout=10) as client:
+            (project / "content" / "index.md").write_text(
+                "---\ntitle: Home\n---\n\nReload broadcast marker.\n", encoding="utf-8"
+            )
+            message = client.recv(timeout=10)
+            assert message == "reload"
+    finally:
+        httpd.shutdown()
+        worker.join(timeout=10)
+    assert not worker.is_alive()
+
+
+def test_reload_hub_broadcast_survives_concurrent_client_churn() -> None:
+    """A broadcast raised while clients connect and disconnect must never crash.
+
+    Regression guard: ``broadcast_reload`` used to build ``list(self._clients)``
+    on the calling (watchdog) thread while ``_handle_client`` added and
+    removed connections on the hub's own loop thread, a race that could raise
+    ``RuntimeError: Set changed size during iteration``. The fix moves the
+    whole snapshot-and-broadcast onto the loop thread via
+    ``call_soon_threadsafe``, so hammering client churn alongside repeated
+    broadcasts must never surface that error.
+    """
+    from websockets.sync.client import connect
+
+    from bartleby.server import _ReloadHub
+
+    hub = _ReloadHub()
+    hub.start("127.0.0.1")
+    errors: list[BaseException] = []
+    assert hub._loop is not None
+    hub._loop.call_soon_threadsafe(
+        lambda: hub._loop.set_exception_handler(  # type: ignore[union-attr]
+            lambda loop, context: errors.append(context["exception"])
+        )
+    )
+    try:
+        stop = threading.Event()
+
+        def churn_clients() -> None:
+            while not stop.is_set():
+                try:
+                    with connect(f"ws://127.0.0.1:{hub.port}/__bartleby_reload", open_timeout=2):
+                        pass
+                except OSError:
+                    pass
+
+        def broadcast_repeatedly() -> None:
+            deadline = time.monotonic() + 1.0
+            while time.monotonic() < deadline:
+                hub.broadcast_reload()
+            stop.set()
+
+        churners = [threading.Thread(target=churn_clients) for _ in range(4)]
+        for churner in churners:
+            churner.start()
+        broadcaster = threading.Thread(target=broadcast_repeatedly)
+        broadcaster.start()
+        broadcaster.join(timeout=10)
+        for churner in churners:
+            churner.join(timeout=10)
+        assert not errors, f"broadcast_reload raced with client churn: {errors}"
+    finally:
+        hub.stop()
+
+
+def test_reload_hub_start_raises_when_bind_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    """start() surfaces a failed bind instead of leaving ``port`` silently ``None``."""
+    import bartleby.server as server_module
+
+    async def failing_serve(*args: object, **kwargs: object) -> object:
+        raise OSError("address already in use")
+
+    monkeypatch.setattr(server_module, "serve_websocket", failing_serve)
+    hub = server_module._ReloadHub()
+    with pytest.raises(RuntimeError):
+        hub.start("127.0.0.1")
+    assert hub.port is None
+
+
+def test_reload_hub_stop_closes_the_event_loop() -> None:
+    """stop() leaves the hub's event loop closed rather than leaking it."""
+    from bartleby.server import _ReloadHub
+
+    hub = _ReloadHub()
+    hub.start("127.0.0.1")
+    loop = hub._loop
+    assert loop is not None
+    hub.stop()
+    assert loop.is_closed()
+
+
 def test_run_retains_last_good_build_after_watcher_triggered_failure(project: Path) -> None:
     """A failed watcher-triggered rebuild keeps serving the last good build."""
     server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)

@@ -104,13 +104,13 @@ Each phase ends at an optional Fable checkpoint (safe commit and review boundary
   - [x] 13.4: REFACTOR: compose primitives, no duplicated decision logic; module docstring accurate
   - [x] 13.5: Run `just check`
 
-- [ ] **Step 14: Serve the reload snippet and WebSocket channel** (R5, part 2)
-  - [ ] 14.1: RED: served HTML contains RELOAD_SNIPPET; WS client at /__bartleby_reload gets signal after rebuild; build output snippet-free
-  - [ ] 14.2: GREEN: serve-path snippet injection + websockets endpoint broadcasting on successful rebuild; dependency confirmed
-  - [ ] 14.3: REFACTOR: reload code lives only on the serve path; route/URL defined once
-  - [ ] 14.4: Run `just check`
+- [x] **Step 14: Serve the reload snippet and WebSocket channel** (R5, part 2)
+  - [x] 14.1: RED: served HTML contains RELOAD_SNIPPET; WS client at /__bartleby_reload gets signal after rebuild; build output snippet-free
+  - [x] 14.2: GREEN: serve-path snippet injection + websockets endpoint broadcasting on successful rebuild; dependency confirmed
+  - [x] 14.3: REFACTOR: reload code lives only on the serve path; route/URL defined once (RELOAD_WS_PATH constant)
+  - [x] 14.4: Run `just check`
 
-- [ ] **Fable checkpoint (optional): Phase 5 done (R4, R5); serves configured output dir, rebuilds on change, live-reloads**
+- [x] **Fable checkpoint (optional): Phase 5 done (R4, R5); serves configured output dir, rebuilds on change, live-reloads**
 
 ## Phase 6: CLI and Agent Surface
 

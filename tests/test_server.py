@@ -242,13 +242,15 @@ def test_events_stream_emits_error_object_on_failed_rebuild(
     assert error_events[0]["errors"]
 
 
-def test_run_builds_and_serves_pages_over_http(project: Path) -> None:
-    """``DevServer.run`` builds the site and serves it over a real HTTP socket.
+def _run_and_fetch_root(project: Path) -> str:
+    """Start ``DevServer.run`` in a worker thread, fetch ``/``, then shut down.
 
-    The server binds an ephemeral port and runs in a worker thread. The ``ready``
-    callback fires once the socket is listening, handing back the live server so
-    the test can learn the bound port, issue a real request, and shut the server
-    down cleanly. This exercises the previously untested ``run`` path end to end.
+    The server binds an ephemeral port. The ``ready`` callback fires once the
+    socket is listening, handing back the live server so the caller can learn
+    the bound port, issue a real request, and shut the server down cleanly.
+
+    :param project: The project directory to serve.
+    :returns: The decoded response body for a GET to ``/``.
     """
     server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
     bound: dict[str, object] = {}
@@ -267,14 +269,34 @@ def test_run_builds_and_serves_pages_over_http(project: Path) -> None:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=10) as response:
             assert response.status == 200
             body = response.read().decode("utf-8")
-        # The built index page was served, not a directory listing.
-        assert "Welcome" in body
     finally:
         bound["httpd"].shutdown()  # type: ignore[attr-defined]
         worker.join(timeout=10)
     assert not worker.is_alive()
+    return body
+
+
+def test_run_builds_and_serves_pages_over_http(project: Path) -> None:
+    """``DevServer.run`` serves from ``site/`` when ``output_dir`` is unset (regression guard)."""
+    body = _run_and_fetch_root(project)
+    # The built index page was served, not a directory listing.
+    assert "Welcome" in body
     # The build the server ran on startup wrote the output tree.
     assert (project / "site" / "index.html").exists()
+
+
+def test_run_serves_configured_output_dir(project: Path) -> None:
+    """With ``output_dir: public`` in bartleby.yml, ``run()`` serves from ``<project>/public/``."""
+    config_path = project / "bartleby.yml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8") + "\noutput_dir: public\n",
+        encoding="utf-8",
+    )
+    body = _run_and_fetch_root(project)
+    # The built index page was served from public/, not a 404 or a stale/missing site/.
+    assert "Welcome" in body
+    assert (project / "public" / "index.html").exists()
+    assert not (project / "site").exists()
 
 
 def test_maybe_recompile_theme_prints_hint_when_no_binary_cached(

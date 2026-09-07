@@ -91,11 +91,11 @@ Each phase ends at an optional Fable checkpoint (safe commit and review boundary
 
 ## Phase 5: Dev Server
 
-- [ ] **Step 12: Serve the configured output directory** (R4)
-  - [ ] 12.1: RED: output_dir: public served correctly; default site/ regression guard
-  - [ ] 12.2: GREEN: resolve serve dir from loaded config; share config between build and handler
-  - [ ] 12.3: REFACTOR: no other hardcoded "site" in server.py
-  - [ ] 12.4: Run `just check`
+- [x] **Step 12: Serve the configured output directory** (R4)
+  - [x] 12.1: RED: output_dir: public served correctly; default site/ regression guard
+  - [x] 12.2: GREEN: resolve serve dir from loaded config; share config between build and handler
+  - [x] 12.3: REFACTOR: no other hardcoded "site" in server.py
+  - [x] 12.4: Run `just check`
 
 - [ ] **Step 13: Wire the file watcher into DevServer.run()** (R5, part 1)
   - [ ] 13.1: RED: watched change rebuilds (visible over HTTP, bounded wait); unwatched change does not

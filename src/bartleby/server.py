@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from bartleby.build import PageError
+    from bartleby.config import BartlebyConfig
 
 
 _CONTENT_PREFIXES: tuple[str, ...] = ("content/",)
@@ -194,14 +195,19 @@ class DevServer:
         if is_watched(rel_path):
             rebuild()
 
-    def dispatch_on_serve(self, server: object) -> None:
+    def dispatch_on_serve(self, server: object, *, config: BartlebyConfig | None = None) -> None:
         """Fire the ``on_serve`` hook so plugins can react to the dev server.
 
         The project's ``hooks/`` directory is discovered and any ``on_serve``
         handlers run with the live server object and resolved config, matching
         the spec signature ``on_serve(server, config)``.
+
+        :param server: The live server object passed through to the hook.
+        :param config: A previously loaded config to reuse. When omitted,
+            ``bartleby.yml`` is loaded fresh.
         """
-        config = load_config(self.config_path)
+        if config is None:
+            config = load_config(self.config_path)
         plugins = PluginCollection()
         plugins.merge(discover_plugins(config.disabled_plugins))
         plugins.merge(discover_hooks(config.config_dir))
@@ -256,10 +262,11 @@ class DevServer:
             from another thread; in normal CLI use it is ``None``.
         """
         self.build_once()
-        site_dir = self.config_path.parent / "site"
+        config = load_config(self.config_path)
+        site_dir = self.config_path.parent / config.output_dir
         handler = _site_request_handler(site_dir)
         with socketserver.TCPServer((self.host, self.port), handler) as httpd:
-            self.dispatch_on_serve(httpd)
+            self.dispatch_on_serve(httpd, config=config)
             print(f"Serving at http://{self.host}:{httpd.server_address[1]}/")
             if ready is not None:
                 ready(httpd)

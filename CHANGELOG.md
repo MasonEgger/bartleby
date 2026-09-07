@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+Remediation cycle addressing 20 confirmed findings from a multi-agent code review of the v1 branch (R1 through R17 in `spec.md`; some requirements cover more than one defect). R2 through R17 (19 findings) were code or test fixes; R1 was re-verified on the project's pinned Python 3.14 and dispositioned as not-a-defect (see below).
+
+- R1 (CLI importability) does not reproduce on Python 3.14: PEP 758 legalizes the unparenthesized `except` tuple in `linting.py`, so the CLI already imports cleanly on the pinned interpreter and `linting.py` is left unchanged. An import-health regression gate (`tests/test_import_health.py`) was added so a real future import or syntax error in any module still fails the suite.
+- `bartleby theme compile` always failed on a clean machine because the release checksum map was empty.
+- CLI failures could surface a raw Python traceback instead of a clean, structured error.
+- `bartleby serve` now serves the configured `output_dir`, not a hardcoded `site/`, and live reload is fully wired: a watchdog observer triggers rebuilds and a WebSocket channel reloads the browser.
+- Cross-references now resolve before the lint orphan pass runs, so a page linked only via a `.md` crossref is no longer reported as orphaned.
+- Draft pages and their co-located assets are excluded from production output everywhere, including the previously-missed shared-directory asset path; two pages sharing a bundle directory with a co-located asset now fail the build loudly instead of guessing an association.
+- JSON-LD output is valid even when a page title contains characters that could break naive string interpolation (embedded quotes, `<`, `>`, `&`).
+- Icon pack defaults merge with project overrides instead of being replaced by them.
+- Listing intro content (`content/{type}/index.md`) now renders as HTML instead of being dropped.
+- Shortcode protection covers multi-backtick inline code spans, not just single-backtick ones.
+- Shortcode discovery checks all three documented lookup locations instead of only one.
+- The aggregate site-wide feed is advertised in `schema.json`.
+- The `hooks/` `sys.path` insertion is scoped to the discovery loop instead of leaking into the rest of the process.
+- The temporary build directory is always cleaned up, including on a failed build.
+- `static_file_count` counts only files actually copied, not every candidate considered.
+- The end-to-end smoke test now exercises a custom `output_dir`, a draft page with a co-located asset, and a quoted title through both a build and a serve cycle, so this class of regression fails the smoke gate again if it recurs.
+
 ## [0.1.0] - 2026-06-23
 
 First public release. Bartleby builds Markdown content into a static site with

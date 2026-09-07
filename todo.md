@@ -142,10 +142,10 @@ Each phase ends at an optional Fable checkpoint (safe commit and review boundary
 
 ## Phase 7: Cycle Verification
 
-- [ ] **Step 19: Extend the e2e smoke test and close the cycle**
-  - [ ] 19.1: RED: smoke covers custom output_dir + quoted title + draft-with-asset + .md crossref, through build and serve
-  - [ ] 19.2: GREEN: fix composition defects only if surfaced; otherwise no production change
-  - [ ] 19.3: Final gate: `just check`; all todo steps checked; R1-R17 closed
-  - [ ] 19.4: CHANGELOG.md remediation entry
+- [x] **Step 19: Extend the e2e smoke test and close the cycle**
+  - [x] 19.1: RED: smoke covers custom output_dir + quoted title + draft-with-asset + .md crossref, through build and serve
+  - [x] 19.2: GREEN: fix composition defects only if surfaced; otherwise no production change
+  - [x] 19.3: Final gate: `just check`; all todo steps checked; R1-R17 closed
+  - [x] 19.4: CHANGELOG.md remediation entry
 
-- [ ] **Fable checkpoint (optional): Phase 7 done; cycle verified, R1-R17 closed, `just check` green, ready to ship**
+- [x] **Fable checkpoint (optional): Phase 7 done; cycle verified, R1-R17 closed, `just check` green, ready to ship**

@@ -1,0 +1,58 @@
+site:
+  title: "Bartleby"
+  url: "https://bartleby.dev"
+  description: "A batteries-included Python static site generator built for humans and agents."
+  author: "Mason Egger"
+
+content_types:
+  guides:
+    path: guides/posts
+    readtime: true
+    excerpt_separator: "<!-- more -->"
+    taxonomies:
+      - tags
+    metadata:
+      audience:
+        type: string
+        choices:
+          - new-user
+          - existing-user
+          - plugin-author
+          - theme-author
+  reference:
+    path: reference/pages
+    taxonomies:
+      - tags
+
+taxonomies:
+  tags:
+    slug_format: "{slug}"
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Quickstart: quickstart.md
+  - Concepts: concepts/
+  - Guides: guides/
+  - Reference: reference/
+
+theme:
+  features:
+    - search
+    - navigation.tabs
+  color_mode:
+    toggle: true
+
+exclude_patterns:
+  - "_drafts/**"
+  - "_*.md"
+  - ".git/**"
+
+ai:
+  llms_txt: true
+  llms_full_txt: true
+  markdown_variants: true
+
+dev_server:
+  host: "127.0.0.1"
+  port: 8000

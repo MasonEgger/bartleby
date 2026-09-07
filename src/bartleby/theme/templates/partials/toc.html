@@ -1,0 +1,16 @@
+<aside class="toc-sidebar" x-data="{ active: '' }">
+  {% if page.toc %}
+  <nav class="toc-nav" aria-label="Table of contents">
+    <ul>
+      {% for entry in page.toc %}
+      <li>
+        <a href="#{{ entry.id }}" x-on:click="active = '{{ entry.id }}'"
+           x-bind:class="active === '{{ entry.id }}' ? 'active' : ''">
+          {{ entry.name }}
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </nav>
+  {% endif %}
+</aside>

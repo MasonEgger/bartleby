@@ -1,0 +1,4 @@
+authors:
+  broken:
+    description: "An author entry missing the required name field"
+    url: https://example.com

@@ -1,0 +1,9 @@
+authors:
+  mason:
+    name: Mason Egger
+    description: "Developer Advocate & Python enthusiast"
+    avatar: https://example.com/avatar.jpg
+    url: https://masonegger.com
+  guest:
+    name: Guest Author
+    description: "Community contributor"

@@ -1,0 +1,10 @@
+<button
+  type="button"
+  class="back-to-top"
+  x-data="{ show: false }"
+  x-on:scroll.window="show = window.scrollY > 400"
+  x-show="show"
+  x-on:click="window.scrollTo({ top: 0, behavior: 'smooth' })"
+  aria-label="Back to top">
+  ↑
+</button>

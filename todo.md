@@ -114,11 +114,11 @@ Each phase ends at an optional Fable checkpoint (safe commit and review boundary
 
 ## Phase 6: CLI and Agent Surface
 
-- [ ] **Step 15: Resolve crossrefs before the lint orphan pass** (R6)
-  - [ ] 15.1: RED: .md-linked page not orphaned via CLI lint; nav page never orphaned; existing lint JSON test asserts no spurious orphans
-  - [ ] 15.2: GREEN: _cmd_lint calls resolve_all_crossrefs before lint_site
-  - [ ] 15.3: REFACTOR: remove redundant re-resolution in _lint_crossrefs if dead; unit tests unchanged
-  - [ ] 15.4: Run `just check`
+- [x] **Step 15: Resolve crossrefs before the lint orphan pass** (R6)
+  - [x] 15.1: RED: .md-linked page not orphaned via CLI lint; nav page never orphaned; existing lint JSON test asserts no spurious orphans
+  - [x] 15.2: GREEN: _cmd_lint calls resolve_all_crossrefs before lint_site
+  - [x] 15.3: REFACTOR: _lint_crossrefs's re-resolution stays; it is the sole source of broken-crossref findings, not dead weight
+  - [x] 15.4: Run `just check`
 
 - [ ] **Step 16: Discover shortcodes across all three lookup locations** (R13)
   - [ ] 16.1: RED: project-root, templates/, and theme shortcodes all discovered; de-duplicated; generate-skill includes project-root shortcode

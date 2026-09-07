@@ -636,10 +636,18 @@ def test_lint_command_json_shape(
     monkeypatch.chdir(tmp_path)
     main(["new", "site", "mysite"])
     monkeypatch.chdir(tmp_path / "mysite")
+    # A post that links to a real page, so the fixture also exercises the
+    # orphan check: linked.md must not be reported orphaned.
+    linked = tmp_path / "mysite" / "content" / "blog" / "posts" / "linked.md"
+    linked.write_text(
+        '---\ntitle: "Linked"\ndate: 2026-05-01\ndraft: false\ndescription: "d"\n---\n\nBody.\n',
+        encoding="utf-8",
+    )
     # A post with a broken cross-reference produces an error-level issue.
     post = tmp_path / "mysite" / "content" / "blog" / "posts" / "broken.md"
     post.write_text(
-        '---\ntitle: "Broken"\ndate: 2026-05-01\ndraft: false\n---\n\n[gone](missing.md)\n',
+        '---\ntitle: "Broken"\ndate: 2026-05-01\ndraft: false\n---\n\n'
+        "[gone](missing.md) and [linked](linked.md)\n",
         encoding="utf-8",
     )
 
@@ -653,6 +661,62 @@ def test_lint_command_json_shape(
     assert payload["summary"]["errors"] >= 1
     rules = {issue["rule"] for issue in payload["issues"]}
     assert "broken-crossref" in rules
+    orphans = {issue["file"] for issue in payload["issues"] if issue["rule"] == "orphaned-page"}
+    assert "blog/posts/linked.md" not in orphans
+
+
+def test_lint_relative_md_link_resolves_before_orphan_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A page linked via a relative ``.md`` path is never reported orphaned.
+
+    Regression guard for the missing crossref-resolution pre-pass in
+    ``_cmd_lint``: without it, ``.md`` hrefs never get rewritten to output
+    URLs, so ``_lint_orphans`` never matches an inbound link and reports
+    every page orphaned.
+    """
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    site = tmp_path / "mysite"
+    (site / "content" / "blog" / "posts" / "linked.md").write_text(
+        '---\ntitle: "Linked"\ndate: 2026-05-01\ndraft: false\ndescription: "d"\n---\n\nBody.\n',
+        encoding="utf-8",
+    )
+    (site / "content" / "blog" / "posts" / "hub.md").write_text(
+        '---\ntitle: "Hub"\ndate: 2026-05-01\ndraft: false\ndescription: "d"\n---\n\n'
+        "[go](linked.md)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(site)
+
+    main(["lint", "--output", "json"])
+    payload = _last_json(capsys.readouterr().out)
+    orphans = {issue["file"] for issue in payload["issues"] if issue["rule"] == "orphaned-page"}
+    assert "blog/posts/linked.md" not in orphans
+
+
+def test_lint_nav_page_never_reported_orphaned(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A page present in navigation is never reported orphaned, inbound links or not."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    site = tmp_path / "mysite"
+    (site / "content" / "blog" / "posts" / "lonely.md").write_text(
+        '---\ntitle: "Lonely"\ndate: 2026-05-01\ndraft: false\ndescription: "d"\n---\n\nBody.\n',
+        encoding="utf-8",
+    )
+    config_path = site / "bartleby.yml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8") + '\nnav:\n  - "Lonely": blog/posts/lonely.md\n',
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(site)
+
+    main(["lint", "--output", "json"])
+    payload = _last_json(capsys.readouterr().out)
+    orphans = {issue["file"] for issue in payload["issues"] if issue["rule"] == "orphaned-page"}
+    assert "blog/posts/lonely.md" not in orphans
 
 
 def test_lint_check_external_off_by_default(

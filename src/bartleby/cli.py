@@ -33,7 +33,7 @@ from bartleby.content_query import (
     list_content,
     select_published,
 )
-from bartleby.crossrefs import resolve_page_crossrefs
+from bartleby.crossrefs import resolve_all_crossrefs, resolve_page_crossrefs
 from bartleby.export import export_content
 from bartleby.linting import lint_site
 from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
@@ -672,6 +672,10 @@ def _cmd_lint(args: argparse.Namespace) -> LintOutput:
         except ShortcodeError:
             processed = page.raw_content
         page.rendered_content = render_markdown(processed, md_renderer).html
+
+    # Rewrite .md hrefs to output URLs before linting, mirroring build.py's
+    # pipeline, so the orphan pass sees resolved inbound links, not .md targets.
+    resolve_all_crossrefs(pages, content_dir)
 
     findings = lint_site(pages, config, content_dir, check_external=args.check_external)
     issues = [finding.to_dict() for finding in findings]

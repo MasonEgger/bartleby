@@ -81,13 +81,13 @@ Each phase ends at an optional Fable checkpoint (safe commit and review boundary
   - [x] 10.3: REFACTOR: generator covers all fields the partial emitted; special-char tests on the generator too
   - [x] 10.4: Run `just check`
 
-- [ ] **Step 11: Protect multi-backtick inline code from shortcode expansion** (R12)
-  - [ ] 11.1: RED: shortcode literal inside double-backtick span; inside span containing a single backtick; single-backtick regression guard
-  - [ ] 11.2: GREEN: CommonMark N-backtick span matching replaces _INLINE_CODE_RE
-  - [ ] 11.3: REFACTOR: docstring accurate
-  - [ ] 11.4: Run `just check`
+- [x] **Step 11: Protect multi-backtick inline code from shortcode expansion** (R12)
+  - [x] 11.1: RED: shortcode literal inside double-backtick span; inside span containing a single backtick; single-backtick regression guard
+  - [x] 11.2: GREEN: CommonMark N-backtick span matching replaces _INLINE_CODE_RE
+  - [x] 11.3: REFACTOR: docstring accurate
+  - [x] 11.4: Run `just check`
 
-- [ ] **Fable checkpoint (optional): Phase 4 done (R11, R9, R12); listing intros render, valid JSON-LD, multi-backtick code protected**
+- [x] **Fable checkpoint (optional): Phase 4 done (R11, R9, R12); listing intros render, valid JSON-LD, multi-backtick code protected**
 
 ## Phase 5: Dev Server
 

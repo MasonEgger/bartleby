@@ -20,7 +20,7 @@ _OPEN_TAG_RE = re.compile(r"\[%\s*([a-zA-Z_][\w-]*)((?:\s+[^%]*?)?)\s*%\]")
 _CLOSE_TAG_RE = re.compile(r"\[%\s*/([a-zA-Z_][\w-]*)\s*%\]")
 _ARG_RE = re.compile(r'(\w+)\s*=\s*"([^"]*)"')
 _FENCED_BLOCK_RE = re.compile(r"(^|\n)(```|~~~)[^\n]*\n.*?\n\2(?=\n|$)", re.DOTALL)
-_INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
+_BACKTICK_RUN_RE = re.compile(r"`+")
 
 
 def process_shortcodes(
@@ -83,9 +83,40 @@ def _collect_protected_spans(source: str) -> list[tuple[int, int]]:
     spans: list[tuple[int, int]] = []
     for match in _FENCED_BLOCK_RE.finditer(source):
         spans.append((match.start(), match.end()))
-    for match in _INLINE_CODE_RE.finditer(source):
-        spans.append((match.start(), match.end()))
+    line_start = 0
+    for line in source.split("\n"):
+        for local_start, local_end in _find_inline_code_spans(line):
+            spans.append((line_start + local_start, line_start + local_end))
+        line_start += len(line) + 1
     spans.sort()
+    return spans
+
+
+def _find_inline_code_spans(line: str) -> list[tuple[int, int]]:
+    """Return (start, end) spans of CommonMark-style inline code within one line.
+
+    A code span opens on a run of N backticks and closes at the next run of
+    exactly N backticks. A run with no matching closer of equal length is not
+    a code span (its backticks stay literal, and shortcode syntax after it
+    still expands).
+    """
+    runs = [(match.start(), match.end()) for match in _BACKTICK_RUN_RE.finditer(line)]
+    spans: list[tuple[int, int]] = []
+    open_index = 0
+    while open_index < len(runs):
+        open_start, open_end = runs[open_index]
+        open_length = open_end - open_start
+        close_index = open_index + 1
+        while close_index < len(runs):
+            close_start, close_end = runs[close_index]
+            if close_end - close_start == open_length:
+                spans.append((open_start, close_end))
+                break
+            close_index += 1
+        else:
+            open_index += 1
+            continue
+        open_index = close_index + 1
     return spans
 
 

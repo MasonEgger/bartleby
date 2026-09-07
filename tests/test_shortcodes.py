@@ -80,6 +80,40 @@ def test_shortcode_inside_inline_code_is_literal(env: jinja2.Environment) -> Non
     assert "`[% nonexistent %]`" in out
 
 
+def test_shortcode_inside_double_backtick_span_is_literal(env: jinja2.Environment) -> None:
+    """Shortcode syntax inside a double-backtick span is treated as literal text."""
+    source = "Use ``[% nonexistent %]`` to invoke the shortcode.\n"
+    out = process_shortcodes(source, {}, env)
+    assert "``[% nonexistent %]``" in out
+
+
+def test_shortcode_inside_double_backtick_span_with_single_backtick_is_literal(
+    env: jinja2.Environment,
+) -> None:
+    """A double-backtick span containing a literal backtick still protects its contents."""
+    source = "Use `` ` embedded [% nonexistent %]`` to invoke the shortcode.\n"
+    out = process_shortcodes(source, {}, env)
+    assert "`` ` embedded [% nonexistent %]``" in out
+
+
+def test_shortcode_inside_single_backtick_span_with_longer_closer_is_literal(
+    env: jinja2.Environment,
+) -> None:
+    """A single-backtick opener is not closed early by a longer backtick run."""
+    source = "Use `a``[% nonexistent %]` to invoke the shortcode.\n"
+    out = process_shortcodes(source, {}, env)
+    assert "`a``[% nonexistent %]`" in out
+
+
+def test_shortcode_inside_double_backtick_span_with_longer_run_is_literal(
+    env: jinja2.Environment,
+) -> None:
+    """A double-backtick opener is not closed early by a triple-backtick run."""
+    source = "Use ``a```[% nonexistent %]`` to invoke the shortcode.\n"
+    out = process_shortcodes(source, {}, env)
+    assert "``a```[% nonexistent %]``" in out
+
+
 def test_shortcode_outside_code_still_renders(env: jinja2.Environment) -> None:
     """A real shortcode invocation still renders when fenced examples appear elsewhere."""
     source = "```markdown\n[% nonexistent %]\n```\n\nBut this one renders: [% version %]\n"

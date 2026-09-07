@@ -11,11 +11,11 @@ Each phase ends at an optional Fable checkpoint (safe commit and review boundary
   - [x] 1.3: Investigate the smoke-test gap; make smoke invoke cli.main() if it bypasses the entry point — already does; no gap found
   - [x] 1.4: Run `just check` (first full-suite run); record unexpected failures — do-markdown/markwright rename fixed by prerequisite migration (commit 24fdace); `just check` now green, 511 passed
 
-- [ ] **Step 2: Populate the Tailwind release checksum map** (R2)
-  - [ ] 2.1: RED: map key set equals the six asset names; values match ^[0-9a-f]{64}$; map path installs via _download_binary
-  - [ ] 2.2: GREEN: populate _RELEASE_SHA256 with official digests for PINNED_TAILWIND_VERSION
-  - [ ] 2.3: RED: checksum-mismatch abort regression guard still passes
-  - [ ] 2.4: Run `just check`
+- [x] **Step 2: Populate the Tailwind release checksum map** (R2)
+  - [x] 2.1: RED: map key set equals the six asset names; values match ^[0-9a-f]{64}$; map path installs via _download_binary
+  - [x] 2.2: GREEN: populate _RELEASE_SHA256 with official digests for PINNED_TAILWIND_VERSION
+  - [x] 2.3: RED: checksum-mismatch abort regression guard still passes
+  - [x] 2.4: Run `just check`
 
 - [ ] **Fable checkpoint (optional): Phase 1 done (R1, R2, critical); suite runs, `just check` green**
 

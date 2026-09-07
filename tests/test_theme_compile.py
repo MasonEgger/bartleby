@@ -5,17 +5,20 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import stat
 from typing import TYPE_CHECKING
 
 import pytest
 
+import bartleby.theme_compile as theme_compile
 from bartleby.theme_compile import (
     PINNED_TAILWIND_VERSION,
     ThemeCompileError,
     ThemeCompileResult,
     active_theme_css,
     resolve_tailwind_binary,
+    tailwind_asset_name,
 )
 
 if TYPE_CHECKING:
@@ -138,6 +141,50 @@ def test_refresh_forces_redownload(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     )
 
     assert origin == "downloaded"
+    assert binary.read_bytes() == payload
+
+
+def test_release_sha256_covers_every_asset_name() -> None:
+    """The pinned-release digest map has exactly one entry per platform asset."""
+    expected_assets = {
+        "tailwindcss-linux-x64",
+        "tailwindcss-linux-arm64",
+        "tailwindcss-macos-x64",
+        "tailwindcss-macos-arm64",
+        "tailwindcss-windows-x64.exe",
+        "tailwindcss-windows-arm64.exe",
+    }
+
+    assert set(theme_compile._RELEASE_SHA256) == expected_assets
+
+
+def test_release_sha256_values_are_hex_digests() -> None:
+    """Every recorded digest is a 64-character lowercase hex SHA-256 string."""
+    digest_pattern = re.compile(r"^[0-9a-f]{64}$")
+
+    for asset, digest in theme_compile._RELEASE_SHA256.items():
+        assert digest_pattern.match(digest), (
+            f"{asset} digest {digest!r} is not a sha256 hex string"
+        )
+
+
+def test_download_binary_uses_release_map_when_no_digest_injected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With no ``expected_sha256`` override, ``_download_binary`` falls back to the release map."""
+    asset = tailwind_asset_name()
+    payload = b"fake-tailwind-binary-from-release-map"
+    digest = hashlib.sha256(payload).hexdigest()
+    monkeypatch.setitem(theme_compile._RELEASE_SHA256, asset, digest)
+
+    binary, origin = theme_compile._download_binary(
+        cache_dir=tmp_path,
+        expected_sha256=None,
+        fetch=lambda url: payload,
+    )
+
+    assert origin == "downloaded"
+    assert binary.exists()
     assert binary.read_bytes() == payload
 
 

@@ -22,10 +22,21 @@ if TYPE_CHECKING:
 PINNED_TAILWIND_VERSION = "3.4.17"
 
 # SHA-256 digests of each platform asset for PINNED_TAILWIND_VERSION. Recorded
-# from the official GitHub release so downloads are verified before use. The
-# tests inject their own digest via ``expected_sha256``; production callers fall
-# back to this map keyed on the resolved asset name.
-_RELEASE_SHA256: dict[str, str] = {}
+# from the official GitHub release's sha256sums.txt so downloads are verified
+# before use. The tests inject their own digest via ``expected_sha256``;
+# production callers fall back to this map keyed on the resolved asset name.
+_RELEASE_SHA256: dict[str, str] = {
+    "tailwindcss-linux-x64": "7d24f7fa191d2193b78cd5f5a42a6093e14409521908529f42d80b11fde1f1d4",
+    "tailwindcss-linux-arm64": "69b1378b8133192d7d2feb12a116fa12d035594f58db3eff215879e4ad8cf39b",
+    "tailwindcss-macos-x64": "6cbdad74be776c087ffa5e9a057512c54898f9fe8828d3362212dfe32fc933a3",
+    "tailwindcss-macos-arm64": "a1d0c7985759accca0bf12e51ac1dcbf0f6cf2fffb62e6e0f62d091c477a10a3",
+    "tailwindcss-windows-x64.exe": (
+        "67f1c5e3f5a03406a7bf5badf5ada09b79f3ae78ec43450c15f7e983068da346"
+    ),
+    "tailwindcss-windows-arm64.exe": (
+        "76f516476784c00f1562160b5758e3d8f0e6c48957efb26b5b50fbdfd76aa382"
+    ),
+}
 
 _GITHUB_RELEASE = (
     "https://github.com/tailwindlabs/tailwindcss/releases/download/v{version}/{asset}"

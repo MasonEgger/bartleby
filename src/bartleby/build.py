@@ -30,7 +30,7 @@ from bartleby.content import discover_content
 from bartleby.content_query import select_published
 from bartleby.crossrefs import resolve_all_crossrefs
 from bartleby.feeds import generate_feeds
-from bartleby.icons import tree_shake_icons
+from bartleby.icons import DEFAULT_ICON_PACKS, tree_shake_icons
 from bartleby.listings import LISTING_KIND_KEY, ListingKind, generate_listing_pages
 from bartleby.llm import (
     generate_llms_full_txt,
@@ -463,11 +463,9 @@ def _emit_outputs(state: _BuildState, rendered_html: list[str]) -> None:
                 for page_path in exc.page_paths
             ]
         ) from exc
-    icon_packs = {pack: bool(value) for pack, value in config.theme.icon_packs.items()} or {
-        "material": True,
-        "fontawesome": True,
-        "octicons": True,
-        "simple": True,
+    icon_packs = {
+        **DEFAULT_ICON_PACKS,
+        **{pack: bool(value) for pack, value in config.theme.icon_packs.items()},
     }
     tree_shake_icons(
         rendered_html + _template_sources(project_dir),

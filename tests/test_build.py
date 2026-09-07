@@ -121,6 +121,80 @@ def test_tree_shake_retains_icon_referenced_only_in_template(project: Path) -> N
     assert (project / "site" / "icons" / "material" / "home.svg").exists()
 
 
+def _write_template_with_icon_spans(project: Path, icon_names: list[str]) -> None:
+    """Write a project template referencing each icon name in ``icon_names``.
+
+    Used to prove which icon packs a build resolved as enabled: tree-shaking
+    only copies an icon whose pack is enabled, so an icon's presence (or
+    absence) in the output tree is the observable signal.
+    """
+    templates_dir = project / "templates"
+    templates_dir.mkdir(exist_ok=True)
+    spans = "\n".join(f'<span class="icon icon-{name}"></span>' for name in icon_names)
+    (templates_dir / "page.html").write_text(
+        '{% extends "base.html" %}\n'
+        "{% block content %}\n"
+        f"{spans}\n"
+        "<article><h1>{{ page.title }}</h1>{{ page.content | safe }}</article>\n"
+        "{% endblock %}\n",
+        encoding="utf-8",
+    )
+
+
+def test_icon_packs_single_false_entry_leaves_other_packs_enabled(project: Path) -> None:
+    """``icon_packs: {simple: false}`` disables only ``simple``, per R10.
+
+    The merge must start from all-four-True and overlay the config on top;
+    naming one pack must not silently drop the other three defaults.
+    """
+    config_path = project / "bartleby.yml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8") + "\ntheme:\n  icon_packs:\n    simple: false\n",
+        encoding="utf-8",
+    )
+    _write_template_with_icon_spans(
+        project,
+        ["material-home", "fontawesome-github", "octicons-star-16", "simple-github"],
+    )
+    build(config_path)
+    site = project / "site" / "icons"
+    assert (site / "material" / "home.svg").exists()
+    assert (site / "fontawesome-brands" / "github.svg").exists()
+    assert (site / "octicons" / "star-16.svg").exists()
+    assert not (site / "simple" / "github.svg").exists()
+
+
+def test_icon_packs_unset_resolves_all_four_packs_enabled(project: Path) -> None:
+    """An unset ``icon_packs`` config resolves all four packs to ``True``."""
+    _write_template_with_icon_spans(project, ["simple-github"])
+    build(project / "bartleby.yml")
+    assert (project / "site" / "icons" / "simple" / "github.svg").exists()
+
+
+def test_icon_packs_two_false_entries_disable_exactly_those_two(project: Path) -> None:
+    """``icon_packs: {fontawesome: false, simple: false}`` disables exactly those two.
+
+    Icons from the two packs left enabled (``material``, ``octicons``) must
+    still land in the output.
+    """
+    config_path = project / "bartleby.yml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8")
+        + "\ntheme:\n  icon_packs:\n    fontawesome: false\n    simple: false\n",
+        encoding="utf-8",
+    )
+    _write_template_with_icon_spans(
+        project,
+        ["material-home", "fontawesome-github", "octicons-star-16", "simple-github"],
+    )
+    build(config_path)
+    site = project / "site" / "icons"
+    assert (site / "material" / "home.svg").exists()
+    assert (site / "octicons" / "star-16.svg").exists()
+    assert not (site / "fontawesome-brands" / "github.svg").exists()
+    assert not (site / "simple" / "github.svg").exists()
+
+
 def test_on_files_runs_after_draft_filter(project: Path) -> None:
     """The ``on_files`` hook sees only published pages, never drafts.
 

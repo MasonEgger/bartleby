@@ -15,6 +15,9 @@ _PACK_PREFIXES: dict[str, tuple[str, str]] = {
     "simple": ("simple-", "simple"),
 }
 
+DEFAULT_ICON_PACKS: dict[str, bool] = dict.fromkeys(_PACK_PREFIXES, True)
+"""All bundled icon packs, enabled. The base that config overrides are merged onto."""
+
 _ICON_CLASS_RE = re.compile(r"icon-([a-z0-9-]+)")
 
 

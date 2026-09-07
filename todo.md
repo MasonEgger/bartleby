@@ -53,11 +53,11 @@ Each phase ends at an optional Fable checkpoint (safe commit and review boundary
   - [x] 6.3: REFACTOR: check fires only when an asset hits a multi-page dir
   - [x] 6.4: Run `just check`
 
-- [ ] **Step 7: Merge icon pack defaults instead of replacing them** (R10)
-  - [ ] 7.1: RED: {simple: false} leaves other three enabled; empty config = all four; two-false case exact
-  - [ ] 7.2: GREEN: overlay config entries on the all-True default dict
-  - [ ] 7.3: REFACTOR: one canonical pack-list constant
-  - [ ] 7.4: Run `just check`
+- [x] **Step 7: Merge icon pack defaults instead of replacing them** (R10)
+  - [x] 7.1: RED: {simple: false} leaves other three enabled; empty config = all four; two-false case exact
+  - [x] 7.2: GREEN: overlay config entries on the all-True default dict
+  - [x] 7.3: REFACTOR: one canonical pack-list constant
+  - [x] 7.4: Run `just check`
 
 - [ ] **Step 8: Count only copied files in static_file_count** (R17)
   - [ ] 8.1: RED: count equals N static + M assets despite generated artifacts present; ai.llms_txt toggle does not change count

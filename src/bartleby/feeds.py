@@ -17,6 +17,25 @@ if TYPE_CHECKING:
 _ATOM_NS = "http://www.w3.org/2005/Atom"
 _RSS_MIME = "application/rss+xml"
 _ATOM_MIME = "application/atom+xml"
+_FEED_FILENAMES = {"rss": "feed.xml", "atom": "atom.xml"}
+
+
+def feed_path(content_type_name: str, feed_format: str) -> str:
+    """Root-relative path of a per-content-type feed file.
+
+    Shared with ``agent_surface._resource_locations`` so the URL advertised in
+    schema.json can never drift from where ``generate_feeds`` writes the file.
+    """
+    return f"/{content_type_name}/{_FEED_FILENAMES[feed_format]}"
+
+
+def aggregate_feed_path(feed_format: str) -> str:
+    """Root-relative path of the site-wide aggregate feed file.
+
+    Shared with ``agent_surface._resource_locations`` so the URL advertised in
+    schema.json can never drift from where ``generate_feeds`` writes the file.
+    """
+    return f"/{_FEED_FILENAMES[feed_format]}"
 
 
 def generate_rss(pages: list[Page], content_type_name: str, site: SiteConfig) -> str:
@@ -85,16 +104,20 @@ def feed_links_for_page(page: Page, config: BartlebyConfig) -> list[dict[str, st
     if content_type is not None and content_type.feeds:
         name = content_type.name
         if "rss" in content_type.feeds:
-            links.append(_feed_link(f"/{name}/feed.xml", _RSS_MIME, f"{name.title()} RSS"))
+            links.append(_feed_link(feed_path(name, "rss"), _RSS_MIME, f"{name.title()} RSS"))
         if "atom" in content_type.feeds:
-            links.append(_feed_link(f"/{name}/atom.xml", _ATOM_MIME, f"{name.title()} Atom"))
+            links.append(_feed_link(feed_path(name, "atom"), _ATOM_MIME, f"{name.title()} Atom"))
 
     if feed.enabled:
         aggregate_title = feed.title or config.site.title
         if "rss" in feed.formats:
-            links.append(_feed_link("/feed.xml", _RSS_MIME, f"{aggregate_title} RSS"))
+            links.append(
+                _feed_link(aggregate_feed_path("rss"), _RSS_MIME, f"{aggregate_title} RSS")
+            )
         if "atom" in feed.formats:
-            links.append(_feed_link("/atom.xml", _ATOM_MIME, f"{aggregate_title} Atom"))
+            links.append(
+                _feed_link(aggregate_feed_path("atom"), _ATOM_MIME, f"{aggregate_title} Atom")
+            )
 
     return links
 

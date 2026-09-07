@@ -126,11 +126,11 @@ Each phase ends at an optional Fable checkpoint (safe commit and review boundary
   - [x] 16.3: REFACTOR: one shared source for the search roots where feasible
   - [x] 16.4: Run `just check`
 
-- [ ] **Step 17: Advertise the aggregate feed in schema.json** (R14)
-  - [ ] 17.1: RED: aggregate feed.xml/atom.xml present per formats; absent when site.feed disabled
-  - [ ] 17.2: GREEN: _resource_locations reads config.site.feed and appends aggregate URLs
-  - [ ] 17.3: REFACTOR: shared feed-URL helper so advertised and written URLs cannot drift
-  - [ ] 17.4: Run `just check`
+- [x] **Step 17: Advertise the aggregate feed in schema.json** (R14)
+  - [x] 17.1: RED: aggregate feed.xml/atom.xml present per formats; absent when site.feed disabled
+  - [x] 17.2: GREEN: _resource_locations reads config.site.feed and appends aggregate URLs
+  - [x] 17.3: REFACTOR: shared feed-URL helper so advertised and written URLs cannot drift
+  - [x] 17.4: Run `just check`
 
 - [ ] **Step 18: Scope the hooks sys.path insertion** (R15)
   - [ ] 18.1: RED: sys.path restored after discover_hooks; double call does not grow it; sibling-import regression guard

@@ -7,6 +7,7 @@ import json
 from typing import TYPE_CHECKING
 
 from bartleby.content_query import select_published
+from bartleby.feeds import aggregate_feed_path, feed_path
 from bartleby.schema_introspection import (
     derive_authors_schema,
     derive_content_type_schema,
@@ -155,7 +156,7 @@ def _resource_locations(config: BartlebyConfig) -> dict[str, object]:
                 {
                     "content_type": type_name,
                     "format": "rss",
-                    "url": _absolute(config.site.url, f"/{type_name}/feed.xml"),
+                    "url": _absolute(config.site.url, feed_path(type_name, "rss")),
                 }
             )
         if "atom" in content_type.feeds:
@@ -163,7 +164,25 @@ def _resource_locations(config: BartlebyConfig) -> dict[str, object]:
                 {
                     "content_type": type_name,
                     "format": "atom",
-                    "url": _absolute(config.site.url, f"/{type_name}/atom.xml"),
+                    "url": _absolute(config.site.url, feed_path(type_name, "atom")),
+                }
+            )
+    aggregate = config.site.feed
+    if aggregate.enabled:
+        if "rss" in aggregate.formats:
+            feeds.append(
+                {
+                    "content_type": None,
+                    "format": "rss",
+                    "url": _absolute(config.site.url, aggregate_feed_path("rss")),
+                }
+            )
+        if "atom" in aggregate.formats:
+            feeds.append(
+                {
+                    "content_type": None,
+                    "format": "atom",
+                    "url": _absolute(config.site.url, aggregate_feed_path("atom")),
                 }
             )
     return {

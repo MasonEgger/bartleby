@@ -22,6 +22,7 @@ from bartleby.config import (
     BartlebyConfig,
     ContentTypeConfig,
     DevServerConfig,
+    FeedConfig,
     MetadataFieldSchema,
     SiteConfig,
     TaxonomyConfig,
@@ -177,6 +178,39 @@ def test_schema_json_carries_resource_locations() -> None:
     feed_urls = {feed["url"] for feed in feeds}
     assert "https://example.com/blog/feed.xml" in feed_urls
     assert "https://example.com/blog/atom.xml" in feed_urls
+
+
+def test_schema_json_advertises_aggregate_rss_feed() -> None:
+    """With the aggregate feed enabled and rss in formats, its URL is advertised."""
+    config = _config()
+    config.site.feed = FeedConfig(enabled=True, formats=["rss"])
+    schema = build_schema_json(_pages(), config, _authors())
+    feeds = schema["resources"]["feeds"]  # type: ignore[index]
+    feed_urls = {feed["url"] for feed in feeds}
+    assert "https://example.com/feed.xml" in feed_urls
+    assert "https://example.com/atom.xml" not in feed_urls
+
+
+def test_schema_json_advertises_aggregate_atom_feed() -> None:
+    """With the aggregate feed enabled and atom in formats, its URL is advertised."""
+    config = _config()
+    config.site.feed = FeedConfig(enabled=True, formats=["atom"])
+    schema = build_schema_json(_pages(), config, _authors())
+    feeds = schema["resources"]["feeds"]  # type: ignore[index]
+    feed_urls = {feed["url"] for feed in feeds}
+    assert "https://example.com/atom.xml" in feed_urls
+    assert "https://example.com/feed.xml" not in feed_urls
+
+
+def test_schema_json_omits_aggregate_feed_when_disabled() -> None:
+    """With the aggregate feed disabled, neither aggregate URL is advertised."""
+    config = _config()
+    config.site.feed = FeedConfig(enabled=False)
+    schema = build_schema_json(_pages(), config, _authors())
+    feeds = schema["resources"]["feeds"]  # type: ignore[index]
+    feed_urls = {feed["url"] for feed in feeds}
+    assert "https://example.com/feed.xml" not in feed_urls
+    assert "https://example.com/atom.xml" not in feed_urls
 
 
 # --- content-index.json ----------------------------------------------------

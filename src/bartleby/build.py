@@ -189,7 +189,7 @@ def build(
         is written to disk and the previous ``site/`` is left untouched.
     :returns: A :class:`BuildResult` for a normal build, or a
         :class:`DryRunResult` when ``dry_run`` is set.
-    :raises ValueError: When metadata validation fails, or when ``strict``
+    :raises BuildError: When metadata validation fails, or when ``strict``
         is on and any cross-reference cannot be resolved.
     """
     started = time.perf_counter()
@@ -242,7 +242,7 @@ def _filter_and_validate(state: _BuildState, *, include_drafts: bool) -> None:
     pages), navigation, the Jinja environment, the markdown renderer, data
     files, build info, and the temp/final output directories.
 
-    :raises ValueError: When metadata validation fails.
+    :raises BuildError: When metadata validation fails.
     """
     config = state.config
     plugins = state.plugins
@@ -258,8 +258,12 @@ def _filter_and_validate(state: _BuildState, *, include_drafts: bool) -> None:
 
     metadata_errors = validate_all_metadata(pages, config, state.authors)
     if metadata_errors:
-        message = "\n".join(f"  {error.file_path}: {error.message}" for error in metadata_errors)
-        raise ValueError(f"metadata validation failed:\n{message}")
+        raise BuildError(
+            [
+                PageError(file_path=error.file_path, message=error.message)
+                for error in metadata_errors
+            ]
+        )
 
     generate_all_urls(pages, config)
     state.taxonomy_data = build_taxonomies(pages, config)
@@ -291,7 +295,7 @@ def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
     page-level failure and abort the build (discarding the temp dir) if any
     occurred, instead of stopping on the first error.
 
-    :raises ValueError: When ``strict`` is set and a cross-reference is broken.
+    :raises BuildError: When ``strict`` is set and a cross-reference is broken.
     :returns: Every rendered HTML document, including ``404.html``, for icon
         tree-shaking downstream.
     """
@@ -348,7 +352,16 @@ def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
                 error.message,
             )
         if strict:
-            raise ValueError(f"strict mode: {len(crossref_errors)} unresolved cross-reference(s)")
+            raise BuildError(
+                [
+                    PageError(
+                        file_path=error.source_path,
+                        message=f"strict mode: unresolved cross-reference to "
+                        f"{error.target_path!r}: {error.message}",
+                    )
+                    for error in crossref_errors
+                ]
+            )
 
     rendered_html: list[str] = []
     for page in state.all_pages:

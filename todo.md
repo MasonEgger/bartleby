@@ -17,17 +17,17 @@ Each phase ends at an optional Fable checkpoint (safe commit and review boundary
   - [x] 2.3: RED: checksum-mismatch abort regression guard still passes
   - [x] 2.4: Run `just check`
 
-- [ ] **Fable checkpoint (optional): Phase 1 done (R1, R2, critical); suite runs, `just check` green**
+- [x] **Fable checkpoint (optional): Phase 1 done (R1, R2, critical); suite runs, `just check` green**
 
 ## Phase 2: Error Contract
 
-- [ ] **Step 3: Route ContentError and build validation failures through the error contract** (R3)
-  - [ ] 3.1: RED: strict-crossref test expects BuildError (update test_build.py:306); metadata failure raises BuildError with PageErrors
-  - [ ] 3.2: RED: ContentError via lint: exit 1, no traceback; json ErrorOutput with content_error + source path; BARTLEBY_DEBUG re-raises
-  - [ ] 3.3: GREEN: build.py raises BuildError at both sites; docstrings updated
-  - [ ] 3.4: GREEN: cli.py catches ContentError; _ERROR_CODES gets content_error
-  - [ ] 3.5: REFACTOR: one catch site covers all content-discovering commands
-  - [ ] 3.6: Run `just check`
+- [x] **Step 3: Route ContentError and build validation failures through the error contract** (R3)
+  - [x] 3.1: RED: strict-crossref test expects BuildError (update test_build.py:306); metadata failure raises BuildError with PageErrors
+  - [x] 3.2: RED: ContentError via lint: exit 1, no traceback; json ErrorOutput with content_error + source path; BARTLEBY_DEBUG re-raises
+  - [x] 3.3: GREEN: build.py raises BuildError at both sites; docstrings updated
+  - [x] 3.4: GREEN: cli.py catches ContentError; _ERROR_CODES gets content_error
+  - [x] 3.5: REFACTOR: one catch site covers all content-discovering commands
+  - [x] 3.6: Run `just check`
 
 - [ ] **Step 4: Guarantee temp build directory cleanup on every failure path** (R16)
   - [ ] 4.1: RED: no .bartleby-build-* remains after strict failure or _emit_outputs exception; success guard still passes

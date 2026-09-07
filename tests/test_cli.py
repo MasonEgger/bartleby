@@ -722,3 +722,64 @@ def test_generate_skill_writes_three_skills(
     assert (skills_dir / "bartleby-write.md").exists()
     assert (skills_dir / "bartleby-review.md").exists()
     assert (skills_dir / "bartleby-ops.md").exists()
+
+
+def _write_malformed_front_matter(project_dir: Path) -> Path:
+    """Write a content file whose front matter parses to a list, not a mapping."""
+    bad_path = project_dir / "content" / "blog" / "posts" / "bad.md"
+    bad_path.write_text(
+        "---\n- not\n- a\n- mapping\n---\n\nBody text.\n",
+        encoding="utf-8",
+    )
+    return bad_path
+
+
+def test_content_error_prints_clean_message_and_exits_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Malformed front matter on a content-discovering command (lint) exits 1
+    with a clean stderr message and no raw Python traceback."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    _write_malformed_front_matter(tmp_path / "mysite")
+
+    with pytest.raises(SystemExit) as exc:
+        main(["lint"])
+    assert exc.value.code == 1
+
+    captured = capsys.readouterr()
+    assert "Traceback" not in captured.err
+    assert "Traceback" not in captured.out
+    assert "content_error" in captured.err
+    assert "bad.md" in captured.err
+
+
+def test_content_error_json_mode_emits_error_object(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """In JSON mode, malformed front matter is a parseable error object on stdout."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    _write_malformed_front_matter(tmp_path / "mysite")
+
+    with pytest.raises(SystemExit) as exc:
+        main(["lint", "--output", "json"])
+    assert exc.value.code == 1
+
+    captured = capsys.readouterr()
+    payload = _last_json(captured.out)
+    assert payload["error"]
+    assert payload["code"] == "content_error"
+    assert "bad.md" in str(payload["file"])
+
+
+def test_content_error_traceback_reenabled_by_debug_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``BARTLEBY_DEBUG=1`` re-enables the raw traceback for malformed front matter."""
+    from bartleby.content import ContentError
+
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    _write_malformed_front_matter(tmp_path / "mysite")
+    monkeypatch.setenv("BARTLEBY_DEBUG", "1")
+
+    with pytest.raises(ContentError):
+        main(["lint"])

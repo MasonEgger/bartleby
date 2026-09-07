@@ -306,14 +306,41 @@ def test_calculate_readtime_short_text() -> None:
 def test_build_strict_fails_on_broken_crossref(
     project: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """In strict mode, an unresolved ``.md`` link aborts the build."""
+    """In strict mode, an unresolved ``.md`` link raises BuildError.
+
+    The failure routes through the same error contract as every other
+    build-time failure: one PageError per broken crossref, carrying the
+    offending file's path.
+    """
     post_path = project / "content" / "blog" / "posts" / "first-post.md"
     text = post_path.read_text(encoding="utf-8")
     post_path.write_text(text + "\nSee [missing page](missing-target.md).\n", encoding="utf-8")
-    with caplog.at_level("WARNING", logger="bartleby"), pytest.raises(ValueError) as exc:
+    with caplog.at_level("WARNING", logger="bartleby"), pytest.raises(BuildError) as exc:
         build(project / "bartleby.yml", strict=True)
-    assert "strict" in str(exc.value).lower()
+    collected = exc.value.errors
+    assert len(collected) == 1
+    assert "strict" in collected[0].message.lower()
+    reported = "\n".join(str(error.file_path) for error in collected)
+    assert "first-post.md" in reported
     assert "missing-target.md" in caplog.text
+
+
+def test_build_fails_on_metadata_validation_errors(project: Path) -> None:
+    """A page with invalid metadata raises BuildError carrying one PageError per failure."""
+    post_path = project / "content" / "blog" / "posts" / "first-post.md"
+    text = post_path.read_text(encoding="utf-8")
+    post_path.write_text(
+        text.replace("authors:\n  - mason", "authors:\n  - nobody-such-author"),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(BuildError) as exc:
+        build(project / "bartleby.yml")
+
+    collected = exc.value.errors
+    assert len(collected) == 1
+    assert "nobody-such-author" in collected[0].message
+    assert "first-post.md" in collected[0].file_path
 
 
 def test_build_non_strict_warns_on_broken_crossref(

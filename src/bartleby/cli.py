@@ -24,7 +24,7 @@ from bartleby.build import (
     format_page_error,
 )
 from bartleby.config import ConfigError, load_config
-from bartleby.content import discover_content
+from bartleby.content import ContentError, discover_content
 from bartleby.content_query import (
     ContentGet,
     ContentList,
@@ -77,6 +77,7 @@ _ERROR_CODES: dict[type[Exception], str] = {
     ConfigError: "config_error",
     AuthorError: "author_error",
     ThemeCompileError: "theme_compile_error",
+    ContentError: "content_error",
 }
 
 
@@ -106,7 +107,7 @@ def main(argv: list[str] | None = None) -> None:
         result = handler(args)
     except UsageError as exc:
         _emit_error(ErrorOutput(message=str(exc), code=exc.code, usage=True), fmt)
-    except (BuildError, ConfigError, AuthorError, ThemeCompileError) as exc:
+    except (BuildError, ConfigError, AuthorError, ThemeCompileError, ContentError) as exc:
         _report_error(exc, fmt)
     else:
         if result is not None:
@@ -153,16 +154,16 @@ def _configure_logging() -> None:
 
 
 def _report_error(
-    exc: BuildError | ConfigError | AuthorError | ThemeCompileError, fmt: str
+    exc: BuildError | ConfigError | AuthorError | ThemeCompileError | ContentError, fmt: str
 ) -> None:
-    """Surface a build/config/author failure in the requested format and exit 1.
+    """Surface a build/config/author/content failure in the requested format and exit 1.
 
     Honors ``BARTLEBY_DEBUG``: when set to a truthy value, the exception is
     re-raised so Python prints the full traceback for development. In text mode
     each collected page error prints to stderr; in JSON mode a single error
     object (carrying the first offending file) prints to stdout.
 
-    :param exc: The build/config/author failure to surface.
+    :param exc: The build/config/author/content failure to surface.
     :param fmt: ``"text"`` or ``"json"``.
     :raises SystemExit: Always, with code 1, in non-debug mode.
     """
@@ -177,6 +178,9 @@ def _report_error(
         else:
             for page_error in exc.errors:
                 print(f"error [{code}] {format_page_error(page_error)}", file=sys.stderr)
+    elif isinstance(exc, ContentError):
+        _emit_error(ErrorOutput(message=str(exc), code=code, file=exc.source_path), fmt)
+        return
     else:
         _emit_error(ErrorOutput(message=str(exc), code=code), fmt)
         return

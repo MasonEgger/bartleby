@@ -47,11 +47,11 @@ Each phase ends at an optional Fable checkpoint (safe commit and review boundary
   - [x] 5.5: REFACTOR: one shared published-page helper
   - [x] 5.6: Run `just check`
 
-- [ ] **Step 6: Detect co-located asset collisions in shared directories** (R8)
-  - [ ] 6.1: RED: two pages + asset in one dir raises error naming dir and pages; no-asset case builds; single-bundle regression guards
-  - [ ] 6.2: GREEN: dict[str, list[Page]] index; collision raises through BuildError
-  - [ ] 6.3: REFACTOR: check fires only when an asset hits a multi-page dir
-  - [ ] 6.4: Run `just check`
+- [x] **Step 6: Detect co-located asset collisions in shared directories** (R8)
+  - [x] 6.1: RED: two pages + asset in one dir raises error naming dir and pages; no-asset case builds; single-bundle regression guards
+  - [x] 6.2: GREEN: dict[str, list[Page]] index; collision raises through BuildError
+  - [x] 6.3: REFACTOR: check fires only when an asset hits a multi-page dir
+  - [x] 6.4: Run `just check`
 
 - [ ] **Step 7: Merge icon pack defaults instead of replacing them** (R10)
   - [ ] 7.1: RED: {simple: false} leaves other three enabled; empty config = all four; two-false case exact

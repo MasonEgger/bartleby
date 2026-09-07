@@ -5,7 +5,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bartleby.assets import copy_colocated_assets, copy_static_files
+import pytest
+
+from bartleby.assets import AssetCollisionError, copy_colocated_assets, copy_static_files
 from bartleby.content import ColocatedAsset, Page
 
 
@@ -96,6 +98,70 @@ def test_empty_static_dir_ok(tmp_path: Path) -> None:
     output = tmp_path / "site"
     output.mkdir()
     copy_static_files(tmp_path / "missing", output)  # No exception expected.
+
+
+def test_two_pages_sharing_directory_with_asset_raises(tmp_path: Path) -> None:
+    """Two published pages sharing a directory that holds an asset are a build error.
+
+    The error must name the shared directory and both pages so the user can
+    restructure into one bundle directory per page.
+    """
+    content_dir = tmp_path / "content"
+    (content_dir / "blog" / "shared").mkdir(parents=True)
+    asset_src = content_dir / "blog" / "shared" / "diagram.png"
+    asset_src.write_bytes(b"png-bytes")
+
+    page_a = Page(
+        source_path=Path("blog/shared/page-a.md"),
+        abs_source_path=content_dir / "blog/shared/page-a.md",
+        title="Page A",
+    )
+    page_a.output_url = "/blog/shared/page-a/"
+    page_b = Page(
+        source_path=Path("blog/shared/page-b.md"),
+        abs_source_path=content_dir / "blog/shared/page-b.md",
+        title="Page B",
+    )
+    page_b.output_url = "/blog/shared/page-b/"
+    asset = ColocatedAsset(
+        source_path=Path("blog/shared/diagram.png"),
+        abs_source_path=asset_src,
+    )
+    output = tmp_path / "site"
+    output.mkdir()
+
+    with pytest.raises(AssetCollisionError) as excinfo:
+        copy_colocated_assets([asset], [page_a, page_b], content_dir, output)
+
+    message = str(excinfo.value)
+    assert "blog/shared" in message
+    assert "blog/shared/page-a.md" in message
+    assert "blog/shared/page-b.md" in message
+
+
+def test_two_pages_sharing_directory_without_asset_is_legal(tmp_path: Path) -> None:
+    """Two pages in one directory with no co-located assets build fine.
+
+    Nothing needs an association when there is no asset to mis-route.
+    """
+    content_dir = tmp_path / "content"
+    (content_dir / "blog" / "shared").mkdir(parents=True)
+    page_a = Page(
+        source_path=Path("blog/shared/page-a.md"),
+        abs_source_path=content_dir / "blog/shared/page-a.md",
+        title="Page A",
+    )
+    page_a.output_url = "/blog/shared/page-a/"
+    page_b = Page(
+        source_path=Path("blog/shared/page-b.md"),
+        abs_source_path=content_dir / "blog/shared/page-b.md",
+        title="Page B",
+    )
+    page_b.output_url = "/blog/shared/page-b/"
+    output = tmp_path / "site"
+    output.mkdir()
+
+    copy_colocated_assets([], [page_a, page_b], content_dir, output)  # No exception expected.
 
 
 def test_orphan_asset_lands_at_source_path(tmp_path: Path) -> None:

@@ -18,7 +18,12 @@ from jinja2 import TemplateError
 
 import bartleby
 from bartleby.agent_surface import write_agent_surface
-from bartleby.assets import copy_colocated_assets, copy_static_files, drop_draft_only_assets
+from bartleby.assets import (
+    AssetCollisionError,
+    copy_colocated_assets,
+    copy_static_files,
+    drop_draft_only_assets,
+)
 from bartleby.authors import load_authors
 from bartleby.config import load_config
 from bartleby.content import discover_content
@@ -430,6 +435,9 @@ def _emit_outputs(state: _BuildState, rendered_html: list[str]) -> None:
 
     Everything written here lands in the temp output dir; the swap into the
     final location happens later in :func:`_finish_build`.
+
+    :raises BuildError: When two pages share a source directory that holds a
+        co-located asset (see :class:`bartleby.assets.AssetCollisionError`).
     """
     config = state.config
     assert state.output_dir is not None
@@ -440,7 +448,21 @@ def _emit_outputs(state: _BuildState, rendered_html: list[str]) -> None:
     copy_static_files(theme_static, output_dir)
     copy_static_files(project_dir / "static", output_dir)
     _apply_compiled_theme_css(project_dir, output_dir)
-    copy_colocated_assets(state.assets, state.pages, state.content_dir, output_dir)
+    try:
+        copy_colocated_assets(state.assets, state.pages, state.content_dir, output_dir)
+    except AssetCollisionError as exc:
+        raise BuildError(
+            [
+                PageError(
+                    file_path=page_path,
+                    message=(
+                        f"co-located asset in shared directory {exc.directory!r} cannot "
+                        "be assigned to one page; split it into one bundle directory per page"
+                    ),
+                )
+                for page_path in exc.page_paths
+            ]
+        ) from exc
     icon_packs = {pack: bool(value) for pack, value in config.theme.icon_packs.items()} or {
         "material": True,
         "fontawesome": True,

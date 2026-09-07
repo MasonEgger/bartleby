@@ -110,8 +110,8 @@ def test_discover_content_identifies_colocated_assets(
     pages, assets = discover_content(sample_config, sample_site_path / "content")
     asset_sources = {str(asset.source_path) for asset in assets}
     page_sources = {str(page.source_path) for page in pages}
-    assert "blog/posts/diagram.png" in asset_sources
-    assert "blog/posts/diagram.png" not in page_sources
+    assert "blog/posts/media/diagram.png" in asset_sources
+    assert "blog/posts/media/diagram.png" not in page_sources
 
 
 def test_discover_drafts_found_but_marked(

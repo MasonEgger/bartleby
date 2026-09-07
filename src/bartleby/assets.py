@@ -12,6 +12,30 @@ if TYPE_CHECKING:
     from bartleby.content import ColocatedAsset, Page
 
 
+class AssetCollisionError(Exception):
+    """Raised when a co-located asset's directory holds more than one page.
+
+    The v1 spec assumes one page per bundle directory (the Hugo leaf-bundle
+    model) and leaves the shared-directory case undefined. Rather than guess
+    which page an asset belongs to, the build fails loudly and names the
+    directory and every page sharing it, so the user restructures into one
+    bundle directory per page.
+
+    :ivar directory: The shared source directory, relative to ``content/``.
+    :ivar page_paths: Source paths (relative to ``content/``) of every page
+        sharing ``directory``.
+    """
+
+    def __init__(self, directory: str, page_paths: list[str]) -> None:
+        self.directory = directory
+        self.page_paths = page_paths
+        pages = ", ".join(page_paths)
+        super().__init__(
+            f"directory {directory!r} holds a co-located asset and more than one "
+            f"page ({pages}); split it into one bundle directory per page"
+        )
+
+
 def copy_static_files(static_dir: Path, output_dir: Path) -> None:
     """Recursively copy ``static_dir`` into ``output_dir``.
 
@@ -42,11 +66,15 @@ def copy_colocated_assets(
     :param content_dir: The site's ``content/`` directory (only used for
         parity with the spec; kept for future page-by-source-path lookups).
     :param output_dir: The build's ``site/`` directory.
+    :raises AssetCollisionError: When an asset's directory holds more than
+        one page (see :class:`AssetCollisionError`).
     """
     del content_dir  # currently unused — kept to match spec signature
-    page_by_dir = {page.source_path.parent.as_posix(): page for page in pages}
+    pages_by_dir: dict[str, list[Page]] = {}
+    for page in pages:
+        pages_by_dir.setdefault(page.source_path.parent.as_posix(), []).append(page)
     for asset in assets:
-        associated_page = _find_associated_page(asset, page_by_dir)
+        associated_page = _find_associated_page(asset, pages_by_dir)
         destination = _destination_for(asset, associated_page, output_dir)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(asset.abs_source_path, destination)
@@ -78,10 +106,24 @@ def drop_draft_only_assets(
     ]
 
 
-def _find_associated_page(asset: ColocatedAsset, page_by_dir: dict[str, Page]) -> Page | None:
-    """Return the page that lives in the same directory as ``asset``, if any."""
+def _find_associated_page(
+    asset: ColocatedAsset, pages_by_dir: dict[str, list[Page]]
+) -> Page | None:
+    """Return the page that lives in the same directory as ``asset``, if any.
+
+    The collision check fires here, at the point an asset actually resolves
+    to a directory, rather than up front over every directory two pages
+    happen to share: a shared directory with no assets is legal, so nothing
+    should be checked until an asset needs an association.
+
+    :raises AssetCollisionError: When ``asset``'s directory holds more than
+        one page.
+    """
     asset_dir = asset.source_path.parent.as_posix()
-    return page_by_dir.get(asset_dir)
+    directory_pages = pages_by_dir.get(asset_dir, [])
+    if len(directory_pages) > 1:
+        raise AssetCollisionError(asset_dir, [str(page.source_path) for page in directory_pages])
+    return directory_pages[0] if directory_pages else None
 
 
 def _destination_for(

@@ -227,6 +227,32 @@ def test_build_still_copies_a_published_pages_colocated_asset(project: Path) -> 
     assert (published_dir / "photo.png").exists()
 
 
+def test_build_reports_shared_directory_asset_collision(project: Path) -> None:
+    """Two pages sharing a directory with a co-located asset raise BuildError.
+
+    A full build must surface the collision as a clean BuildError (routed
+    through the R3 error contract) rather than a traceback or a silent
+    last-writer-wins asset placement.
+    """
+    shared_dir = project / "content" / "blog" / "posts" / "shared-bundle"
+    shared_dir.mkdir()
+    (shared_dir / "page-a.md").write_text(
+        '---\ntitle: "Page A"\ndraft: false\n---\n\nPage A body.\n', encoding="utf-8"
+    )
+    (shared_dir / "page-b.md").write_text(
+        '---\ntitle: "Page B"\ndraft: false\n---\n\nPage B body.\n', encoding="utf-8"
+    )
+    (shared_dir / "diagram.png").write_bytes(b"stub-png")
+
+    with pytest.raises(BuildError) as excinfo:
+        build(project / "bartleby.yml")
+
+    message = str(excinfo.value)
+    assert "shared-bundle" in message
+    assert "page-a.md" in message
+    assert "page-b.md" in message
+
+
 def test_build_cleans_output_dir(project: Path) -> None:
     """``site/`` is cleaned at the start of each build — stale files vanish."""
     site_dir = project / "site"

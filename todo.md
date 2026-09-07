@@ -97,12 +97,12 @@ Each phase ends at an optional Fable checkpoint (safe commit and review boundary
   - [x] 12.3: REFACTOR: no other hardcoded "site" in server.py
   - [x] 12.4: Run `just check`
 
-- [ ] **Step 13: Wire the file watcher into DevServer.run()** (R5, part 1)
-  - [ ] 13.1: RED: watched change rebuilds (visible over HTTP, bounded wait); unwatched change does not
-  - [ ] 13.2: GREEN: watchdog Observer in run() routing through existing primitives; clean shutdown; dependency confirmed in pyproject.toml
-  - [ ] 13.3: GREEN: last-good-build retention holds via a real watcher-triggered failure
-  - [ ] 13.4: REFACTOR: compose primitives, no duplicated decision logic; module docstring accurate
-  - [ ] 13.5: Run `just check`
+- [x] **Step 13: Wire the file watcher into DevServer.run()** (R5, part 1)
+  - [x] 13.1: RED: watched change rebuilds (visible over HTTP, bounded wait); unwatched change does not
+  - [x] 13.2: GREEN: watchdog Observer in run() routing through existing primitives; clean shutdown; dependency confirmed in pyproject.toml
+  - [x] 13.3: GREEN: last-good-build retention holds via a real watcher-triggered failure
+  - [x] 13.4: REFACTOR: compose primitives, no duplicated decision logic; module docstring accurate
+  - [x] 13.5: Run `just check`
 
 - [ ] **Step 14: Serve the reload snippet and WebSocket channel** (R5, part 2)
   - [ ] 14.1: RED: served HTML contains RELOAD_SNIPPET; WS client at /__bartleby_reload gets signal after rebuild; build output snippet-free

@@ -6,9 +6,14 @@ from __future__ import annotations
 import contextlib
 import http.server
 import json
+import os
 import socketserver
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
+
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
 
 from bartleby.build import BuildError, build, format_page_error
 from bartleby.config import load_config
@@ -16,7 +21,9 @@ from bartleby.plugins import PluginCollection, discover_hooks, discover_plugins
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
+
+    from watchdog.events import FileSystemEvent
+    from watchdog.observers.api import BaseObserver
 
     from bartleby.build import PageError
     from bartleby.config import BartlebyConfig
@@ -102,6 +109,49 @@ def inject_reload_snippet(html: str) -> str:
     if marker in html:
         return html.replace(marker, RELOAD_SNIPPET + marker, 1)
     return html + RELOAD_SNIPPET
+
+
+class _ProjectChangeHandler(FileSystemEventHandler):
+    """Translate watchdog filesystem events into project-relative change paths.
+
+    Every non-directory event (create, modify, move, delete) under the
+    watched root is forwarded to ``on_change``. This handler makes no
+    decision about whether a path matters; :meth:`DevServer.dispatch_change`
+    (via :func:`is_watched`) is the single place that decides.
+    """
+
+    def __init__(self, project_dir: Path, on_change: Callable[[str], None]) -> None:
+        super().__init__()
+        self._project_dir = project_dir
+        self._on_change = on_change
+
+    def on_any_event(self, event: FileSystemEvent) -> None:
+        """Forward one non-directory event as a project-relative POSIX path."""
+        if event.is_directory:
+            return
+        changed_path = Path(os.fsdecode(event.src_path))
+        try:
+            rel_path = changed_path.relative_to(self._project_dir).as_posix()
+        except ValueError:
+            return
+        self._on_change(rel_path)
+
+
+def _start_watcher(project_dir: Path, on_change: Callable[[str], None]) -> BaseObserver:
+    """Start a watchdog Observer over the whole project tree.
+
+    :param project_dir: The project root (the directory containing
+        ``bartleby.yml``), watched recursively.
+    :param on_change: Called with each changed path's project-relative POSIX
+        path; the caller decides whether the path is actually watched.
+    :returns: The started observer. Call ``.stop()`` then ``.join()`` on it to
+        shut down cleanly.
+    """
+    observer = Observer()
+    handler = _ProjectChangeHandler(project_dir, on_change)
+    observer.schedule(handler, str(project_dir), recursive=True)
+    observer.start()
+    return observer
 
 
 class DevServer:
@@ -253,8 +303,28 @@ class DevServer:
             self.emit_event({"type": "rebuild", "status": "ok"})
         return errors
 
+    def _on_watched_change(self, rel_path: str) -> None:
+        """Route one filesystem change through :meth:`dispatch_change`.
+
+        :meth:`dispatch_change` (via :func:`is_watched`) is the single
+        decision point for whether ``rel_path`` triggers a rebuild; this
+        method only picks which rebuild callback to use.
+
+        :param rel_path: The project-relative POSIX path that changed.
+        """
+        if self.events:
+            self.dispatch_change(rel_path, rebuild=lambda: self.rebuild_with_events(rel_path))
+        else:
+            self.dispatch_change(rel_path, rebuild=self.rebuild)
+
     def run(self, *, ready: Callable[[socketserver.TCPServer], None] | None = None) -> None:
-        """Start the HTTP server, serving the built site until interrupted.
+        """Start the HTTP server and file watcher, serving until interrupted.
+
+        A watchdog Observer watches the whole project tree; every change is
+        routed through :meth:`dispatch_change`, so only paths under
+        :data:`WATCHED_PATHS` trigger a rebuild (see :meth:`_on_watched_change`).
+        :meth:`rebuild` retains the last good build on a failed rebuild, so a
+        watcher-triggered failure keeps serving the previous good output.
 
         :param ready: Optional callback fired once the socket is bound and
             listening, receiving the live ``TCPServer``. Tests use it to learn
@@ -263,15 +333,21 @@ class DevServer:
         """
         self.build_once()
         config = load_config(self.config_path)
-        site_dir = self.config_path.parent / config.output_dir
+        project_dir = self.config_path.parent
+        site_dir = project_dir / config.output_dir
         handler = _site_request_handler(site_dir)
-        with socketserver.TCPServer((self.host, self.port), handler) as httpd:
-            self.dispatch_on_serve(httpd, config=config)
-            print(f"Serving at http://{self.host}:{httpd.server_address[1]}/")
-            if ready is not None:
-                ready(httpd)
-            with contextlib.suppress(KeyboardInterrupt):
-                httpd.serve_forever()
+        observer = _start_watcher(project_dir, self._on_watched_change)
+        try:
+            with socketserver.TCPServer((self.host, self.port), handler) as httpd:
+                self.dispatch_on_serve(httpd, config=config)
+                print(f"Serving at http://{self.host}:{httpd.server_address[1]}/")
+                if ready is not None:
+                    ready(httpd)
+                with contextlib.suppress(KeyboardInterrupt):
+                    httpd.serve_forever()
+        finally:
+            observer.stop()
+            observer.join()
 
 
 def _site_request_handler(site_dir: Path) -> type[http.server.SimpleHTTPRequestHandler]:

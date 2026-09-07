@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import shutil
 import threading
+import time
 import urllib.request
 from typing import TYPE_CHECKING
 
@@ -23,7 +24,10 @@ from bartleby.server import (
 )
 
 if TYPE_CHECKING:
+    import socketserver
     from pathlib import Path
+
+    from bartleby.build import PageError
 
 
 @pytest.fixture
@@ -242,35 +246,50 @@ def test_events_stream_emits_error_object_on_failed_rebuild(
     assert error_events[0]["errors"]
 
 
-def _run_and_fetch_root(project: Path) -> str:
-    """Start ``DevServer.run`` in a worker thread, fetch ``/``, then shut down.
+def _start_running_server(
+    server: DevServer,
+) -> tuple[threading.Thread, int, socketserver.TCPServer]:
+    """Start ``server.run`` on a daemon thread and block until it is listening.
 
-    The server binds an ephemeral port. The ``ready`` callback fires once the
-    socket is listening, handing back the live server so the caller can learn
-    the bound port, issue a real request, and shut the server down cleanly.
+    The ``ready`` callback fires once the socket is bound and listening,
+    handing back the live server so the caller can learn the bound port and
+    later call :meth:`~socketserver.BaseServer.shutdown` from another thread.
 
-    :param project: The project directory to serve.
-    :returns: The decoded response body for a GET to ``/``.
+    :param server: A configured, not-yet-running ``DevServer``.
+    :returns: The worker thread, the bound ephemeral port, and the live server.
     """
-    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
     bound: dict[str, object] = {}
     listening = threading.Event()
 
-    def on_ready(httpd: object) -> None:
-        bound["port"] = httpd.server_address[1]  # type: ignore[attr-defined]
+    def on_ready(httpd: socketserver.TCPServer) -> None:
+        bound["port"] = httpd.server_address[1]
         bound["httpd"] = httpd
         listening.set()
 
     worker = threading.Thread(target=lambda: server.run(ready=on_ready), daemon=True)
     worker.start()
+    assert listening.wait(timeout=10), "server never started listening"
+    return worker, bound["port"], bound["httpd"]  # type: ignore[return-value]
+
+
+def _fetch(port: int, path: str = "/") -> str:
+    """GET ``path`` from the local server on ``port`` and return the decoded body."""
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=10) as response:
+        return response.read().decode("utf-8")
+
+
+def _run_and_fetch_root(project: Path) -> str:
+    """Start ``DevServer.run`` in a worker thread, fetch ``/``, then shut down.
+
+    :param project: The project directory to serve.
+    :returns: The decoded response body for a GET to ``/``.
+    """
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    worker, port, httpd = _start_running_server(server)
     try:
-        assert listening.wait(timeout=10), "server never started listening"
-        port = bound["port"]
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=10) as response:
-            assert response.status == 200
-            body = response.read().decode("utf-8")
+        body = _fetch(port)
     finally:
-        bound["httpd"].shutdown()  # type: ignore[attr-defined]
+        httpd.shutdown()
         worker.join(timeout=10)
     assert not worker.is_alive()
     return body
@@ -317,3 +336,110 @@ def test_maybe_recompile_theme_prints_hint_when_no_binary_cached(
     server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
     assert server.maybe_recompile_theme() == "hint"
     assert "bartleby theme compile" in capsys.readouterr().out
+
+
+# --- Step 13: wire the watchdog observer into run() -------------------------
+
+
+def test_run_rebuilds_on_watched_content_change(project: Path) -> None:
+    """Editing a watched content file while ``run()`` is active rebuilds the site.
+
+    The new content becomes visible over HTTP within a bounded wait, driven by
+    a real watchdog observer rather than a direct call to a rebuild method.
+    """
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    worker, port, httpd = _start_running_server(server)
+    try:
+        (project / "content" / "index.md").write_text(
+            "---\ntitle: Home\n---\n\nWatcher rebuild marker.\n", encoding="utf-8"
+        )
+        deadline = time.monotonic() + 10
+        body = ""
+        while time.monotonic() < deadline:
+            body = _fetch(port)
+            if "Watcher rebuild marker." in body:
+                break
+            time.sleep(0.1)
+        assert "Watcher rebuild marker." in body
+    finally:
+        httpd.shutdown()
+        worker.join(timeout=10)
+    assert not worker.is_alive()
+
+
+def test_run_ignores_changes_outside_watched_paths(project: Path) -> None:
+    """A change to an unwatched path does not trigger a rebuild while ``run()`` is active.
+
+    The watcher pipeline is instrumented by wrapping ``server.rebuild`` so the
+    test observes the rebuild callback directly rather than sleeping blind
+    against ambiguous HTTP content.
+    """
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    calls: list[list[PageError]] = []
+    original_rebuild = server.rebuild
+
+    def counting_rebuild() -> list[PageError]:
+        result = original_rebuild()
+        calls.append(result)
+        return result
+
+    server.rebuild = counting_rebuild  # type: ignore[method-assign]
+
+    worker, _port, httpd = _start_running_server(server)
+    try:
+        # A file inside the output dir, and a project-root README, are both
+        # outside WATCHED_PATHS.
+        (project / "site" / "index.html").write_text("tampered", encoding="utf-8")
+        (project / "README.md").write_text("not watched\n", encoding="utf-8")
+        time.sleep(1.0)
+        assert calls == [], "an unwatched path change must not trigger a rebuild"
+
+        # Prove the watcher pipeline is alive: a watched change still fires one.
+        (project / "content" / "index.md").write_text(
+            "---\ntitle: Home\n---\n\nWatched after all.\n", encoding="utf-8"
+        )
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and not calls:
+            time.sleep(0.05)
+        assert calls, "the watcher pipeline appears dead"
+    finally:
+        httpd.shutdown()
+        worker.join(timeout=10)
+    assert not worker.is_alive()
+
+
+def test_run_retains_last_good_build_after_watcher_triggered_failure(project: Path) -> None:
+    """A failed watcher-triggered rebuild keeps serving the last good build."""
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    calls: list[list[PageError]] = []
+    original_rebuild = server.rebuild
+
+    def counting_rebuild() -> list[PageError]:
+        result = original_rebuild()
+        calls.append(result)
+        return result
+
+    server.rebuild = counting_rebuild  # type: ignore[method-assign]
+
+    worker, port, httpd = _start_running_server(server)
+    try:
+        good_body = _fetch(port)
+
+        # A page that fails metadata validation (unknown author reference)
+        # forces the watcher-triggered rebuild to collect errors.
+        broken = project / "content" / "blog" / "posts" / "broken.md"
+        broken.write_text(
+            "---\ntitle: Broken\ndate: 2026-01-01\nauthors: [does-not-exist]\n---\n\nBody.\n",
+            encoding="utf-8",
+        )
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and not calls:
+            time.sleep(0.05)
+        assert calls, "the watcher never attempted a rebuild for the broken page"
+        assert calls[-1], "the rebuild attempt should have collected errors"
+
+        assert _fetch(port) == good_body
+    finally:
+        httpd.shutdown()
+        worker.join(timeout=10)
+    assert not worker.is_alive()

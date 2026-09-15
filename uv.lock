@@ -44,7 +44,7 @@ requires-dist = [
     { name = "aiofiles", specifier = ">=23.0" },
     { name = "jinja2", specifier = ">=3.1" },
     { name = "markdown", specifier = ">=3.4" },
-    { name = "markwright", editable = "../do-markdown" },
+    { name = "markwright", specifier = ">=0.1.0" },
     { name = "pygments", specifier = ">=2.17" },
     { name = "pymdown-extensions", specifier = ">=10.0" },
     { name = "python-slugify", specifier = ">=8.0" },
@@ -170,24 +170,14 @@ wheels = [
 [[package]]
 name = "markwright"
 version = "0.1.0"
-source = { editable = "../do-markdown" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "markdown" },
+    { name = "pymdown-extensions" },
 ]
-
-[package.metadata]
-requires-dist = [{ name = "markdown", specifier = ">=3.4" }]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mkdocs", specifier = ">=1.6,<2" },
-    { name = "mkdocs-material", specifier = ">=9.7.5" },
-    { name = "mypy", specifier = ">=1.10" },
-    { name = "pymdown-extensions", specifier = ">=10.5" },
-    { name = "pytest", specifier = ">=8.0" },
-    { name = "pytest-cov", specifier = ">=7.0" },
-    { name = "ruff", specifier = ">=0.5" },
-    { name = "types-markdown", specifier = ">=3.10.2.20260211" },
+sdist = { url = "https://files.pythonhosted.org/packages/51/61/2512efb81ca06985f869aee02dca803636df921af0b2beab59a387c83403/markwright-0.1.0.tar.gz", hash = "sha256:f99ce68cf826d485bd33773e379445259cde69fde0609ed5ee677616667bfae8", size = 26138, upload-time = "2026-09-15T17:20:58.049Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3b/21/367b46296e7e96207d4c088d6f822521f28b5ea00fa6059cc8ba2ed87d48/markwright-0.1.0-py3-none-any.whl", hash = "sha256:7144f77788fb879d22d1d79dff5a9a49822addc3a7fbebca87263b13aedb75ae", size = 35841, upload-time = "2026-09-15T17:20:57.005Z" },
 ]
 
 [[package]]

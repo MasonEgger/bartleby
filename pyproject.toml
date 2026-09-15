@@ -58,8 +58,5 @@ disallow_any_generics = true
 testpaths = ["tests"]
 pythonpath = ["src"]
 
-[tool.uv.sources]
-markwright = { path = "../do-markdown", editable = true }
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/bartleby"]

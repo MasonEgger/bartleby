@@ -1,3 +1,8 @@
+# Bartleby
+commit-msg.md
+site/
+!tests/fixtures/site/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -216,3 +221,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+goal.md
+
+# BPE step-executor scratch file (absorbed into session summaries, never committed)
+.ai-sessions/implementation-notes.md

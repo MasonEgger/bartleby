@@ -1,0 +1,9 @@
+<footer>
+  <nav class="prev-next">
+    {% if page.previous %}<a href="{{ page.previous.url }}" rel="prev">&larr; {{ page.previous.title }}</a>{% endif %}
+    {% if page.next %}<a href="{{ page.next.url }}" rel="next">{{ page.next.title }} &rarr;</a>{% endif %}
+  </nav>
+  <p class="site-meta">
+    Built with Bartleby {{ build.bartleby_version }} on {{ build.date }}.
+  </p>
+</footer>

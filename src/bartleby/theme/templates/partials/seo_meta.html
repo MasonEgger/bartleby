@@ -1,0 +1,16 @@
+{% if seo %}
+<meta name="description" content="{{ page.description or site.description or '' }}">
+<link rel="canonical" href="{{ seo.canonical }}">
+{% for key, value in seo.og.items() %}
+<meta property="{{ key }}" content="{{ value }}">
+{% endfor %}
+{% for key, value in seo.twitter.items() %}
+<meta name="{{ key }}" content="{{ value }}">
+{% endfor %}
+{% else %}
+<meta name="description" content="{{ page.description or site.description or '' }}">
+<meta property="og:title" content="{{ page.title }}">
+<meta property="og:description" content="{{ page.description or site.description or '' }}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ page.title }}">
+{% endif %}

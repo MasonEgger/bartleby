@@ -151,6 +151,27 @@ def test_atom_entry_fields() -> None:
     assert entry.findtext("atom:updated", "", namespace)
 
 
+def test_atom_feed_updated_is_most_recent_entry_date() -> None:
+    """The feed-level ``<updated>`` derives from the newest entry date, not the clock.
+
+    Deriving it from content keeps the feed byte-identical across rebuilds with no
+    content change, so reproducible and incremental builds do not treat the feed as
+    perpetually modified (the source of the old dry-run flake).
+    """
+    posts = [
+        _post(source="blog/posts/a.md", title="A", date=datetime.date(2026, 3, 1)),
+        _post(source="blog/posts/b.md", title="B", date=datetime.date(2026, 5, 15)),
+    ]
+    namespace = {"atom": "http://www.w3.org/2005/Atom"}
+    xml_one = generate_atom(posts, "blog", _config().site)
+    xml_two = generate_atom(posts, "blog", _config().site)
+    feed_updated = ET.fromstring(xml_one).findtext("atom:updated", "", namespace)
+    # Newest entry is 2026-05-15, regardless of input order.
+    assert feed_updated == "2026-05-15T00:00:00Z"
+    # Deterministic: identical content yields identical feeds across rebuilds.
+    assert xml_one == xml_two
+
+
 def test_feed_only_for_configured_types(tmp_path: Path) -> None:
     """A content type without ``feeds`` configured produces no feed files."""
     posts = [_post(source="blog/posts/a.md", title="A", date=datetime.date(2026, 3, 1))]

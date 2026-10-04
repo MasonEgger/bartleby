@@ -206,7 +206,7 @@ def _render_atom(
     ET.SubElement(feed, f"{{{_ATOM_NS}}}title").text = title
     ET.SubElement(feed, f"{{{_ATOM_NS}}}id").text = feed_id
     ET.SubElement(feed, f"{{{_ATOM_NS}}}link", href=self_href, rel="self")
-    ET.SubElement(feed, f"{{{_ATOM_NS}}}updated").text = _atom_updated_now()
+    ET.SubElement(feed, f"{{{_ATOM_NS}}}updated").text = _atom_feed_updated(pages)
 
     for page in pages:
         entry = ET.SubElement(feed, f"{{{_ATOM_NS}}}entry")
@@ -261,9 +261,17 @@ def _atom_date(date: datetime.date) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _atom_updated_now() -> str:
-    """Atom feed-level ``<updated>`` timestamp — build-time clock, not a page date."""
-    return datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+def _atom_feed_updated(pages: list[Page]) -> str:
+    """Atom feed-level ``<updated>``: the most recent entry date.
+
+    Deriving this from content (not the build-time clock) keeps the feed
+    byte-identical across rebuilds when nothing changed, so reproducible and
+    incremental builds do not treat the feed as perpetually modified. Falls back
+    to the Unix epoch when no entry carries a date, which keeps the element
+    present and valid per Atom while staying deterministic.
+    """
+    dates = [page.date for page in pages if page.date is not None]
+    return _atom_date(max(dates)) if dates else _atom_date(datetime.date(1970, 1, 1))
 
 
 def _serialise(element: ET.Element) -> str:

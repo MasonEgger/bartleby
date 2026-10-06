@@ -1,0 +1,57 @@
+name: Test Publish to TestPyPI
+
+# Manually-triggered dry run that builds and publishes to TestPyPI via trusted
+# publishing, so install, README rendering, and metadata can be validated before
+# a real PyPI release. Never runs on release or push.
+#
+# Requires a TestPyPI trusted-publisher config referencing this workflow file
+# (test-publish.yml) and the "testpypi" environment below. Optional: delete this
+# file if you do not want a TestPyPI dry-run step.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.1.0
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: ".python-version"
+
+      - name: Build package
+        run: uv build
+
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: [build]
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/bartleby-ssg
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.1.0
+
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to TestPyPI
+        run: uv publish --publish-url https://test.pypi.org/legacy/

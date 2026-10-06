@@ -1,0 +1,12 @@
+site:
+  title: "Invalid Taxonomy Reference"
+  url: "https://example.com"
+
+content_types:
+  blog:
+    path: blog/posts
+    taxonomies: [tags, series]
+
+taxonomies:
+  tags:
+    slug_format: "tag:{slug}"

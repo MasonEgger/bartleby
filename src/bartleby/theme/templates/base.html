@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ page.title }} — {{ site.title }}</title>
+  <link rel="stylesheet" href="/css/main.css">
+  {% include "partials/seo_meta.html" %}
+  {% if page.url %}
+  <link rel="alternate" type="text/markdown" href="/{{ (page.url.strip('/') ~ '/index.md') if page.url.strip('/') else 'index.md' }}">
+  {% endif %}
+  {% for feed_link in feed_links | default([]) %}
+  <link rel="alternate" type="{{ feed_link.type }}" href="{{ feed_link.href }}" title="{{ feed_link.title }}">
+  {% endfor %}
+  {% for css in extra_css %}
+  <link rel="stylesheet" href="/{{ css.lstrip('/') }}">
+  {% endfor %}
+  {% include "partials/jsonld.html" %}
+  <script defer src="/js/alpine.min.js"></script>
+  <script defer src="/js/htmx.min.js"></script>
+  <script defer src="/js/lunr.min.js"></script>
+</head>
+<body>
+  {% include "partials/header.html" %}
+  {% if feature is defined and feature('search') %}{% include "partials/search.html" %}{% endif %}
+  <main>
+    {% block content %}{{ page.content | safe if page.content else "" }}{% endblock %}
+  </main>
+  {% if feature is defined and feature('navigation.top') %}{% include "partials/back_to_top.html" %}{% endif %}
+  {% if feature is defined and feature('content.code.copy') %}{% include "partials/code_copy.html" %}{% endif %}
+  {% include "partials/footer.html" %}
+  {% for js in extra_js %}
+  <script src="/{{ js.lstrip('/') }}"></script>
+  {% endfor %}
+</body>
+</html>

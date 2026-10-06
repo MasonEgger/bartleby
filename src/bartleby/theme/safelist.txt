@@ -1,0 +1,20 @@
+# Curated Tailwind safelist for the shipped theme CSS.
+# These utility classes are always present in the package-built main.css even
+# when no bundled template references them statically, so common runtime-toggled
+# states (dark mode, search modal open/close, prose variants) render correctly
+# without the user running `bartleby theme compile`.
+#
+# Compiled into static/css/main.css at package build time. See the `theme-css`
+# recipe in the Justfile and the "Theme Asset Pipeline" section of spec.md.
+hidden
+block
+flex
+grid
+prose
+prose-invert
+dark
+dark:bg-gray-900
+dark:text-gray-100
+sr-only
+container
+mx-auto

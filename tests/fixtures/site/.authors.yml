@@ -1,0 +1,7 @@
+authors:
+  mason:
+    name: Mason Egger
+    description: "Sample author"
+    url: https://masonegger.com
+  guest:
+    name: Guest Author

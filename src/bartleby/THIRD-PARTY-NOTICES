@@ -1,0 +1,93 @@
+THIRD-PARTY NOTICES
+===================
+
+Bartleby ships several third-party assets in its built-in theme. Each retains
+its own copyright and license, reproduced or referenced below. Bartleby itself
+is MIT-licensed (see LICENSE).
+
+The vendored JavaScript bundles live in
+src/bartleby/theme/static/js/ and are pinned to the exact versions recorded
+here. SHA-256 checksums are recorded so the bundles can be re-verified.
+
+
+JavaScript libraries
+--------------------
+
+Alpine.js
+  Version: 3.14.1
+  License: MIT
+  Homepage: https://alpinejs.dev/
+  File: theme/static/js/alpine.min.js
+  SHA-256: 358d9afbb1ab5befa2f48061a30776e5bcd7707f410a606ba985f98bc3b1c034
+  Copyright (c) 2019-2024 Caleb Porzio and contributors.
+
+HTMX
+  Version: 2.0.4
+  License: BSD 2-Clause
+  Homepage: https://htmx.org/
+  File: theme/static/js/htmx.min.js
+  SHA-256: e209dda5c8235479f3166defc7750e1dbcd5a5c1808b7792fc2e6733768fb447
+  Copyright (c) 2020 Big Sky Software.
+
+lunr.js
+  Version: 2.3.9
+  License: MIT
+  Homepage: https://lunrjs.com/
+  File: theme/static/js/lunr.min.js
+  SHA-256: 0c50d9002b85780a842afffb567bb54ede402dae7c6dc5997a018614d8044fc8
+  Copyright (c) 2013-2020 Oliver Nightingale.
+
+
+Icon packs
+----------
+
+Material Design Icons   Apache License 2.0   https://pictogrammers.com/library/mdi/
+FontAwesome (Free)      CC BY 4.0 (icons), MIT (code)   https://fontawesome.com/
+Octicons                MIT   https://primer.style/octicons/
+Simple Icons            CC0 1.0   https://simpleicons.org/
+
+
+License texts
+-------------
+
+MIT License
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+BSD 2-Clause License
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+  1. Redistributions of source code must retain the above copyright notice, this
+     list of conditions and the following disclaimer.
+  2. Redistributions in binary form must reproduce the above copyright notice,
+     this list of conditions and the following disclaimer in the documentation
+     and/or other materials provided with the distribution.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

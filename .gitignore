@@ -1,3 +1,8 @@
+# Bartleby
+commit-msg.md
+site/
+!tests/fixtures/site/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -216,3 +221,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+goal.md
+
+# AI development session artifacts (session summaries, lessons, scratch notes).
+# Kept locally but never tracked in the repo.
+.ai-sessions/

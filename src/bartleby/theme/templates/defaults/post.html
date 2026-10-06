@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<article>
+  <header>
+    <h1>{{ page.title }}</h1>
+    {% if page.date %}<time datetime="{{ page.date }}">{{ page.date }}</time>{% endif %}
+    {% if page.authors %}
+    <p>By
+    {% for author in page.authors %}{{ author.name }}{% if not loop.last %}, {% endif %}{% endfor %}
+    </p>
+    {% endif %}
+    {% if page.readtime %}<p>{{ page.readtime }} min read</p>{% endif %}
+  </header>
+  {{ page.content | safe if page.content else "" }}
+  {% if page.taxonomies and page.taxonomies.tags %}
+  <footer>
+    <ul>
+      {% for tag in page.taxonomies.tags %}<li>{{ tag }}</li>{% endfor %}
+    </ul>
+  </footer>
+  {% endif %}
+</article>
+{% endblock %}

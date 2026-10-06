@@ -1,0 +1,21 @@
+<div class="search-modal" x-data="{ open: false, query: '', results: [] }">
+  <button type="button" class="search-trigger" x-on:click="open = true" aria-label="Open search">
+    Search
+  </button>
+  <div class="search-overlay" x-show="open" x-on:keydown.escape.window="open = false">
+    <div class="search-panel" x-on:click.outside="open = false">
+      <input
+        type="search"
+        class="search-input"
+        placeholder="Search…"
+        x-model="query"
+        x-on:input.debounce.150ms="results = window.__bartlebySearch ? window.__bartlebySearch(query) : []"
+        autofocus>
+      <ul class="search-results">
+        <template x-for="result in results" :key="result.location">
+          <li><a x-bind:href="result.location" x-text="result.title"></a></li>
+        </template>
+      </ul>
+    </div>
+  </div>
+</div>

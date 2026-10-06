@@ -1,0 +1,779 @@
+# ABOUTME: Integration tests for the build pipeline orchestrator.
+# Drives the sample fixture site through build() and inspects the output.
+
+from __future__ import annotations
+
+import shutil
+from pathlib import Path
+
+import pytest
+
+from bartleby.build import (
+    BuildError,
+    BuildResult,
+    DryRunResult,
+    build,
+    build_dry_run,
+    calculate_readtime,
+    extract_excerpt,
+)
+from bartleby.config import ConfigError
+from bartleby.theme import get_theme_static_dir
+
+
+@pytest.fixture
+def project(tmp_path: Path) -> Path:
+    """Copy the sample fixture site into a temp dir so build can mutate ``site/``."""
+    source = Path(__file__).parent / "fixtures" / "site"
+    destination = tmp_path / "site_project"
+    shutil.copytree(source, destination)
+    return destination
+
+
+def test_build_produces_output_directory(project: Path) -> None:
+    """``build`` writes a ``site/`` directory next to ``bartleby.yml``."""
+    build(project / "bartleby.yml")
+    assert (project / "site").is_dir()
+
+
+def test_build_honors_configured_output_dir(project: Path) -> None:
+    """A non-default ``output_dir`` in config is where the site is written (Design 10).
+
+    The output directory must not be hardcoded to ``site/``; setting
+    ``output_dir: public`` makes the build write there instead.
+    """
+    config_path = project / "bartleby.yml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8") + "\noutput_dir: public\n",
+        encoding="utf-8",
+    )
+    result = build(config_path)
+    assert (project / "public" / "index.html").exists()
+    assert not (project / "site").exists()
+    assert isinstance(result, BuildResult)
+    assert result.output_dir == "public/"
+
+
+def test_build_renders_index_page(project: Path) -> None:
+    """The top-level ``index.md`` becomes ``site/index.html``."""
+    build(project / "bartleby.yml")
+    rendered = (project / "site" / "index.html").read_text(encoding="utf-8")
+    assert "Welcome" in rendered
+
+
+def test_build_renders_blog_post(project: Path) -> None:
+    """Blog posts land at their generated URL path under ``site/``."""
+    build(project / "bartleby.yml")
+    rendered_dir = project / "site" / "blog" / "posts" / "first-post"
+    assert (rendered_dir / "index.html").exists()
+
+
+def test_build_post_renders_author_byline(project: Path) -> None:
+    """Blog post HTML includes the resolved author name from ``.authors.yml``."""
+    build(project / "bartleby.yml")
+    rendered = (project / "site" / "blog" / "posts" / "first-post" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    # first-post.md front matter has `authors: [mason]`;
+    # .authors.yml maps `mason` to `Mason Egger`.
+    assert "Mason Egger" in rendered
+
+
+def test_build_listing_page_lists_published_posts(project: Path) -> None:
+    """The blog listing HTML contains a link to every published post."""
+    build(project / "bartleby.yml")
+    rendered = (project / "site" / "blog" / "index.html").read_text(encoding="utf-8")
+    # Two published posts in the fixture: first-post and second-post.
+    assert 'href="/blog/posts/first-post/"' in rendered
+    assert 'href="/blog/posts/second-post/"' in rendered
+    # Draft post must not appear.
+    assert 'href="/blog/posts/draft-post/"' not in rendered
+
+
+def test_build_renders_standalone_404(project: Path) -> None:
+    """``build`` renders a standalone ``site/404.html`` from the 404 template."""
+    build(project / "bartleby.yml")
+    not_found = project / "site" / "404.html"
+    assert not_found.exists()
+    rendered = not_found.read_text(encoding="utf-8")
+    assert "404" in rendered
+    # The 404 template extends base.html, so the site chrome must be present.
+    assert "<html" in rendered.lower()
+
+
+def test_tree_shake_retains_icon_referenced_only_in_template(project: Path) -> None:
+    """An icon referenced only in a project template is copied to the output.
+
+    The page bodies never mention ``icon-material-home``; only an overriding
+    template does. Tree-shaking must scan template sources, not just rendered
+    page bodies, to retain it.
+    """
+    templates_dir = project / "templates"
+    templates_dir.mkdir()
+    (templates_dir / "page.html").write_text(
+        '{% extends "base.html" %}\n'
+        "{% block content %}\n"
+        '<span class="icon icon-material-home"></span>\n'
+        "<article><h1>{{ page.title }}</h1>{{ page.content | safe }}</article>\n"
+        "{% endblock %}\n",
+        encoding="utf-8",
+    )
+    build(project / "bartleby.yml")
+    assert (project / "site" / "icons" / "material" / "home.svg").exists()
+
+
+def _write_template_with_icon_spans(project: Path, icon_names: list[str]) -> None:
+    """Write a project template referencing each icon name in ``icon_names``.
+
+    Used to prove which icon packs a build resolved as enabled: tree-shaking
+    only copies an icon whose pack is enabled, so an icon's presence (or
+    absence) in the output tree is the observable signal.
+    """
+    templates_dir = project / "templates"
+    templates_dir.mkdir(exist_ok=True)
+    spans = "\n".join(f'<span class="icon icon-{name}"></span>' for name in icon_names)
+    (templates_dir / "page.html").write_text(
+        '{% extends "base.html" %}\n'
+        "{% block content %}\n"
+        f"{spans}\n"
+        "<article><h1>{{ page.title }}</h1>{{ page.content | safe }}</article>\n"
+        "{% endblock %}\n",
+        encoding="utf-8",
+    )
+
+
+def test_icon_packs_single_false_entry_leaves_other_packs_enabled(project: Path) -> None:
+    """``icon_packs: {simple: false}`` disables only ``simple``, per R10.
+
+    The merge must start from all-four-True and overlay the config on top;
+    naming one pack must not silently drop the other three defaults.
+    """
+    config_path = project / "bartleby.yml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8") + "\ntheme:\n  icon_packs:\n    simple: false\n",
+        encoding="utf-8",
+    )
+    _write_template_with_icon_spans(
+        project,
+        ["material-home", "fontawesome-github", "octicons-star-16", "simple-github"],
+    )
+    build(config_path)
+    site = project / "site" / "icons"
+    assert (site / "material" / "home.svg").exists()
+    assert (site / "fontawesome-brands" / "github.svg").exists()
+    assert (site / "octicons" / "star-16.svg").exists()
+    assert not (site / "simple" / "github.svg").exists()
+
+
+def test_icon_packs_unset_resolves_all_four_packs_enabled(project: Path) -> None:
+    """An unset ``icon_packs`` config resolves all four packs to ``True``."""
+    _write_template_with_icon_spans(project, ["simple-github"])
+    build(project / "bartleby.yml")
+    assert (project / "site" / "icons" / "simple" / "github.svg").exists()
+
+
+def test_icon_packs_two_false_entries_disable_exactly_those_two(project: Path) -> None:
+    """``icon_packs: {fontawesome: false, simple: false}`` disables exactly those two.
+
+    Icons from the two packs left enabled (``material``, ``octicons``) must
+    still land in the output.
+    """
+    config_path = project / "bartleby.yml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8")
+        + "\ntheme:\n  icon_packs:\n    fontawesome: false\n    simple: false\n",
+        encoding="utf-8",
+    )
+    _write_template_with_icon_spans(
+        project,
+        ["material-home", "fontawesome-github", "octicons-star-16", "simple-github"],
+    )
+    build(config_path)
+    site = project / "site" / "icons"
+    assert (site / "material" / "home.svg").exists()
+    assert (site / "octicons" / "star-16.svg").exists()
+    assert not (site / "fontawesome-brands" / "github.svg").exists()
+    assert not (site / "simple" / "github.svg").exists()
+
+
+def test_on_files_runs_after_draft_filter(project: Path) -> None:
+    """The ``on_files`` hook sees only published pages, never drafts.
+
+    A hook registered in the project's ``hooks/`` directory records the titles
+    of every page it receives. Because the draft filter runs before the hook, a
+    draft post must be absent from what the hook observed.
+    """
+    hooks_dir = project / "hooks"
+    hooks_dir.mkdir()
+    record_path = project / "seen_pages.txt"
+    (hooks_dir / "record.py").write_text(
+        "# ABOUTME: Test hook that records the titles on_files receives.\n"
+        "# Writes them to seen_pages.txt for the draft-filter ordering assertion.\n"
+        "from __future__ import annotations\n"
+        "from pathlib import Path\n"
+        "\n"
+        "RECORD = Path(__file__).parent.parent / 'seen_pages.txt'\n"
+        "\n"
+        "def on_files(pages, config):\n"
+        "    RECORD.write_text('\\n'.join(page.title for page in pages), encoding='utf-8')\n"
+        "    return pages\n",
+        encoding="utf-8",
+    )
+    build(project / "bartleby.yml")
+    seen = record_path.read_text(encoding="utf-8")
+    assert "Draft Post" not in seen
+    # Sanity: the published posts the hook should see are present.
+    assert "First Post" in seen
+
+
+def test_build_sitemap_includes_listing_url(project: Path) -> None:
+    """``sitemap.xml`` lists the navigable ``/blog/`` listing URL."""
+    build(project / "bartleby.yml")
+    sitemap = (project / "site" / "sitemap.xml").read_text(encoding="utf-8")
+    assert "https://sample.example.com/blog/" in sitemap
+
+
+def test_build_taxonomy_term_page_lists_tagged_posts(project: Path) -> None:
+    """A ``/tags/python/`` term page links to every post tagged ``python``."""
+    build(project / "bartleby.yml")
+    target = project / "site" / "tags" / "python" / "index.html"
+    assert target.exists(), "taxonomy term page should be generated for `python`"
+    rendered = target.read_text(encoding="utf-8")
+    assert 'href="/blog/posts/first-post/"' in rendered
+    assert 'href="/blog/posts/second-post/"' in rendered
+
+
+def test_build_html_is_valid_structure(project: Path) -> None:
+    """Rendered pages include the standard HTML5 scaffolding."""
+    build(project / "bartleby.yml")
+    rendered = (project / "site" / "index.html").read_text(encoding="utf-8")
+    assert "<!DOCTYPE html>" in rendered
+    assert "<html" in rendered
+    assert "<head>" in rendered
+    assert "<body>" in rendered
+
+
+def test_build_page_title_in_output(project: Path) -> None:
+    """The page's front-matter title appears inside ``<title>``."""
+    build(project / "bartleby.yml")
+    rendered = (project / "site" / "index.html").read_text(encoding="utf-8")
+    assert "<title>Home" in rendered
+
+
+def test_build_excludes_drafts(project: Path) -> None:
+    """Draft posts are not written to ``site/`` by default."""
+    build(project / "bartleby.yml")
+    draft_dir = project / "site" / "blog" / "posts" / "draft-post"
+    assert not draft_dir.exists()
+
+
+def test_build_includes_drafts_when_requested(project: Path) -> None:
+    """``include_drafts=True`` writes draft posts alongside published ones."""
+    build(project / "bartleby.yml", include_drafts=True)
+    draft_dir = project / "site" / "blog" / "posts" / "draft-post"
+    assert draft_dir.exists()
+
+
+def test_build_excludes_draft_colocated_asset(project: Path) -> None:
+    """A draft's co-located asset is dropped from the output along with the page.
+
+    ``draft-with-asset/`` is a bundle occupied solely by a draft page, so a
+    production build must write neither the page nor ``photo.png`` next to it.
+    """
+    build(project / "bartleby.yml")
+    draft_dir = project / "site" / "blog" / "posts" / "draft-with-asset"
+    assert not draft_dir.exists()
+    assert not (draft_dir / "photo.png").exists()
+
+
+def test_build_includes_draft_colocated_asset_when_requested(project: Path) -> None:
+    """``include_drafts=True`` writes a draft's co-located asset alongside the page."""
+    build(project / "bartleby.yml", include_drafts=True)
+    draft_dir = project / "site" / "blog" / "posts" / "draft-with-asset"
+    assert draft_dir.exists()
+    assert (draft_dir / "photo.png").exists()
+
+
+def test_build_still_copies_a_published_pages_colocated_asset(project: Path) -> None:
+    """Regression guard: a published page's co-located asset still copies."""
+    build(project / "bartleby.yml")
+    published_dir = project / "site" / "blog" / "posts" / "published-with-asset"
+    assert published_dir.exists()
+    assert (published_dir / "photo.png").exists()
+
+
+def test_build_reports_shared_directory_asset_collision(project: Path) -> None:
+    """Two pages sharing a directory with a co-located asset raise BuildError.
+
+    A full build must surface the collision as a clean BuildError (routed
+    through the R3 error contract) rather than a traceback or a silent
+    last-writer-wins asset placement.
+    """
+    shared_dir = project / "content" / "blog" / "posts" / "shared-bundle"
+    shared_dir.mkdir()
+    (shared_dir / "page-a.md").write_text(
+        '---\ntitle: "Page A"\ndraft: false\n---\n\nPage A body.\n', encoding="utf-8"
+    )
+    (shared_dir / "page-b.md").write_text(
+        '---\ntitle: "Page B"\ndraft: false\n---\n\nPage B body.\n', encoding="utf-8"
+    )
+    (shared_dir / "diagram.png").write_bytes(b"stub-png")
+
+    with pytest.raises(BuildError) as excinfo:
+        build(project / "bartleby.yml")
+
+    message = str(excinfo.value)
+    assert "shared-bundle" in message
+    assert "page-a.md" in message
+    assert "page-b.md" in message
+
+
+def test_build_cleans_output_dir(project: Path) -> None:
+    """``site/`` is cleaned at the start of each build — stale files vanish."""
+    site_dir = project / "site"
+    site_dir.mkdir()
+    (site_dir / "stale.html").write_text("stale")
+    build(project / "bartleby.yml")
+    assert not (site_dir / "stale.html").exists()
+
+
+def test_build_returns_result(project: Path) -> None:
+    """``build`` returns a :class:`BuildResult` with positive page count and duration."""
+    result = build(project / "bartleby.yml")
+    assert isinstance(result, BuildResult)
+    assert result.page_count > 0
+    assert result.duration_seconds >= 0.0
+
+
+def test_static_file_count_excludes_generated_artifacts(project: Path) -> None:
+    """``static_file_count`` counts only copied static files and co-located assets.
+
+    The expected count is every file under the built-in theme's static
+    directory, plus every file under the project's ``static/`` (``logo.png``,
+    ``css/custom.css``), plus the two co-located assets that survive draft
+    filtering (``published-with-asset/photo.png`` and the orphaned
+    ``media/diagram.png``).
+    The default config also emits a search index, feeds, a sitemap, a
+    ``robots.txt``, ``llms.txt`` files, markdown variants, and agent-surface
+    JSON; those generated artifacts must not inflate the count. This test
+    asserts each of those artifacts actually exists in the tree, so it proves
+    they are excluded rather than merely absent.
+    """
+    result = build(project / "bartleby.yml")
+    site_dir = project / "site"
+
+    # Prove the generated artifacts are present, so their exclusion is real.
+    assert (site_dir / "search" / "search_index.json").exists()
+    assert (site_dir / "feed.xml").exists()
+    assert (site_dir / "atom.xml").exists()
+    assert (site_dir / "sitemap.xml").exists()
+    assert (site_dir / "robots.txt").exists()
+    assert (site_dir / "llms.txt").exists()
+    assert (site_dir / "llms-full.txt").exists()
+    assert (site_dir / "index.md").exists()  # markdown variant of the homepage
+    assert (site_dir / "schema.json").exists()
+    assert (site_dir / "content-index.json").exists()
+
+    theme_static_count = sum(1 for path in get_theme_static_dir().rglob("*") if path.is_file())
+    project_static_count = sum(1 for path in (project / "static").rglob("*") if path.is_file())
+    colocated_asset_count = 2  # published-with-asset/photo.png + orphaned media/diagram.png
+    expected_count = theme_static_count + project_static_count + colocated_asset_count
+
+    assert isinstance(result, BuildResult)
+    assert result.static_file_count == expected_count
+
+
+def test_static_file_count_unaffected_by_llms_txt_toggle(project: Path) -> None:
+    """Toggling a generated artifact (``ai.llms_txt``) does not change the count."""
+    config_path = project / "bartleby.yml"
+    baseline = config_path.read_text(encoding="utf-8")
+
+    result_with_llms_txt = build(config_path)
+    shutil.rmtree(project / "site")
+
+    config_path.write_text(baseline + "\nai:\n  llms_txt: false\n", encoding="utf-8")
+    result_without_llms_txt = build(config_path)
+    assert not (project / "site" / "llms.txt").exists()
+
+    assert result_with_llms_txt.static_file_count == result_without_llms_txt.static_file_count
+
+
+def test_dry_run_reports_all_added_on_fresh_build(project: Path) -> None:
+    """With no existing ``site/``, every rendered file is reported as added."""
+    result = build_dry_run(project / "bartleby.yml")
+    assert isinstance(result, DryRunResult)
+    assert result.added  # at least the index and a blog post
+    assert result.modified == []
+    assert result.deleted == []
+    assert result.unchanged == []
+
+
+def test_dry_run_does_not_write_to_disk(project: Path) -> None:
+    """A dry run never creates the ``site/`` directory."""
+    build_dry_run(project / "bartleby.yml")
+    assert not (project / "site").exists()
+
+
+def test_dry_run_reports_unchanged_after_real_build(project: Path) -> None:
+    """After a real build, a dry run with no source changes reports everything unchanged."""
+    build(project / "bartleby.yml")
+    result = build_dry_run(project / "bartleby.yml")
+    assert result.added == []
+    assert result.modified == []
+    assert result.deleted == []
+    assert result.unchanged  # the previously built files are unchanged
+
+
+def test_dry_run_reports_modified_when_content_changes(project: Path) -> None:
+    """Editing a page's body shows that page's output as modified, not added."""
+    build(project / "bartleby.yml")
+    index = project / "content" / "index.md"
+    index.write_text(
+        index.read_text(encoding="utf-8") + "\n\nA brand new paragraph.\n", encoding="utf-8"
+    )
+    result = build_dry_run(project / "bartleby.yml")
+    modified_paths = " ".join(result.modified)
+    assert "index.html" in modified_paths
+    # The existing site/ is left untouched by the dry run.
+    assert (project / "site" / "index.html").exists()
+
+
+def test_dry_run_reports_deleted_when_source_removed(project: Path) -> None:
+    """Removing a content file marks its previously built output as deleted."""
+    build(project / "bartleby.yml")
+    (project / "content" / "blog" / "posts" / "first-post.md").unlink()
+    result = build_dry_run(project / "bartleby.yml")
+    deleted_paths = " ".join(result.deleted)
+    assert "first-post" in deleted_paths
+
+
+def test_dry_run_result_renders_dry_run_status() -> None:
+    """The dry-run output object reports the ``dry_run`` status in its JSON shape."""
+    from bartleby.output import DryRunOutput
+
+    output = DryRunOutput(added=["site/a/index.html"], modified=[], unchanged=5, deleted=[])
+    payload = output.to_dict()
+    assert payload["status"] == "dry_run"
+    assert payload["added"] == ["site/a/index.html"]
+    assert payload["unchanged"] == 5
+
+
+def test_extract_excerpt_with_separator() -> None:
+    """When a separator is present, the excerpt is the content above it rendered to HTML."""
+    source = "Intro paragraph.\n\n<!-- more -->\n\nRest of post.\n"
+    excerpt = extract_excerpt(source, "<!-- more -->")
+    assert "Intro paragraph" in excerpt
+    assert "Rest of post" not in excerpt
+
+
+def test_extract_excerpt_first_paragraph() -> None:
+    """Without a separator, the first paragraph of source is returned."""
+    source = "First paragraph.\n\nSecond paragraph.\n"
+    excerpt = extract_excerpt(source, None)
+    assert "First paragraph" in excerpt
+    assert "Second paragraph" not in excerpt
+
+
+def test_calculate_readtime() -> None:
+    """``calculate_readtime`` returns ~1 minute per 265 words (rounded up)."""
+    text = "word " * 1000
+    assert calculate_readtime(text) in {3, 4, 5}
+
+
+def test_calculate_readtime_short_text() -> None:
+    """Very short text still returns at least 1 minute."""
+    assert calculate_readtime("hello world") == 1
+
+
+def test_build_strict_fails_on_broken_crossref(
+    project: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """In strict mode, an unresolved ``.md`` link raises BuildError.
+
+    The failure routes through the same error contract as every other
+    build-time failure: one PageError per broken crossref, carrying the
+    offending file's path.
+    """
+    post_path = project / "content" / "blog" / "posts" / "first-post.md"
+    text = post_path.read_text(encoding="utf-8")
+    post_path.write_text(text + "\nSee [missing page](missing-target.md).\n", encoding="utf-8")
+    with caplog.at_level("WARNING", logger="bartleby"), pytest.raises(BuildError) as exc:
+        build(project / "bartleby.yml", strict=True)
+    collected = exc.value.errors
+    assert len(collected) == 1
+    assert "strict" in collected[0].message.lower()
+    reported = "\n".join(str(error.file_path) for error in collected)
+    assert "first-post.md" in reported
+    assert "missing-target.md" in caplog.text
+
+
+def test_build_fails_on_metadata_validation_errors(project: Path) -> None:
+    """A page with invalid metadata raises BuildError carrying one PageError per failure."""
+    post_path = project / "content" / "blog" / "posts" / "first-post.md"
+    text = post_path.read_text(encoding="utf-8")
+    post_path.write_text(
+        text.replace("authors:\n  - mason", "authors:\n  - nobody-such-author"),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(BuildError) as exc:
+        build(project / "bartleby.yml")
+
+    collected = exc.value.errors
+    assert len(collected) == 1
+    assert "nobody-such-author" in collected[0].message
+    assert "first-post.md" in collected[0].file_path
+
+
+def test_build_non_strict_warns_on_broken_crossref(
+    project: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Without strict mode, broken cross-references log a warning but do not abort."""
+    post_path = project / "content" / "blog" / "posts" / "first-post.md"
+    text = post_path.read_text(encoding="utf-8")
+    post_path.write_text(text + "\nSee [missing page](missing-target.md).\n", encoding="utf-8")
+    with caplog.at_level("WARNING", logger="bartleby"):
+        result = build(project / "bartleby.yml")
+    assert result.page_count > 0
+    assert "missing-target.md" in caplog.text
+
+
+def _inject_unknown_shortcode(post_path: Path, shortcode_name: str) -> None:
+    """Append an unknown shortcode invocation to a content file so render fails."""
+    text = post_path.read_text(encoding="utf-8")
+    post_path.write_text(f"{text}\n[% {shortcode_name} %]\n", encoding="utf-8")
+
+
+def test_build_collects_all_page_errors_into_one_build_error(project: Path) -> None:
+    """Two pages with render errors raise a single BuildError carrying both.
+
+    The render pass must not stop on the first failure. Both offending pages'
+    paths appear in the collected error list.
+    """
+    first = project / "content" / "blog" / "posts" / "first-post.md"
+    second = project / "content" / "blog" / "posts" / "second-post.md"
+    _inject_unknown_shortcode(first, "totally_unknown_one")
+    _inject_unknown_shortcode(second, "totally_unknown_two")
+
+    with pytest.raises(BuildError) as exc:
+        build(project / "bartleby.yml")
+
+    collected = exc.value.errors
+    assert len(collected) == 2, "render pass must collect both errors, not stop on the first"
+    reported = "\n".join(str(error.file_path) for error in collected)
+    assert "first-post.md" in reported
+    assert "second-post.md" in reported
+
+
+def test_failed_build_leaves_existing_site_untouched(project: Path) -> None:
+    """A failing build never deletes or partially overwrites a pre-existing site/."""
+    site_dir = project / "site"
+    site_dir.mkdir()
+    sentinel = site_dir / "sentinel.html"
+    sentinel.write_text("previous good build", encoding="utf-8")
+
+    first = project / "content" / "blog" / "posts" / "first-post.md"
+    _inject_unknown_shortcode(first, "totally_unknown_one")
+
+    with pytest.raises(BuildError):
+        build(project / "bartleby.yml")
+
+    assert sentinel.exists(), "failed build must not delete the existing site/"
+    assert sentinel.read_text(encoding="utf-8") == "previous good build"
+    # No partial output for the (would-be) new build leaked into site/.
+    assert not (site_dir / "blog" / "posts" / "first-post" / "index.html").exists()
+
+
+def test_successful_build_swaps_output_atomically(project: Path) -> None:
+    """On success the new output replaces site/ wholesale and no temp dir lingers.
+
+    A stale sentinel from a prior build must be gone (the directory is swapped,
+    not merged into), and no sibling temp build directory is left behind.
+    """
+    site_dir = project / "site"
+    site_dir.mkdir()
+    (site_dir / "stale-from-old-build.html").write_text("old", encoding="utf-8")
+
+    build(project / "bartleby.yml")
+
+    assert (site_dir / "index.html").exists()
+    assert not (site_dir / "stale-from-old-build.html").exists()
+    leftover_temp = [
+        child
+        for child in project.iterdir()
+        if child.is_dir() and child.name != "site" and child.name.startswith(".bartleby")
+    ]
+    assert leftover_temp == [], f"build left a temp directory behind: {leftover_temp}"
+
+
+def _leftover_temp_dirs(project: Path) -> list[Path]:
+    """Return any ``.bartleby-build-*`` temp directories left directly under ``project``."""
+    return [
+        child
+        for child in project.iterdir()
+        if child.is_dir() and child.name.startswith(".bartleby-build-")
+    ]
+
+
+def test_strict_mode_failure_leaves_no_temp_dir(
+    project: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A strict-mode crossref failure (BuildError) leaves no ``.bartleby-build-*`` dir behind.
+
+    Strict-crossref failures raise directly from ``_render_all_pages`` without
+    routing through ``_fail_build``, so this exercises the failure path a
+    per-helper cleanup would miss.
+    """
+    post_path = project / "content" / "blog" / "posts" / "first-post.md"
+    text = post_path.read_text(encoding="utf-8")
+    post_path.write_text(text + "\nSee [missing page](missing-target.md).\n", encoding="utf-8")
+
+    with caplog.at_level("WARNING", logger="bartleby"), pytest.raises(BuildError):
+        build(project / "bartleby.yml", strict=True)
+
+    leftover = _leftover_temp_dirs(project)
+    assert leftover == [], f"strict-mode failure left a temp directory behind: {leftover}"
+
+
+def test_exception_in_emit_outputs_leaves_no_temp_dir(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An exception raised deep in the emit phase still cleans up the temp build dir.
+
+    ``_emit_outputs`` has no error handling of its own, so any exception raised
+    inside it (a plugin, a write, anything) must still be cleaned up by the
+    pipeline's cleanup, not by a helper local to a known failure mode.
+    """
+    site_dir = project / "site"
+    site_dir.mkdir()
+    sentinel = site_dir / "sentinel.html"
+    sentinel.write_text("previous good build", encoding="utf-8")
+
+    def _boom(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("emit failure")
+
+    monkeypatch.setattr("bartleby.build.write_sitemap", _boom)
+
+    with pytest.raises(RuntimeError):
+        build(project / "bartleby.yml")
+
+    assert sentinel.exists(), "an emit-phase failure must not touch the existing site/"
+    assert sentinel.read_text(encoding="utf-8") == "previous good build"
+    leftover = _leftover_temp_dirs(project)
+    assert leftover == [], f"emit-phase exception left a temp directory behind: {leftover}"
+
+
+def test_invalid_config_fails_before_render(project: Path) -> None:
+    """An invalid config raises ConfigError immediately, before any render pass."""
+    site_dir = project / "site"
+    site_dir.mkdir()
+    sentinel = site_dir / "sentinel.html"
+    sentinel.write_text("previous good build", encoding="utf-8")
+
+    config_path = project / "bartleby.yml"
+    config_path.write_text("site:\n  title: only a title, no url\n", encoding="utf-8")
+
+    with pytest.raises(ConfigError):
+        build(config_path)
+
+    # Pre-render failure leaves the existing site/ completely untouched.
+    assert sentinel.exists()
+    assert sentinel.read_text(encoding="utf-8") == "previous good build"
+
+
+def test_on_build_error_fires_once_with_collected_errors(project: Path) -> None:
+    """A failing build dispatches ``on_build_error`` exactly once with the full error list.
+
+    The hook receives the same :class:`BuildError` that is raised, so a plugin
+    can inspect every collected :class:`PageError` in a single call rather than
+    once per failure.
+    """
+    hooks_dir = project / "hooks"
+    hooks_dir.mkdir()
+    record_path = project / "build_errors.txt"
+    (hooks_dir / "record_errors.py").write_text(
+        "# ABOUTME: Test hook that records on_build_error invocations.\n"
+        "# Appends one line per call carrying the count of collected errors.\n"
+        "from __future__ import annotations\n"
+        "from pathlib import Path\n"
+        "\n"
+        "RECORD = Path(__file__).parent.parent / 'build_errors.txt'\n"
+        "\n"
+        "def on_build_error(error):\n"
+        "    paths = ','.join(str(page_error.file_path) for page_error in error.errors)\n"
+        "    with RECORD.open('a', encoding='utf-8') as handle:\n"
+        "        handle.write(f'{len(error.errors)}|{paths}\\n')\n",
+        encoding="utf-8",
+    )
+
+    first = project / "content" / "blog" / "posts" / "first-post.md"
+    second = project / "content" / "blog" / "posts" / "second-post.md"
+    _inject_unknown_shortcode(first, "totally_unknown_one")
+    _inject_unknown_shortcode(second, "totally_unknown_two")
+
+    with pytest.raises(BuildError):
+        build(project / "bartleby.yml")
+
+    lines = record_path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1, "on_build_error must fire exactly once, not per page error"
+    count, paths = lines[0].split("|", 1)
+    assert count == "2", "the hook must receive every collected error in one call"
+    assert "first-post.md" in paths
+    assert "second-post.md" in paths
+
+
+def test_successful_build_does_not_fire_on_build_error(project: Path) -> None:
+    """A clean build never dispatches ``on_build_error``."""
+    hooks_dir = project / "hooks"
+    hooks_dir.mkdir()
+    record_path = project / "build_errors.txt"
+    (hooks_dir / "record_errors.py").write_text(
+        "# ABOUTME: Test hook that records on_build_error invocations.\n"
+        "# Writes a marker file if the hook ever fires.\n"
+        "from __future__ import annotations\n"
+        "from pathlib import Path\n"
+        "\n"
+        "RECORD = Path(__file__).parent.parent / 'build_errors.txt'\n"
+        "\n"
+        "def on_build_error(error):\n"
+        "    RECORD.write_text('fired', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+
+    build(project / "bartleby.yml")
+
+    assert not record_path.exists(), "on_build_error must not fire on a successful build"
+
+
+def test_build_prefers_compiled_theme_css(project: Path) -> None:
+    """A current ``.bartleby/theme.css`` overrides the shipped ``css/main.css``."""
+    compiled = project / ".bartleby" / "theme.css"
+    compiled.parent.mkdir(parents=True)
+    compiled.write_text("/* compiled-by-tailwind */", encoding="utf-8")
+
+    build(project / "bartleby.yml")
+
+    rendered_css = (project / "site" / "css" / "main.css").read_text(encoding="utf-8")
+    assert rendered_css == "/* compiled-by-tailwind */"
+
+
+def test_build_ignores_stale_compiled_theme_css(project: Path) -> None:
+    """A stale compiled CSS (older than a template) is not preferred."""
+    import os
+    import time
+
+    templates_dir = project / "templates"
+    templates_dir.mkdir(exist_ok=True)
+    override = templates_dir / "custom-partial.html"
+    override.write_text("<p>override</p>", encoding="utf-8")
+
+    compiled = project / ".bartleby" / "theme.css"
+    compiled.parent.mkdir(parents=True)
+    compiled.write_text("/* compiled-but-stale */", encoding="utf-8")
+    later = time.time() + 100
+    os.utime(override, (later, later))
+
+    build(project / "bartleby.yml")
+
+    rendered_css = (project / "site" / "css" / "main.css").read_text(encoding="utf-8")
+    assert "compiled-but-stale" not in rendered_css

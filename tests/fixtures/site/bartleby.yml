@@ -1,0 +1,27 @@
+site:
+  title: "Sample Site"
+  url: "https://sample.example.com"
+
+content_types:
+  blog:
+    path: blog/posts
+    taxonomies:
+      - tags
+      - categories
+    readtime: true
+    excerpt_separator: "<!-- more -->"
+  tutorials:
+    path: tutorials/posts
+    taxonomies:
+      - tags
+
+taxonomies:
+  tags:
+    slug_format: "{slug}"
+  categories:
+    slug_format: "{slug}"
+
+exclude_patterns:
+  - "_drafts/**"
+  - "_*.md"
+  - ".git/**"

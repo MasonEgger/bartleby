@@ -93,7 +93,7 @@ Bartleby is 18 source modules under `src/bartleby/`, organised by build pipeline
 - **Surfaces** — `cli.py`, `server.py`
 - **Theme** — `theme/` package with templates, partials, static assets, icons
 
-See [`spec.md`](spec.md) for the full specification and [`plan.md`](plan.md) for the 27-step implementation roadmap that produced this codebase.
+See [`spec.md`](spec.md) for the full specification.
 
 ## License
 

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "bartleby"
+name = "bartleby-ssg"
 version = "0.1.0"
 description = "A batteries-included Python static site generator"
 readme = "README.md"

@@ -13,7 +13,7 @@ For human authors, the surface area is small: write Markdown with YAML front mat
 ## Quick start
 
 ```bash
-uv pip install bartleby
+uv pip install bartleby-ssg
 bartleby new site mysite
 cd mysite
 bartleby new post "Hello world" --type blog

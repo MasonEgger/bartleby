@@ -12,7 +12,7 @@ wheels = [
 ]
 
 [[package]]
-name = "bartleby"
+name = "bartleby-ssg"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

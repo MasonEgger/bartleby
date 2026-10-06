@@ -10,19 +10,19 @@ Bartleby requires Python 3.14 or newer. There are no Node.js prerequisites — t
 `uv` is the recommended installer:
 
 ```bash
-uv pip install bartleby
+uv pip install bartleby-ssg
 ```
 
 For a project-local install you'd usually add it to a project:
 
 ```bash
-uv add bartleby
+uv add bartleby-ssg
 ```
 
 ## Install with pip
 
 ```bash
-pip install bartleby
+pip install bartleby-ssg
 ```
 
 ## Verify the install

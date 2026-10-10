@@ -90,6 +90,23 @@ The Jinja2 loader searches these directories in order:
 3. The project root
 4. Each theme layer's `templates/`, leaf-first
 
+## Template Selection
+
+Bartleby gives each page a template type: `post` for a page in a content type, `page` for any other page, `list` for a listing page, `taxonomy_index` for a taxonomy index, and `taxonomy` for a taxonomy term page.
+The `template` front matter value, when set, names the template directly.
+Otherwise Bartleby takes the first candidate that exists in `overrides/`, `templates/`, or a theme layer's `templates/`:
+
+1. `<type>/taxonomy/<taxonomy>.html`, then `<type>/taxonomy.html`, for `taxonomy` pages in a content type
+2. `<type>/<template-type>.html`, for pages in a content type
+3. `<type>/base.html`, for pages in a content type
+4. `defaults/<template-type>.html`
+5. `<template-type>.html`
+6. `page.html`, for every template type except `page`
+
+`<type>` is the content type name.
+The `base` theme ships `page.html`, `404.html`, `defaults/list.html`, and `defaults/post.html`, so in `base` alone, taxonomy pages render with `page.html`.
+When no candidate exists, the build fails with a missing-template error for the last candidate.
+
 ## Base Blocks
 
 `base.html` in the `base` theme defines these blocks:

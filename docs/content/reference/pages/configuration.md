@@ -108,9 +108,12 @@ content_types:
 | `pagination.enabled` | `false` | Paginate the listing page |
 | `pagination.per_page` | `10` | Pages per listing page |
 | `pagination.url_format` | `page/{page}` | URL template for pages after the first |
-| `metadata` | none | Schema for custom front matter fields |
+| `metadata` | none | Schema for custom front matter fields, one entry per field |
+| `metadata.<field>.type` | required | The field's type |
+| `metadata.<field>.required` | `false` | Whether every page of the type must set the field |
+| `metadata.<field>.choices` | none | The values the field accepts |
 
-Each `metadata` field takes a `type` (required), `required` (default `false`), and `choices`.
+`<field>` stands for a field name that you choose.
 The supported types are listed in [Front matter fields](front-matter-fields.md#custom-metadata).
 
 ## `taxonomies`
@@ -126,7 +129,9 @@ taxonomies:
     slug_format: "{slug}"
 ```
 
-`slug_format` defaults to `"{slug}"`.
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `slug_format` | `{slug}` | Template that builds a term's slug. The placeholder `{slug}` is the slugified term. |
 
 ## `theme`
 
@@ -213,6 +218,7 @@ The bundled themes read these tokens:
 | `color.bg-dark`, `color.text-dark` | Background and text colors in dark mode |
 | `font.text`, `font.ui`, `font.code` | Body, interface, and code fonts |
 | `radius` | Corner radius |
+| `logo.height` | Height of the image from `theme.logo` |
 
 Token values must be strings.
 The old mkdocs-style `palette` and `font` keys are config errors, and the message points to `theme.tokens`.
@@ -321,7 +327,7 @@ ai:
 | `agent_context.audience` | none | Audience description, copied the same way |
 | `agent_context.constraints` | `[]` | List of rules, copied the same way |
 
-See [Agent surface](agent-surface.md) for what each output contains.
+See [Agent output formats](agent-surface.md) for what each output contains.
 
 ## `dev_server`
 
@@ -332,3 +338,8 @@ dev_server:
   host: "127.0.0.1"
   port: 8000
 ```
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `host` | `127.0.0.1` | Address the server binds to. `--host` overrides it. |
+| `port` | `8000` | Port the server binds to. `--port` overrides it. |

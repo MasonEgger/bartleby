@@ -217,11 +217,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 ## Section 8: Public interface documentation and final gate
 
 ### Step 25: Document and stabilize the public interfaces (task)
-- [ ] 1. Scope: reference pages incl. themes.md + agent-output-formats
-- [ ] 2. Tooling: diataxis, python; schema/inspect introspection as cross-check
-- [ ] 3. Do: enumerate real surfaces; correct pages; prefer generated lists; writing hard rules
-- [ ] 4. Verify: both-way cross-check; build/lint docs clean
-- [ ] 5. Document: stability statement in spec.md/README
+- [x] 1. Scope: reference pages incl. themes.md + agent-output-formats
+- [x] 2. Tooling: diataxis, python; schema/inspect introspection as cross-check
+- [x] 3. Do: enumerate real surfaces; correct pages; prefer generated lists; writing hard rules
+- [x] 4. Verify: both-way cross-check; build/lint docs clean
+- [x] 5. Document: stability statement in spec.md/README
 
 ### Step 26: Final stabilization gate (task)
 - [ ] 1. Scope: CHANGELOG, README, version (Mason: 0.1.x vs 0.2.0)

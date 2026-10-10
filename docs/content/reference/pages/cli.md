@@ -19,6 +19,7 @@ Every command that does work accepts these flags, before or after the subcommand
 | `--quiet` | off | Hide warnings and the text confirmation of `new`, `build`, and `generate-skill`. Errors, JSON output, and commands that return data still print. |
 | `--verbose` | off | Log detailed progress to stderr, such as how many pages were found and where the build wrote them. |
 
+`--quiet` and `--verbose` exclude each other.
 Commands run from the directory that holds `bartleby.yml`, or take `--config` with a path to it.
 Commands do not take a site directory as an argument.
 To act on the docs site from the repository root, run `bartleby build --config docs/bartleby.yml`.
@@ -33,8 +34,9 @@ Scaffold a new project directory.
 bartleby new site NAME
 ```
 
-Creates `NAME/` containing `bartleby.yml`, `.authors.yml`, and `content/index.md`.
-The generated config defines one `blog` content type that stores posts in `blog/posts` and opts in to the `tags` taxonomy.
+Creates `NAME/` containing `bartleby.yml`, `.authors.yml`, `content/index.md`, and a first post at `content/blog/posts/welcome.md`.
+It also creates empty `templates/`, `static/`, and `hooks/` directories.
+The generated config selects the `scrivener` theme and defines one `blog` content type that stores posts in `blog/posts` and opts in to the `tags` taxonomy.
 Fails if `NAME` already exists.
 
 ### `bartleby new post`
@@ -140,7 +142,7 @@ bartleby schema TARGET
 ```
 
 `TARGET` is a content type name, `authors`, or `taxonomies`.
-See [Agent surface](agent-surface.md#bartleby-schema) for the output shapes.
+See [Agent output formats](agent-surface.md#bartleby-schema) for the output shapes.
 
 ## `bartleby content`
 
@@ -184,7 +186,7 @@ bartleby generate-skill [--force]
 
 The command writes `bartleby-write.md`, `bartleby-review.md`, and `bartleby-ops.md` to `ai.skills.output_dir`, which defaults to `.claude/skills`.
 The output is deterministic, so `--force` changes nothing.
-See [Agent surface](agent-surface.md#generated-skills) for what each skill contains.
+See [Agent output formats](agent-surface.md#generated-skills) for what each skill contains.
 
 ## `bartleby theme`
 
@@ -221,6 +223,8 @@ bartleby theme inspect
 List every theme file with the layer that provides it.
 The first line names the theme and its chain, such as `Theme scrivener (chain: scrivener -> base)`.
 A file that your `overrides/` directory replaces gets a `[shadowed by overrides/...]` note.
+With `--output json`, the command returns `status`, `theme`, `chain`, and `files`.
+See [Themes](themes.md#bartleby-theme-inspect) for the fields of each file.
 
 ## Exit Codes
 

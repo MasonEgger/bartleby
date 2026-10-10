@@ -91,8 +91,11 @@ BuildResult(
     duration_seconds=float,
     static_file_count=int,
     output_dir=str,
+    config=BartlebyConfig,
 )
 ```
+
+`config` is the configuration that the build ran with, after the `on_config` hooks.
 
 `static_file_count` counts theme static files, project static files, and co-located assets.
 It leaves out generated files such as the search index, feeds, and sitemap.

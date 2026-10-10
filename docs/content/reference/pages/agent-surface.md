@@ -1,12 +1,13 @@
 ---
-title: "Agent Surface"
-description: "The machine-readable files Bartleby publishes and the CLI commands that return the same data."
+title: "Agent Output Formats"
+description: "Every machine-readable file Bartleby publishes, its fields, and the CLI commands that return the same data."
 tags:
   - ai
   - cli
 ---
 
-This page lists the files and commands that make a Bartleby site readable by agents.
+This page is the reference for every agent output format: the per-page Markdown variants, `llms.txt`, `llms-full.txt`, `schema.json`, `content-index.json`, the JSON-LD blocks, and the generated skills.
+It also covers the CLI commands that return the same data.
 For why they exist, read [Agent integration](../../concepts/agents-and-llms.md).
 For the flags of each command, read the [CLI reference](cli.md).
 
@@ -29,7 +30,7 @@ Bartleby writes these files to the site root on every build.
 Every published page from `content/` has a Markdown variant at `<url>/index.md` when `ai.markdown_variants` is on.
 Every HTML page, including `404.html`, carries exactly one JSON-LD block.
 The block parses as JSON and has `@context`, `@type`, `name`, `headline`, and `url`.
-Posts are `Article`, listing and taxonomy pages are `CollectionPage`, and other pages are `WebPage`.
+The [JSON-LD](#json-ld) section lists the types and keys.
 Drafts and pages matched by `exclude_patterns` are never rendered, so they get neither.
 Listing pages, taxonomy pages, and `404.html` have no Markdown source and no variant.
 Their HTML omits the `text/markdown` alternate link, which the theme emits only when the variant exists.
@@ -85,6 +86,31 @@ The `theme` block has three keys:
 An agent should read `active` to know what the site supports.
 A name that appears in `enabled` but not in `implemented` is a feature the build warned about and did not render.
 For the docs site, `active` equals `enabled`, because `scrivener` implements all eight features.
+
+### JSON-LD
+
+Each page's block is a `schema.org` object.
+The type depends on what the page is:
+
+| Type | Used for |
+|------|----------|
+| `Article` | A page that belongs to a content type |
+| `CollectionPage` | A listing or taxonomy page that the build generates |
+| `WebPage` | Any other page, including `404.html` |
+
+The block has these keys:
+
+| Key | Present when |
+|-----|--------------|
+| `@context` | Always. The value is `https://schema.org`. |
+| `@type` | Always |
+| `name`, `headline` | Always. Both hold the page title. |
+| `description` | Always. The page description, else `site.description`, else an empty string. |
+| `url` | Always. The absolute page URL. |
+| `datePublished` | The page is an `Article` and has a date, in ISO format |
+
+The `partials/jsonld.html` partial in the `base` theme prints the block.
+The characters `<`, `>`, and `&` appear as `\u003c`, `\u003e`, and `\u0026`, so a value can never close the surrounding `<script>` tag.
 
 ### Determinism
 

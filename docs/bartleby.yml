@@ -58,7 +58,7 @@ nav:
       - Plugin Hook Events: reference/pages/plugin-hooks.md
       - Shortcodes: reference/pages/shortcodes.md
       - Markdown Extensions: reference/pages/markdown-extensions.md
-      - Agent Surface: reference/pages/agent-surface.md
+      - Agent Output Formats: reference/pages/agent-surface.md
       - Build Pipeline: reference/pages/build-pipeline.md
       - Error Messages: reference/pages/errors.md
 

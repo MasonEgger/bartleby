@@ -57,6 +57,8 @@ Or read the source directly:
 - [Guides](docs/content/guides/) — task-oriented walkthroughs
 - [Reference](docs/content/reference/) — config, CLI, and hook APIs
 
+The plugin hooks, the `bartleby.yml` schema, the template context and base-theme blocks, the theme manifest and feature names, the `bartleby` commands and flags, and the agent output formats are stable for 0.x, and the CHANGELOG calls out any breaking change to them.
+
 ## Status
 
 Version 0.1.0. The initial 27-step build plus the v0.1.0 hardening pass (18 delta steps) are complete; the project passes 507 tests under `ruff` strict and `mypy --strict`, including an end-to-end smoke test. The hardening pass vendored the real Alpine.js, HTMX, and lunr.js bundles, added the hybrid Tailwind compile pipeline, shipped the full icon packs, and closed the build-failure, agent-surface, and feed gaps from the audit.

@@ -46,6 +46,18 @@ It is the `Page` object itself, so every attribute is reachable in a template.
 | `previous`, `next` | Page or null | Neighbors in navigation order |
 | `content_type_name` | string or null | The page's content type |
 | `draft` | bool | The draft flag |
+| `source_path` | path | The source file, relative to `content/`. Generated pages use a path that starts with `__generated__`. |
+| `abs_source_path` | path | The source file's absolute path |
+| `generated` | bool | `true` for a listing or taxonomy page that the build created, `false` for a page read from `content/` |
+| `raw_content` | string | The Markdown body after the front matter, before shortcodes run |
+| `rendered_content` | string | Rendered HTML body. `content` is the same value. |
+| `output_url` | string | The output URL. `url` is the same value. |
+| `author_keys` | list of strings | The `authors` front matter keys, before Bartleby resolves them into `authors` |
+| `taxonomy_values` | dict of lists | The taxonomy terms from front matter. `taxonomies` is the same value. |
+| `template_override` | string or null | The `template` front matter value |
+| `url_override` | string or null | The `url` front matter value |
+| `url_base_override` | string or null | The `url_base` front matter value |
+| `slug_override` | string or null | The `slug` front matter value |
 
 To read a custom field:
 
@@ -85,6 +97,7 @@ A mapping with two scopes:
 ```
 
 Each `TaxonomyData` has `name`, `terms` (a dict keyed by term name), and `content_type` (`None` for the global scope).
+Each term is a `TaxonomyTerm` with `name`, `slug`, `pages` (the pages that carry the term), and `count`.
 
 ### `config`
 
@@ -102,6 +115,8 @@ They read the AI toggles from `config.ai`.
   "bartleby_version": str,      # the running Bartleby version
 }
 ```
+
+`date` is the build date, and `bartleby_version` is the version of the running Bartleby.
 
 ### `data`
 
@@ -147,6 +162,35 @@ The `base` layout renders `<link rel="alternate" type="text/markdown">` only whe
 
 The page's JSON-LD block as a serialized string.
 The `partials/jsonld.html` partial in the `base` theme prints it inside a `<script type="application/ld+json">` tag.
+
+## Listing Pages
+
+A listing page is a generated page, one per content type, or one per pagination page when the type enables pagination.
+It renders with the `list` template type.
+The context is the one above, and the page's `custom_metadata` carries these keys:
+
+| Key | Type | Notes |
+|-----|------|-------|
+| `listing_kind` | string | Always `content_type` |
+| `posts` | list of Page | The content type's published pages, newest first. With pagination, only the pages on this listing page. |
+| `intro_content` | string | The HTML of `content/<type>/index.md`, or an empty string. With pagination, only the first listing page has it. |
+| `paginator` | PaginatorPage | Present only when the content type enables pagination |
+
+A `PaginatorPage` has `items`, `page_number`, `total_pages`, `has_next`, `has_prev`, `next_url`, `prev_url`, and `page_range`.
+`next_url` and `prev_url` are `None` at the ends of the range.
+
+## Taxonomy Pages
+
+A taxonomy page is a generated page for a taxonomy index or for one term, at the global scope and at each content type's scope.
+An index renders with the `taxonomy_index` template type and a term page with the `taxonomy` type.
+The page's `custom_metadata` carries these keys:
+
+| Key | Type | Notes |
+|-----|------|-------|
+| `taxonomy_name` | string | The taxonomy, such as `tags` |
+| `taxonomy_kind` | string | `index` or `term` |
+| `taxonomy_term` | string | The term name. Term pages only. |
+| `posts` | list of Page | The pages that carry the term. Term pages only. |
 
 ## Global Functions
 

@@ -17,6 +17,7 @@ from bartleby.theme_loader import (
     inspect_chain,
     resolve_theme,
 )
+from bartleby.themes import bundled_theme_root
 from tests.theme_helpers import material_theme
 
 THEMES = Path(__file__).parent / "fixtures" / "themes"
@@ -298,3 +299,37 @@ class TestEjectEditBuild:
         assert "EJECTED-EDIT-MARKER" in (project / "site" / "index.html").read_text(
             encoding="utf-8"
         )
+
+
+class TestEjectSafelist:
+    @pytest.mark.parametrize("theme_name", ["material", "scrivener"])
+    def test_eject_copies_the_bundled_safelist(self, theme_name: str, tmp_path: Path) -> None:
+        resolved = resolve_theme(name=theme_name, project_dir=tmp_path)
+
+        flatten_chain(resolved, tmp_path / "out", project_dir=tmp_path)
+
+        ejected = tmp_path / "out" / "safelist.txt"
+        source = bundled_theme_root(theme_name) / "safelist.txt"
+        assert ejected.read_text(encoding="utf-8") == source.read_text(encoding="utf-8")
+
+    def test_child_safelist_wins_over_parent(self, tmp_path: Path) -> None:
+        parent = tmp_path / "parent"
+        child = tmp_path / "child"
+        for root in (parent, child):
+            (root / "templates").mkdir(parents=True)
+        (parent / "theme.yml").write_text("name: parent\n", encoding="utf-8")
+        (parent / "safelist.txt").write_text("from-parent\n", encoding="utf-8")
+        (child / "theme.yml").write_text(f"name: child\nextends: {parent}\n", encoding="utf-8")
+        (child / "safelist.txt").write_text("from-child\n", encoding="utf-8")
+        resolved = resolve_theme(project_dir=tmp_path, path=str(child))
+
+        flatten_chain(resolved, tmp_path / "out", project_dir=tmp_path)
+
+        assert (tmp_path / "out" / "safelist.txt").read_text(encoding="utf-8") == "from-child\n"
+
+    def test_inspect_lists_the_safelist_with_its_layer(self, tmp_path: Path) -> None:
+        result = inspect_chain(material_theme(), tmp_path)
+
+        by_path = {entry.path: entry for entry in result.files}
+        assert by_path["safelist.txt"].layer == "material"
+        assert by_path["safelist.txt"].kind == "tailwind"

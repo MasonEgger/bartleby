@@ -27,6 +27,11 @@ A theme can `extends` another, so the default `scrivener` theme sits on top of `
 Bartleby searches the leaf theme first and its parents after it, which lets a child replace any file it needs and inherit the rest.
 `bartleby theme inspect` prints the chain and shows which layer provides each file.
 
+Project files sit in front of the whole chain.
+The search order for any template name is `overrides/`, `templates/`, the project root, then each theme layer from leaf to root.
+That order is why an `overrides/` file can replace one template from any layer, and why a `theme.path` theme can replace many.
+For the manifest and the rest of the theme system, read the [themes reference](../reference/pages/themes.md).
+
 ## The Jinja2 Search Path
 
 Templates also find each other by name, through `{% extends %}` and `{% include %}`.

@@ -8,6 +8,8 @@ Each one solves a specific problem.
 
 ## Available Guides
 
+- [Choose and customize a theme](posts/choose-and-customize-a-theme.md)
+- [Write a theme](posts/write-a-theme.md)
 - [Override a single theme template](posts/override-theme-template.md)
 - [Add a custom Jinja2 filter](posts/add-jinja-filter.md)
 - [Validate post metadata at build time](posts/validate-metadata.md)

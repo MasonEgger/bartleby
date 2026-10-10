@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 THEME_ENTRY_POINT_GROUP = "bartleby.themes"
 MANIFEST_FILENAME = "theme.yml"
 THEME_ASSET_DIRS: tuple[str, ...] = ("templates", "static", "icons")
-TAILWIND_SOURCES: tuple[str, ...] = ("tailwind.css", "tailwind.config.js")
+TAILWIND_SOURCES: tuple[str, ...] = ("tailwind.css", "tailwind.config.js", "safelist.txt")
 
 THEME_FEATURES: frozenset[str] = frozenset(
     {
@@ -389,7 +389,10 @@ def _extends_root(extends: str, child_root: Path) -> Path:
 
 
 def _file_kind(relative_path: str) -> str:
-    """Classify a theme-relative path as template, static, icon, or tailwind."""
+    """Classify a theme-relative path as template, static, icon, or tailwind.
+
+    The safelist belongs to the Tailwind sources, so it classifies as ``tailwind``.
+    """
     top = relative_path.split("/", 1)[0]
     return {"templates": "template", "static": "static", "icons": "icon"}.get(top, "tailwind")
 

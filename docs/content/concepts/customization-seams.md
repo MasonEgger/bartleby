@@ -17,11 +17,15 @@ A theme can `extends` another theme and replace only the files it needs, so a ch
 Choose this seam when you want a different design for the whole site.
 `bartleby theme inspect` lists every theme file and the layer that provides it.
 `bartleby theme eject` copies the whole chain into one directory you can edit.
+Because a theme is plain files, a coding agent can read an ejected theme from top to bottom and change it with no other context.
+To start, read [Choose and Customize a Theme](../guides/posts/choose-and-customize-a-theme.md).
+To build your own, read [Write a Theme](../guides/posts/write-a-theme.md).
 
 ## `overrides/`
 
 Files here replace theme templates of the same name.
 Choose this seam to change one piece of the chrome, such as the header, the footer, or the base layout, while keeping the rest of the theme.
+Bartleby searches `overrides/` before every theme layer, so a file here beats a theme file of the same name.
 
 ```
 overrides/

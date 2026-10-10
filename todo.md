@@ -147,11 +147,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 5. Document: route engine bugs to later sections
 
 ### Step 18: Write the theme-system documentation (task)
-- [ ] 1. Scope: guides choose-and-customize-a-theme.md + write-a-theme.md; reference themes.md; update concepts customization-seams.md + templates.md
-- [ ] 2. Tooling: diataxis, tutorial-writing, style-linting; real CLI output
-- [ ] 3. Do: write against real code/manifests; worked example from a bundled theme.yml; eject-for-agents angle
-- [ ] 4. Verify: build/lint clean; every flag/key in docs exists in code and vice versa
-- [ ] 5. Document: add pages to docs nav
+- [x] 1. Scope: guides choose-and-customize-a-theme.md + write-a-theme.md; reference themes.md; update concepts customization-seams.md + templates.md
+- [x] 2. Tooling: diataxis, tutorial-writing, style-linting; real CLI output
+- [x] 3. Do: write against real code/manifests; worked example from a bundled theme.yml; eject-for-agents angle
+- [x] 4. Verify: build/lint clean; every flag/key in docs exists in code and vice versa
+- [x] 5. Document: add pages to docs nav
 
 ### Step 19: Visual polish pass on the docs showcase (task)
 - [ ] 1. Scope: docs/content/** copy/structure; docs/bartleby.yml features

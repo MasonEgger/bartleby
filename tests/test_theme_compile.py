@@ -32,6 +32,7 @@ from bartleby.theme_compile import (
 from bartleby.theme_loader import (
     ResolvedTheme,
     ThemeLayer,
+    flatten_chain,
     load_manifest,
     resolve_theme,
 )
@@ -599,3 +600,18 @@ def test_package_main_compiles_each_bundled_theme_that_has_sources(
         assert "--minify" in call
         assert "tokens.css" not in call
     assert "material" in capsys.readouterr().out
+
+
+def test_compile_succeeds_on_an_ejected_scrivener_theme(tmp_path: Path) -> None:
+    """Eject carries safelist.txt, so the ejected tailwind.config.js can read it."""
+    _real_binary()
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    bundled = resolve_theme(name="scrivener", project_dir=tmp_path)
+    ejected = project_dir / "themes" / "scrivener"
+    flatten_chain(bundled, ejected, project_dir=project_dir)
+    theme = resolve_theme(project_dir=project_dir, path=str(ejected))
+
+    result = compile_theme_css(project_dir, theme, {})
+
+    assert (project_dir / result.css_path).stat().st_size > 0

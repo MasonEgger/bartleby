@@ -1,0 +1,20 @@
+{# Scrivener header: the site title in italic, top-level links, the search trigger, and the color-mode toggle. #}
+{# The double rule under the header comes from .site-header; the tab strip, when enabled, follows it. #}
+<header class="site-header">
+  <div class="header-inner">
+    <a href="/" class="site-title">{{ site.title }}</a>
+    {% set tabs = feature is defined and feature('nav.tabs') %}
+    {% if not tabs %}{% include "partials/nav.html" %}{% endif %}
+    {# Search trigger hook: the search modal partial (Step 14) owns its own trigger and opens bartlebySearch. #}
+    {% set color_mode = (config.theme.color_mode if config is defined and config and config.theme else None) %}
+    {% if color_mode and color_mode.toggle %}
+    <button
+      type="button"
+      x-data="{ dark: document.documentElement.dataset.theme === 'dark' }"
+      x-on:click="dark = !dark; document.documentElement.dataset.theme = dark ? 'dark' : 'light'; try { localStorage.setItem('bartleby-color-mode', dark ? 'dark' : 'light') } catch (e) {}"
+      x-text="dark ? 'Light mode' : 'Dark mode'"
+      class="theme-toggle">Toggle theme</button>
+    {% endif %}
+  </div>
+</header>
+{% if tabs %}{% include "partials/nav.html" %}{% endif %}

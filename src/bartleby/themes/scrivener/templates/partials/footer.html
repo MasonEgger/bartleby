@@ -1,0 +1,12 @@
+{# Scrivener footer: previous and next page links, then a one-line colophon under the closing double rule. #}
+<footer class="site-footer">
+  {% if page.previous or page.next %}
+  <nav class="prev-next" aria-label="Page">
+    {% if page.previous %}<a href="{{ page.previous.url }}" rel="prev">&larr; {{ page.previous.title }}</a>{% endif %}
+    {% if page.next %}<a href="{{ page.next.url }}" rel="next">{{ page.next.title }} &rarr;</a>{% endif %}
+  </nav>
+  {% endif %}
+  <p class="site-meta">
+    Built with Bartleby {{ build.bartleby_version }} on {{ build.date }}.
+  </p>
+</footer>

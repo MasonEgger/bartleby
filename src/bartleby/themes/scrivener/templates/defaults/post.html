@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{# Scrivener post: one ruled column, an italic meta line under the title, tags at the foot. #}
+{% block content %}
+<div class="layout-prose">
+  <article class="prose-column">
+    <div class="prose dark:prose-invert max-w-none">
+      <h1>{{ page.title }}</h1>
+      <p class="post-meta">
+        {% if page.date %}<time datetime="{{ page.date }}">{{ page.date }}</time>{% endif %}
+        {% if page.authors %}<span>By {% for author in page.authors %}{{ author.name }}{% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}
+        {% if page.readtime %}<span>{{ page.readtime }} min read</span>{% endif %}
+      </p>
+      {{ page.content | safe if page.content else "" }}
+    </div>
+    {% if page.taxonomies and page.taxonomies.tags %}
+    <footer>
+      <ul class="tag-list">
+        {% for tag in page.taxonomies.tags %}<li class="tag">{{ tag }}</li>{% endfor %}
+      </ul>
+    </footer>
+    {% endif %}
+  </article>
+</div>
+{% endblock %}

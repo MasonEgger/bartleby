@@ -101,11 +101,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 5. Document: design-direction comment block
 
 ### Step 12: Scrivener shell and content templates (task)
-- [ ] 1. Scope: header, nav, footer, page, post, list under themes/scrivener
-- [ ] 2. Tooling: frontend-design; build scratch scaffold on scrivener
-- [ ] 3. Do: implement against base blocks; preserve variables + toggle
-- [ ] 4. Verify: home/post/listing carry classes + prose; exit 0; no UndefinedError
-- [ ] 5. Document: none
+- [x] 1. Scope: header, nav, footer, page, post, list under themes/scrivener
+- [x] 2. Tooling: frontend-design; build scratch scaffold on scrivener
+- [x] 3. Do: implement against base blocks; preserve variables + toggle
+- [x] 4. Verify: home/post/listing carry classes + prose; exit 0; no UndefinedError
+- [x] 5. Document: none
 
 ### Step 13: Scrivener docs layout: sidebar, TOC, tabs (task)
 - [ ] 1. Scope: nav.html, sidebar.html, toc.html, page.html under themes/scrivener

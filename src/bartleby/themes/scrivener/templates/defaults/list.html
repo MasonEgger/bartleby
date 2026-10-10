@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{# Scrivener listing: ledger lines with the date in the margin column and Previous/Next below. #}
+{% block content %}
+{% set intro_content = page.custom_metadata.intro_content %}
+{% set paginator = page.custom_metadata.paginator %}
+{% set listed = paginator.items if paginator else page.custom_metadata.posts %}
+<div class="layout-prose">
+  <section class="prose-column">
+    <div class="prose dark:prose-invert max-w-none">
+      <h1>{{ page.title }}</h1>
+      {% if intro_content %}{{ intro_content | safe }}{% endif %}
+    </div>
+    <ul class="post-list">
+      {% for post in listed %}
+      <li class="post-list-item">
+        {% if post.date %}<time datetime="{{ post.date }}">{{ post.date }}</time>{% else %}<span></span>{% endif %}
+        <div>
+          <h2><a href="{{ post.output_url }}">{{ post.title }}</a></h2>
+          {% if post.excerpt %}<div class="prose dark:prose-invert max-w-none">{{ post.excerpt | safe }}</div>{% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% if paginator and (paginator.has_prev or paginator.has_next) %}
+    <nav class="prev-next" aria-label="Pagination">
+      {% if paginator.has_prev %}<a href="{{ paginator.prev_url }}" rel="prev">&larr; Previous</a>{% endif %}
+      {% if paginator.has_next %}<a href="{{ paginator.next_url }}" rel="next">Next &rarr;</a>{% endif %}
+    </nav>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

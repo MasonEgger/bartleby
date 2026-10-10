@@ -168,8 +168,10 @@ bartleby export [--format {jsonl,json,csv}] [--type TYPE]
 - `--format` defaults to `jsonl`.
 - `--type` limits the export to one content type.
 - `--include-content` adds each page's Markdown body.
-- `--include-html` adds an `html` field.
-  The field is empty today, because `export` reads pages without rendering them.
+- `--include-html` adds an `html` field with each page's rendered body.
+  The export runs the build's own render phase to get it, so the field holds the same HTML the built page embeds.
+  It writes no `site/` output.
+  Plugin hooks run too: see [hooks during export](plugin-hooks.md#hooks-during-export).
 - `--file` writes to a file and prints `wrote FILE`. Without it, the export goes to stdout.
 
 ## `bartleby generate-skill`

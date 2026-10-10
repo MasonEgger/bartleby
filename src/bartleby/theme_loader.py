@@ -164,6 +164,10 @@ class ResolvedTheme:
 
     chain: list[ThemeLayer]
 
+    def implemented_features(self) -> list[str]:
+        """The sorted union of feature names declared by every manifest in the chain."""
+        return sorted({name for layer in self.chain for name in layer.manifest.features})
+
     def templates_dirs(self) -> list[Path]:
         """Existing ``templates/`` directories, leaf-first."""
         return self._existing_dirs("templates")
@@ -640,7 +644,7 @@ def flatten_chain(
 
     # Write a manifest that stands alone
     leaf = resolved.chain[0].manifest
-    features = sorted({name for layer in resolved.chain for name in layer.manifest.features})
+    features = resolved.implemented_features()
     manifest: dict[str, object] = {"name": leaf.name}
     if leaf.version is not None:
         manifest["version"] = leaf.version

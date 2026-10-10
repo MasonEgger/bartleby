@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from bartleby.urls import absolute_url
+
 if TYPE_CHECKING:
     from bartleby.config import SiteConfig
     from bartleby.content import Page
@@ -19,7 +21,7 @@ def generate_og_tags(page: Page, site: SiteConfig) -> dict[str, str]:
         "og:title": page.title,
         "og:description": description,
         "og:type": og_type,
-        "og:url": _absolute(site.url, page.output_url),
+        "og:url": absolute_url(site.url, page.output_url),
     }
     if image:
         tags["og:image"] = image
@@ -46,7 +48,7 @@ def generate_twitter_tags(page: Page, site: SiteConfig) -> dict[str, str]:
 
 def generate_canonical_url(page: Page, site: SiteConfig) -> str:
     """Build the canonical URL by joining ``site.url`` with ``page.output_url``."""
-    return _absolute(site.url, page.output_url)
+    return absolute_url(site.url, page.output_url)
 
 
 def generate_all_meta_tags(page: Page, site: SiteConfig) -> dict[str, object]:
@@ -68,9 +70,4 @@ def _resolve_image(page: Page, site: SiteConfig) -> str | None:
         return None
     if image.startswith("http://") or image.startswith("https://"):
         return image
-    return _absolute(site.url, image)
-
-
-def _absolute(site_url: str, path: str) -> str:
-    """Join site URL and path with exactly one ``/`` between them."""
-    return site_url.rstrip("/") + "/" + path.lstrip("/")
+    return absolute_url(site.url, image)

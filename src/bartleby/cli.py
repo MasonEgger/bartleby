@@ -23,6 +23,7 @@ from bartleby.build import (
     build_dry_run,
     calculate_readtime,
     format_page_error,
+    render_content,
 )
 from bartleby.config import ConfigError, load_config
 from bartleby.content import ContentError, discover_content
@@ -793,8 +794,13 @@ def _cmd_export(args: argparse.Namespace) -> RawOutput:
     returned so nothing is echoed), otherwise it is emitted on stdout verbatim.
     """
     config_path = _resolve_config_path(args)
-    config = load_config(config_path)
-    pages, _assets = discover_content(config, config.config_dir / "content")
+    if args.include_html:
+        # Rendering HTML needs the build's render phase, so the export runs it.
+        rendered = render_content(config_path)
+        config, pages = rendered.config, rendered.pages
+    else:
+        config = load_config(config_path)
+        pages, _assets = discover_content(config, config.config_dir / "content")
     if args.type is not None and args.type not in config.content_types:
         raise _unknown_content_type(args.type, config)
     payload = export_content(

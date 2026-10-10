@@ -250,7 +250,48 @@ def build(
             shutil.rmtree(state.output_dir, ignore_errors=True)
 
 
-def _load_inputs(config_path: Path, theme: ResolvedTheme | None) -> _BuildState:
+@dataclass(slots=True)
+class RenderedContent:
+    """Published pages with their Markdown bodies rendered to HTML.
+
+    :ivar config: The configuration after ``on_config`` plugins ran.
+    :ivar pages: The published content pages, each with ``rendered_content`` filled.
+    """
+
+    config: BartlebyConfig
+    pages: list[Page]
+
+
+def render_content(config_path: Path) -> RenderedContent:
+    """Render the published pages' bodies through the build's own render phase.
+
+    Runs the build's load, filter, and body-render phases (shortcodes, plugin hooks,
+    Markdown, cross-references) and stops before any template renders or output is
+    written. This is the smallest context the render path needs: the Jinja environment,
+    navigation, and taxonomies that shortcodes and cross-references read.
+    The empty temp directory the filter phase creates is removed before returning.
+    Fires ``on_shutdown`` on success, pairing the ``on_startup`` that loading fired,
+    and never ``on_post_build``, since nothing is written.
+
+    :param config_path: Path to ``bartleby.yml``.
+    :returns: The final config and the published pages with ``rendered_content`` set.
+    :raises BuildError: When metadata validation or a page's render fails.
+    """
+    state = _load_inputs(config_path, None, command="export")
+    try:
+        _filter_and_validate(state, include_drafts=False)
+        _render_page_bodies(state, strict=False)
+    finally:
+        if state.output_dir is not None:
+            shutil.rmtree(state.output_dir, ignore_errors=True)
+    # A failed render already fired on_build_error and on_shutdown in _fail_build.
+    state.plugins.run_lifecycle("on_shutdown")
+    return RenderedContent(config=state.config, pages=state.published)
+
+
+def _load_inputs(
+    config_path: Path, theme: ResolvedTheme | None, *, command: str = "build"
+) -> _BuildState:
     """Phase 1: load config, discover plugins/hooks, and read authors + content.
 
     Fires the early lifecycle hooks (``on_startup``, ``on_config``,
@@ -264,7 +305,7 @@ def _load_inputs(config_path: Path, theme: ResolvedTheme | None) -> _BuildState:
     # `plugins`), then installed plugins (alphabetical), then project hooks last.
     plugins.merge(discover_plugins(config.disabled_plugins))
     plugins.merge(discover_hooks(project_dir))
-    plugins.run_event("on_startup", "build")
+    plugins.run_event("on_startup", command)
     config = plugins.run_event("on_config", config)
     plugins.run_event("on_pre_build", config)
     authors = load_authors(project_dir / config.authors_file)
@@ -310,7 +351,7 @@ def _load_inputs(config_path: Path, theme: ResolvedTheme | None) -> _BuildState:
 
 def _warn_unimplemented_features(config: BartlebyConfig, theme: ResolvedTheme) -> None:
     """Warn once per enabled feature that no manifest in the theme chain declares."""
-    implemented = {feature for layer in theme.chain for feature in layer.manifest.features}
+    implemented = theme.implemented_features()
     for feature_name in config.theme.features:
         if feature_name not in implemented:
             _LOGGER.warning(
@@ -380,27 +421,22 @@ def _filter_and_validate(state: _BuildState, *, include_drafts: bool) -> None:
     state.output_dir = Path(tempfile.mkdtemp(prefix=".bartleby-build-", dir=state.project_dir))
 
 
-def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
-    """Phase 3: render markdown, resolve crossrefs, render templates, and the 404.
+def _render_page_bodies(state: _BuildState, *, strict: bool) -> None:
+    """Phase 3a: render every page's Markdown body to HTML and resolve cross-references.
 
-    Both the markdown render loop and the template render loop collect every
-    page-level failure and abort the build (discarding the temp dir) if any
-    occurred, instead of stopping on the first error.
+    Fills ``rendered_content``, ``toc``, ``readtime``, and the excerpt fields on each page
+    in ``state.all_pages``. The build and ``bartleby export --include-html`` both call this,
+    so an exported page body is the HTML the built page embeds.
 
-    :raises BuildError: When ``strict`` is set and a cross-reference is broken.
-    :returns: Every rendered HTML document, including ``404.html``, for icon
-        tree-shaking downstream.
+    :raises BuildError: When a page fails to render, or when ``strict`` is set and a
+        cross-reference is broken.
     """
     config = state.config
     plugins = state.plugins
     assert state.env is not None
     assert state.build_info is not None
-    assert state.output_dir is not None
-    assert state.taxonomy_data is not None
     env = state.env
     build_info = state.build_info
-    output_dir = state.output_dir
-    taxonomy_context = _taxonomy_context(state.taxonomy_data)
 
     page_errors: list[PageError] = []
     for page in state.all_pages:
@@ -459,6 +495,32 @@ def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
                 ]
             )
 
+
+def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
+    """Phase 3: render page bodies, then the page templates and the 404.
+
+    Both the markdown render loop and the template render loop collect every
+    page-level failure and abort the build (discarding the temp dir) if any
+    occurred, instead of stopping on the first error.
+
+    :raises BuildError: When ``strict`` is set and a cross-reference is broken.
+    :returns: Every rendered HTML document, including ``404.html``, for icon
+        tree-shaking downstream.
+    """
+    config = state.config
+    plugins = state.plugins
+    assert state.env is not None
+    assert state.build_info is not None
+    assert state.output_dir is not None
+    assert state.taxonomy_data is not None
+    env = state.env
+    build_info = state.build_info
+    output_dir = state.output_dir
+    taxonomy_context = _taxonomy_context(state.taxonomy_data)
+
+    _render_page_bodies(state, strict=strict)
+
+    page_errors: list[PageError] = []
     rendered_html: list[str] = []
     for page in state.all_pages:
         content_type = (
@@ -569,7 +631,7 @@ def _emit_outputs(state: _BuildState, rendered_html: list[str]) -> None:
     # The sitemap lists every rendered page: the published content plus the generated ones.
     write_sitemap(state.published + state.all_pages[len(state.pages) :], config.site, output_dir)
     if config.ai.agent_surface:
-        write_agent_surface(state.pages, config, state.authors, output_dir)
+        write_agent_surface(state.published, config, state.authors, state.theme, output_dir)
     static_robots_exists = (project_dir / "static" / "robots.txt").exists()
     write_robots_txt(
         config.site, config.ai, output_dir, static_override_exists=static_robots_exists

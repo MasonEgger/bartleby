@@ -13,6 +13,18 @@ See [Plugins and hooks](../../concepts/plugins-and-hooks.md) for how Bartleby fi
 Every event except `on_serve` fires during `bartleby build`.
 Step numbers refer to the [build pipeline](build-pipeline.md).
 
+## Hooks During Export
+
+`bartleby export --include-html` runs the build's load and body-render phases, so some hooks fire during an export.
+These eleven fire, in the same order as in a build: `on_startup`, `on_config`, `on_pre_build`, `on_files`, `on_nav`, `on_env`, `on_pre_page`, `on_page_read_source`, `on_page_markdown`, `on_page_content`, and `on_shutdown`.
+`on_startup` receives `"export"` instead of `"build"`.
+A handler with side effects, such as writing a file or calling a service, runs during that export.
+`on_shutdown` fires exactly once at the end of every export, so a handler that opens a resource in `on_startup` can release it there.
+If a page fails to render, `on_build_error` fires first, then `on_shutdown`, each once.
+
+`on_page_context`, `on_post_page`, `on_post_build`, and `on_serve` never fire during an export.
+`bartleby export` without `--include-html` only reads content and fires no hooks.
+
 ## Return Values
 
 Events fall into three kinds:
@@ -27,7 +39,8 @@ Events fall into three kinds:
 
 ### `on_startup`
 
-Fires at the start of every build, with the argument `"build"`.
+Fires at the start of every build and every `export --include-html`.
+The argument is the command name: `"build"` for a build, `"export"` for an export.
 Step 3, notification event.
 
 ```python
@@ -36,7 +49,8 @@ def on_startup(command: str) -> None: ...
 
 ### `on_shutdown`
 
-Fires at the end of every build, after `on_post_build`, and after `on_build_error` when a build fails.
+Fires at the end of every build, after `on_post_build`, and at the end of every `export --include-html`, where no `on_post_build` precedes it.
+When a build or an export fails, it fires after `on_build_error`.
 Step 36, notification event.
 The event takes no arguments.
 

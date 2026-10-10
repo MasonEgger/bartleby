@@ -123,4 +123,8 @@ The sixteenth, `on_serve`, fires when the dev server starts.
 | `on_shutdown` | 36 |
 | `on_build_error` | 18 or 20, when a page fails |
 
+`bartleby export --include-html` runs steps 1 through 19 only, so the events through `on_page_content` fire, followed by `on_shutdown`.
+The template and output events, and `on_post_build`, do not fire.
+The [plugin hook reference](plugin-hooks.md#hooks-during-export) lists the exact set.
+
 The [plugin hook reference](plugin-hooks.md) gives the signature of each event.

@@ -45,6 +45,7 @@ At equal priority, installed plugins run first, in alphabetical order by entry p
 Bartleby dispatches 16 events across the build, from `on_startup` to `on_shutdown`.
 The [plugin hook reference](../reference/pages/plugin-hooks.md) lists each event with its signature, its return value, and its place in the build.
 The [build pipeline reference](../reference/pages/build-pipeline.md) shows the same events in sequence.
+`bartleby export --include-html` fires the first ten of them, through `on_page_content`, then `on_shutdown`, with `"export"` as the `on_startup` argument.
 
 Most events pass a value through the handlers.
 A handler that returns `None` leaves the value unchanged.

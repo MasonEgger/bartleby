@@ -18,8 +18,8 @@ Bartleby writes these files to the site root on every build.
 | File | Toggle | Contents |
 |------|--------|----------|
 | `<url>/index.md` | `ai.markdown_variants` | The page's Markdown body, without front matter, next to its HTML |
-| `llms.txt` | `ai.llms_txt` | Site overview with one link per Markdown variant, grouped by content type |
-| `llms-full.txt` | `ai.llms_full_txt` | The Markdown body of every page, each under a `---` separator with its title, URL, and date |
+| `llms.txt` | `ai.llms_txt` | Site overview with one link per Markdown variant, grouped by content type, described below |
+| `llms-full.txt` | `ai.llms_full_txt` | The Markdown body of every published page, each under a `---` separator with its title, absolute URL, and date |
 | `schema.json` | `ai.agent_surface` | Site manifest, described below |
 | `content-index.json` | `ai.agent_surface` | One entry per published page, described below |
 | `robots.txt` | none | Crawler directives from `ai.robots`, unless `static/robots.txt` exists |
@@ -37,6 +37,19 @@ Their HTML omits the `text/markdown` alternate link, which the theme emits only 
 A published page may not use `schema.json` or `content-index.json` as its output path.
 The build stops with an `AgentSurfaceError` that names the page.
 
+### `llms.txt` and `llms-full.txt`
+
+`llms.txt` opens with the site title and description.
+When `ai.agent_surface` is on, a `Machine-readable` section follows with absolute links to `schema.json` and `content-index.json`.
+Then comes one section per content type that has published pages, in the order `content_types` lists them, and a `Pages` section for pages that have no content type.
+Each entry is one line: `- [Title](absolute-md-url): summary`.
+The summary is the page description, else its excerpt, else its title, with whitespace runs collapsed to single spaces.
+
+`llms-full.txt` has the same header, then one block per published page.
+A block is `---`, `# Title`, `URL: <absolute page URL>`, a `Date:` line when the page has a date, a blank line, and the raw Markdown body.
+
+Both files list published pages only, in source-path order.
+
 ### `schema.json`
 
 `schema.json` has these top-level keys:
@@ -47,10 +60,37 @@ The build stops with an `AgentSurfaceError` that names the page.
 | `content_types` | One object per content type, in the shape of `bartleby schema <type>` |
 | `taxonomies` | Each taxonomy with its `name`, `slug_format`, and the `terms` in use with their `count` |
 | `authors` | The public author list, in the shape of `bartleby schema authors` |
+| `theme` | The active theme, described below |
 | `resources` | Absolute URLs for `sitemap`, `llms_txt`, `content_index`, and a `feeds` list |
 
 Each entry in `resources.feeds` has `content_type` (`null` for the site-wide feed), `format` (`rss` or `atom`), and `url`.
 The file uses sorted keys and two-space indentation, so its output is stable between builds.
+
+The `theme` block has three keys:
+
+| Key | Contents |
+|-----|----------|
+| `name` | The name of the theme the site selects |
+| `chain` | The resolved theme names, selected theme first and the root ancestor (`base`) last |
+| `features` | Three sorted lists, described below |
+
+`features` carries all three lists because each answers a different question:
+
+| List | Contents |
+|------|----------|
+| `enabled` | The names `theme.features` in `bartleby.yml` asks for |
+| `implemented` | The union of `features` across the manifests in the chain |
+| `active` | The names in both lists, which is what the built site can do |
+
+An agent should read `active` to know what the site supports.
+A name that appears in `enabled` but not in `implemented` is a feature the build warned about and did not render.
+For the docs site, `active` equals `enabled`, because `scrivener` implements all eight features.
+
+### Determinism
+
+Every file above is a pure function of the site's content, config, and theme.
+The build date shows in the HTML footer, but none of these files carry it or any other timestamp.
+Pages appear in source-path order, JSON keys are sorted, and two builds of the same input produce byte-identical files.
 
 ### `content-index.json`
 
@@ -119,6 +159,7 @@ Only published pages appear.
 Each record has `path`, `url`, `type`, `title`, `date`, and `word_count`.
 It adds `description`, `authors`, and one key per taxonomy when the page has them.
 `--include-content` adds a `content` key.
+`--include-html` adds an `html` key holding the rendered body, produced by the build's own render phase.
 
 | Format | Shape |
 |--------|-------|

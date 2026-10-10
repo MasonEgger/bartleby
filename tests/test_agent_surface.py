@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -17,6 +19,7 @@ from bartleby.agent_surface import (
     write_agent_surface,
 )
 from bartleby.authors import Author
+from bartleby.build import BuildResult, build
 from bartleby.config import (
     AIConfig,
     BartlebyConfig,
@@ -27,8 +30,11 @@ from bartleby.config import (
     SiteConfig,
     TaxonomyConfig,
     ThemeConfig,
+    load_config,
 )
-from bartleby.content import Page
+from bartleby.content import Page, discover_content
+from bartleby.content_query import select_published
+from bartleby.theme_loader import ResolvedTheme, ThemeLayer, ThemeManifest
 
 
 def _config(*, agent_surface: bool = True) -> BartlebyConfig:
@@ -97,6 +103,20 @@ def _page(
     return page
 
 
+def _theme(
+    leaf_features: list[str] | None = None, base_features: list[str] | None = None
+) -> ResolvedTheme:
+    """A two-layer theme chain (stub over base) with the given manifest features."""
+    leaf = ThemeManifest(name="stub", extends="base", features=leaf_features or [])
+    base = ThemeManifest(name="base", features=base_features or [])
+    return ResolvedTheme(
+        chain=[
+            ThemeLayer(name="stub", root=Path("/themes/stub"), manifest=leaf),
+            ThemeLayer(name="base", root=Path("/themes/base"), manifest=base),
+        ]
+    )
+
+
 def _authors() -> dict[str, Author]:
     return {
         "mason": Author(
@@ -127,7 +147,7 @@ def _pages() -> list[Page]:
 
 def test_schema_json_carries_site_identity() -> None:
     """schema.json includes site title, description, and base URL."""
-    schema = build_schema_json(_pages(), _config(), _authors())
+    schema = build_schema_json(_pages(), _config(), _authors(), _theme())
     site = schema["site"]
     assert isinstance(site, dict)
     assert site["title"] == "Test Site"
@@ -137,7 +157,7 @@ def test_schema_json_carries_site_identity() -> None:
 
 def test_schema_json_carries_content_type_schemas() -> None:
     """schema.json describes each content type's metadata schema."""
-    schema = build_schema_json(_pages(), _config(), _authors())
+    schema = build_schema_json(_pages(), _config(), _authors(), _theme())
     content_types = schema["content_types"]
     assert isinstance(content_types, list)
     blog = next(entry for entry in content_types if entry["content_type"] == "blog")
@@ -147,7 +167,7 @@ def test_schema_json_carries_content_type_schemas() -> None:
 
 def test_schema_json_carries_taxonomy_terms() -> None:
     """schema.json lists taxonomy terms in use with counts."""
-    schema = build_schema_json(_pages(), _config(), _authors())
+    schema = build_schema_json(_pages(), _config(), _authors(), _theme())
     taxonomies = schema["taxonomies"]
     assert isinstance(taxonomies, list)
     tags = next(tax for tax in taxonomies if tax["name"] == "tags")
@@ -157,7 +177,7 @@ def test_schema_json_carries_taxonomy_terms() -> None:
 
 def test_schema_json_carries_public_authors() -> None:
     """schema.json includes public author data, never private fields."""
-    schema = build_schema_json(_pages(), _config(), _authors())
+    schema = build_schema_json(_pages(), _config(), _authors(), _theme())
     authors = schema["authors"]
     assert isinstance(authors, list)
     entry = authors[0]
@@ -167,7 +187,7 @@ def test_schema_json_carries_public_authors() -> None:
 
 def test_schema_json_carries_resource_locations() -> None:
     """schema.json points at sitemap, llms.txt, content-index, and feeds by absolute URL."""
-    schema = build_schema_json(_pages(), _config(), _authors())
+    schema = build_schema_json(_pages(), _config(), _authors(), _theme())
     resources = schema["resources"]
     assert isinstance(resources, dict)
     assert resources["sitemap"] == "https://example.com/sitemap.xml"
@@ -184,7 +204,7 @@ def test_schema_json_advertises_aggregate_rss_feed() -> None:
     """With the aggregate feed enabled and rss in formats, its URL is advertised."""
     config = _config()
     config.site.feed = FeedConfig(enabled=True, formats=["rss"])
-    schema = build_schema_json(_pages(), config, _authors())
+    schema = build_schema_json(_pages(), config, _authors(), _theme())
     feeds = schema["resources"]["feeds"]  # type: ignore[index]
     feed_urls = {feed["url"] for feed in feeds}
     assert "https://example.com/feed.xml" in feed_urls
@@ -195,7 +215,7 @@ def test_schema_json_advertises_aggregate_atom_feed() -> None:
     """With the aggregate feed enabled and atom in formats, its URL is advertised."""
     config = _config()
     config.site.feed = FeedConfig(enabled=True, formats=["atom"])
-    schema = build_schema_json(_pages(), config, _authors())
+    schema = build_schema_json(_pages(), config, _authors(), _theme())
     feeds = schema["resources"]["feeds"]  # type: ignore[index]
     feed_urls = {feed["url"] for feed in feeds}
     assert "https://example.com/atom.xml" in feed_urls
@@ -206,7 +226,7 @@ def test_schema_json_omits_aggregate_feed_when_disabled() -> None:
     """With the aggregate feed disabled, neither aggregate URL is advertised."""
     config = _config()
     config.site.feed = FeedConfig(enabled=False)
-    schema = build_schema_json(_pages(), config, _authors())
+    schema = build_schema_json(_pages(), config, _authors(), _theme())
     feeds = schema["resources"]["feeds"]  # type: ignore[index]
     feed_urls = {feed["url"] for feed in feeds}
     assert "https://example.com/feed.xml" not in feed_urls
@@ -275,6 +295,23 @@ def test_curation_excludes_mechanical_fields() -> None:
     assert "slug_override" not in curated
 
 
+def test_schema_json_theme_block_names_the_chain_and_splits_features() -> None:
+    """The theme block holds the name, the chain, and enabled/implemented/active features."""
+    config = _config()
+    config.theme.features = ["search", "search.highlight", "nav.sidebar"]
+    theme = _theme(leaf_features=["search", "nav.tabs"], base_features=["search.highlight"])
+    schema = build_schema_json(_pages(), config, _authors(), theme)
+    assert schema["theme"] == {
+        "name": "stub",
+        "chain": ["stub", "base"],
+        "features": {
+            "enabled": ["nav.sidebar", "search", "search.highlight"],
+            "implemented": ["nav.tabs", "search", "search.highlight"],
+            "active": ["search", "search.highlight"],
+        },
+    }
+
+
 # --- llms.txt discovery section --------------------------------------------
 
 
@@ -302,7 +339,6 @@ def project(tmp_path: Path) -> Path:
 
 def test_every_page_head_has_markdown_alternate_link(project: Path) -> None:
     """Every rendered page advertises its .md variant via rel=alternate in the head."""
-    from bartleby.build import build
 
     build(project / "bartleby.yml")
     rendered = (project / "site" / "blog" / "posts" / "first-post" / "index.html").read_text(
@@ -322,7 +358,7 @@ def test_collision_with_generated_artifact_is_a_clear_error(tmp_path: Path) -> N
     output_dir.mkdir()
     colliding = _page(name="schema", title="Collide", output_url="schema.json")
     with pytest.raises(AgentSurfaceError, match="schema.json"):
-        write_agent_surface([colliding], _config(), _authors(), output_dir)
+        write_agent_surface([colliding], _config(), _authors(), _theme(), output_dir)
 
 
 # --- toggle ----------------------------------------------------------------
@@ -330,7 +366,6 @@ def test_collision_with_generated_artifact_is_a_clear_error(tmp_path: Path) -> N
 
 def test_agent_surface_disabled_suppresses_both_artifacts(project: Path) -> None:
     """ai.agent_surface: false means neither artifact is written."""
-    from bartleby.build import build
 
     config_path = project / "bartleby.yml"
     config_path.write_text(
@@ -344,7 +379,6 @@ def test_agent_surface_disabled_suppresses_both_artifacts(project: Path) -> None
 
 def test_agent_surface_enabled_writes_both_artifacts(project: Path) -> None:
     """By default both artifacts land at the site root and parse as JSON."""
-    from bartleby.build import build
 
     build(project / "bartleby.yml")
     schema_path = project / "site" / "schema.json"
@@ -359,8 +393,81 @@ def test_collision_error_names_the_page_source_and_the_reserved_path(tmp_path: P
     """The error names the colliding source file, the artifact path, and a fix."""
     colliding = _page(name="schema", title="Collide", output_url="content-index.json")
     with pytest.raises(AgentSurfaceError) as excinfo:
-        write_agent_surface([colliding], _config(), _authors(), tmp_path)
+        write_agent_surface([colliding], _config(), _authors(), _theme(), tmp_path)
     message = str(excinfo.value)
     assert "blog/posts/schema.md" in message
     assert "content-index.json" in message
     assert "fix:" in message
+
+
+# --- integration: the docs site ----------------------------------------------
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_AGENT_FILES = ("llms.txt", "llms-full.txt", "schema.json", "content-index.json")
+
+
+@pytest.fixture(scope="module")
+def docs_site(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Build a copy of the repo's docs site and return the project directory."""
+    project = tmp_path_factory.mktemp("docs_agent_surface") / "docs"
+    shutil.copytree(_REPO_ROOT / "docs", project, ignore=shutil.ignore_patterns("site"))
+    result = build(project / "bartleby.yml")
+    assert isinstance(result, BuildResult)
+    return project
+
+
+def test_every_content_index_url_resolves_to_a_built_page(docs_site: Path) -> None:
+    """Each content-index url and md_url maps to a file in the built site."""
+    index = json.loads((docs_site / "site" / "content-index.json").read_text(encoding="utf-8"))
+    assert index["count"] == len(index["content"]) > 0
+    for entry in index["content"]:
+        for key, filename in (("url", "index.html"), ("md_url", None)):
+            path = urlsplit(entry[key]).path.strip("/")
+            built = docs_site / "site" / path / filename if filename else docs_site / "site" / path
+            assert built.is_file(), f"{entry[key]} has no built file at {built}"
+
+
+def test_content_index_matches_the_published_pages_of_the_docs_site(docs_site: Path) -> None:
+    """The index lists exactly the published pages, with no draft among them."""
+    config = load_config(docs_site / "bartleby.yml")
+    pages, _assets = discover_content(config, docs_site / "content")
+    published = select_published(pages)
+    index = json.loads((docs_site / "site" / "content-index.json").read_text(encoding="utf-8"))
+    assert index["count"] == len(published)
+    assert {entry["title"] for entry in index["content"]} == {page.title for page in published}
+
+
+def test_schema_theme_block_matches_the_docs_config(docs_site: Path) -> None:
+    """schema.json's theme block reflects docs/bartleby.yml and the resolved chain."""
+    config = load_config(docs_site / "bartleby.yml")
+    schema = json.loads((docs_site / "site" / "schema.json").read_text(encoding="utf-8"))
+    theme = schema["theme"]
+    assert theme["name"] == config.theme.name == "scrivener"
+    assert theme["chain"] == ["scrivener", "base"]
+    assert theme["features"]["enabled"] == sorted(config.theme.features)
+    assert set(theme["features"]["active"]) == set(config.theme.features)
+    assert set(theme["features"]["active"]) <= set(theme["features"]["implemented"])
+    schema_types = [entry["content_type"] for entry in schema["content_types"]]
+    assert schema_types == list(config.content_types)
+
+
+def test_llms_txt_links_resolve_to_built_markdown_variants(docs_site: Path) -> None:
+    """Every page link in llms.txt is absolute and points at a built variant."""
+    body = (docs_site / "site" / "llms.txt").read_text(encoding="utf-8")
+    links = re.findall(r"^- \[[^\]]+\]\((\S+)\)", body, flags=re.MULTILINE)
+    assert links
+    for link in links:
+        assert link.startswith("https://bartleby.dev/")
+        assert (docs_site / "site" / urlsplit(link).path.strip("/")).is_file()
+
+
+def test_agent_outputs_are_identical_across_two_builds(project: Path, tmp_path: Path) -> None:
+    """Two builds of the same input produce byte-identical agent files."""
+    second = tmp_path / "second"
+    shutil.copytree(project, second)
+    assert isinstance(build(project / "bartleby.yml"), BuildResult)
+    assert isinstance(build(second / "bartleby.yml"), BuildResult)
+    for name in _AGENT_FILES:
+        first_bytes = (project / "site" / name).read_bytes()
+        assert first_bytes == (second / "site" / name).read_bytes(), name
+        assert first_bytes

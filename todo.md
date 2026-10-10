@@ -195,14 +195,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 8. Verify: coverage + `just check`
 
 ### Step 23: llms.txt, schema.json, and content-index.json are correct (feature)
-- [ ] 1. RED: llms.txt/llms-full.txt; schema.json incl. theme block; content-index published only
-- [ ] 2. Document: format/field contract per module
-- [ ] 3. GREEN: fix defects; add theme block
-- [ ] 4. RED: integration on docs fixture; theme block matches config
-- [ ] 5. GREEN: wire into build.py
-- [ ] 6. REFACTOR: share extraction with Step 22
-- [ ] 7. Document: expand agent-surface reference
-- [ ] 8. Verify: coverage + `just check`
+- [x] 1. RED: llms.txt/llms-full.txt; schema.json incl. theme block; content-index published only
+- [x] 2. Document: format/field contract per module
+- [x] 3. GREEN: fix defects; add theme block
+- [x] 4. RED: integration on docs fixture; theme block matches config
+- [x] 5. GREEN: wire into build.py
+- [x] 6. REFACTOR: share extraction with Step 22
+- [x] 7. Document: expand agent-surface reference
+- [x] 8. Verify: coverage + `just check`
 
 ### Step 24: Generated skills reflect the real site shape (feature)
 - [ ] 1. RED: determinism; real content types/fields; taxonomies/authors; ops skill mentions theme + theme commands

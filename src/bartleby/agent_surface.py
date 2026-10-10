@@ -3,6 +3,35 @@
 
 """Static agent surface artifacts.
 
+Both files are written at the site root as UTF-8 JSON with sorted keys and two-space
+indentation, so the same input yields byte-identical output (no timestamps, no build date).
+They describe published pages only.
+
+``schema.json`` is one object with these keys:
+
+* ``site``: ``title``, ``description``, ``url``, and ``language`` (always ``en``).
+* ``content_types``: one object per configured content type, in config order, in the shape
+  of ``bartleby schema <type>``.
+* ``taxonomies``: each taxonomy with ``name``, ``slug_format``, and the ``terms`` in use
+  with their ``count`` over published pages.
+* ``authors``: the public authors, in the shape of ``bartleby schema authors``.
+* ``theme``: ``name`` (the leaf theme), ``chain`` (theme names, leaf first), and
+  ``features``, an object of three sorted lists.
+  ``enabled`` is what ``theme.features`` in ``bartleby.yml`` asks for.
+  ``implemented`` is the union of ``features`` across the manifests in the chain.
+  ``active`` is the intersection, which is what the built site can actually do.
+  An agent reads ``active`` to know what to rely on; a name in ``enabled`` but not in
+  ``implemented`` is a feature the build warned about and did not render.
+* ``resources``: absolute URLs for ``sitemap``, ``llms_txt``, ``content_index``, and a
+  ``feeds`` list of ``{content_type, format, url}`` objects.
+
+``content-index.json`` is ``{"count": N, "content": [...]}``, one entry per published page
+in discovery order (sorted by source path).
+Each entry carries ``title``, ``type`` (``null`` for a page with no content type), absolute
+``url`` and ``md_url``, then ``description``, ``date``, ``authors``, one key per taxonomy,
+and one key per custom metadata field when the page sets them.
+Fields that configure the build (template, draft, URL overrides) are left out.
+
 Error-message contract: an :class:`AgentSurfaceError` names the colliding page source
 (relative to ``content/``) and the reserved output path, with a hint to rename the page
 or set a different ``url``, as ``content/<page>: would overwrite the generated artifact
@@ -17,11 +46,13 @@ from typing import TYPE_CHECKING
 from bartleby.content_query import select_published
 from bartleby.errors import format_error
 from bartleby.feeds import aggregate_feed_path, feed_path
+from bartleby.llm import markdown_variant_url
 from bartleby.schema_introspection import (
     derive_authors_schema,
     derive_content_type_schema,
     derive_taxonomies_schema,
 )
+from bartleby.urls import absolute_url
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -29,6 +60,7 @@ if TYPE_CHECKING:
     from bartleby.authors import Author
     from bartleby.config import BartlebyConfig, SiteConfig
     from bartleby.content import Page
+    from bartleby.theme_loader import ResolvedTheme
 
 # Generated artifact paths a user content page must never collide with.
 SCHEMA_JSON_PATH = "schema.json"
@@ -87,6 +119,7 @@ def build_schema_json(
     pages: list[Page],
     config: BartlebyConfig,
     authors: dict[str, Author],
+    theme: ResolvedTheme,
 ) -> dict[str, object]:
     """Build the schema.json site manifest as a JSON-serialisable mapping.
 
@@ -98,6 +131,7 @@ def build_schema_json(
         reflect only published content).
     :param config: The loaded site configuration.
     :param authors: The authors mapping.
+    :param theme: The resolved theme chain the build renders with.
     :returns: The schema.json payload.
     """
     published = select_published(pages)
@@ -116,6 +150,7 @@ def build_schema_json(
         "content_types": content_types,
         "taxonomies": taxonomies,
         "authors": author_entries,
+        "theme": _theme_block(config, theme),
         "resources": _resource_locations(config),
     }
 
@@ -131,8 +166,8 @@ def build_content_index(pages: list[Page], config: BartlebyConfig) -> dict[str, 
     entries: list[dict[str, object]] = []
     for page in published:
         entry = curate_page_fields(page)
-        entry["url"] = _absolute(config.site.url, page.output_url)
-        entry["md_url"] = _absolute(config.site.url, _md_variant_path(page.output_url))
+        entry["url"] = absolute_url(config.site.url, page.output_url)
+        entry["md_url"] = absolute_url(config.site.url, markdown_variant_url(page.output_url))
         entries.append(entry)
     return {"count": len(entries), "content": entries}
 
@@ -141,6 +176,7 @@ def write_agent_surface(
     pages: list[Page],
     config: BartlebyConfig,
     authors: dict[str, Author],
+    theme: ResolvedTheme,
     output_dir: Path,
 ) -> None:
     """Emit schema.json and content-index.json at the site root.
@@ -148,11 +184,12 @@ def write_agent_surface(
     :param pages: Content pages (drafts are filtered when building the index).
     :param config: The loaded site configuration.
     :param authors: The authors mapping.
+    :param theme: The resolved theme chain the build renders with.
     :param output_dir: The build output directory.
     :raises AgentSurfaceError: If a user page would overwrite either artifact.
     """
     _check_collisions(pages)
-    schema = build_schema_json(pages, config, authors)
+    schema = build_schema_json(pages, config, authors, theme)
     index = build_content_index(pages, config)
     (output_dir / SCHEMA_JSON_PATH).write_text(
         json.dumps(schema, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8"
@@ -160,6 +197,21 @@ def write_agent_surface(
     (output_dir / CONTENT_INDEX_PATH).write_text(
         json.dumps(index, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8"
     )
+
+
+def _theme_block(config: BartlebyConfig, theme: ResolvedTheme) -> dict[str, object]:
+    """Describe the active theme: its name, resolved chain, and feature lists."""
+    enabled = set(config.theme.features)
+    implemented = set(theme.implemented_features())
+    return {
+        "name": theme.chain[0].name,
+        "chain": [layer.name for layer in theme.chain],
+        "features": {
+            "enabled": sorted(enabled),
+            "implemented": sorted(implemented),
+            "active": sorted(enabled & implemented),
+        },
+    }
 
 
 def _check_collisions(pages: list[Page]) -> None:
@@ -180,7 +232,7 @@ def _resource_locations(config: BartlebyConfig) -> dict[str, object]:
                 {
                     "content_type": type_name,
                     "format": "rss",
-                    "url": _absolute(config.site.url, feed_path(type_name, "rss")),
+                    "url": absolute_url(config.site.url, feed_path(type_name, "rss")),
                 }
             )
         if "atom" in content_type.feeds:
@@ -188,7 +240,7 @@ def _resource_locations(config: BartlebyConfig) -> dict[str, object]:
                 {
                     "content_type": type_name,
                     "format": "atom",
-                    "url": _absolute(config.site.url, feed_path(type_name, "atom")),
+                    "url": absolute_url(config.site.url, feed_path(type_name, "atom")),
                 }
             )
     aggregate = config.site.feed
@@ -198,7 +250,7 @@ def _resource_locations(config: BartlebyConfig) -> dict[str, object]:
                 {
                     "content_type": None,
                     "format": "rss",
-                    "url": _absolute(config.site.url, aggregate_feed_path("rss")),
+                    "url": absolute_url(config.site.url, aggregate_feed_path("rss")),
                 }
             )
         if "atom" in aggregate.formats:
@@ -206,31 +258,25 @@ def _resource_locations(config: BartlebyConfig) -> dict[str, object]:
                 {
                     "content_type": None,
                     "format": "atom",
-                    "url": _absolute(config.site.url, aggregate_feed_path("atom")),
+                    "url": absolute_url(config.site.url, aggregate_feed_path("atom")),
                 }
             )
     return {
-        "sitemap": _absolute(config.site.url, "/sitemap.xml"),
-        "llms_txt": _absolute(config.site.url, "/llms.txt"),
-        "content_index": _absolute(config.site.url, f"/{CONTENT_INDEX_PATH}"),
+        "sitemap": absolute_url(config.site.url, "/sitemap.xml"),
+        "llms_txt": absolute_url(config.site.url, "/llms.txt"),
+        "content_index": absolute_url(config.site.url, f"/{CONTENT_INDEX_PATH}"),
         "feeds": feeds,
     }
 
 
 def schema_json_url(site: SiteConfig) -> str:
     """Absolute URL of the schema.json manifest (used by llms.txt discovery)."""
-    return _absolute(site.url, f"/{SCHEMA_JSON_PATH}")
+    return absolute_url(site.url, f"/{SCHEMA_JSON_PATH}")
 
 
 def content_index_url(site: SiteConfig) -> str:
     """Absolute URL of the content-index.json artifact (used by llms.txt discovery)."""
-    return _absolute(site.url, f"/{CONTENT_INDEX_PATH}")
-
-
-def _md_variant_path(output_url: str) -> str:
-    """The .md variant path for an output URL (mirrors write_markdown_variant)."""
-    stripped = output_url.strip("/")
-    return "index.md" if not stripped else f"{stripped}/index.md"
+    return absolute_url(site.url, f"/{CONTENT_INDEX_PATH}")
 
 
 def _jsonable(value: object) -> object:
@@ -239,8 +285,3 @@ def _jsonable(value: object) -> object:
     if callable(isoformat):
         return isoformat()
     return value
-
-
-def _absolute(site_url: str, path: str) -> str:
-    """Join the site URL with a path, ensuring a single ``/`` between them."""
-    return site_url.rstrip("/") + "/" + path.lstrip("/")

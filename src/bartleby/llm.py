@@ -12,6 +12,26 @@ Markdown source, so they get JSON-LD but no variant, and their HTML never links 
 The ``<link rel="alternate" type="text/markdown">`` tag is emitted only when the variant
 exists: the build passes the set of variant URLs to the template context, and the
 theme reads ``markdown_url``.
+
+``llms.txt`` format (UTF-8, Markdown, ends with one newline):
+
+* ``# <site.title>``, then ``site.description`` on its own paragraph.
+* When ``ai.agent_surface`` is on, a ``## Machine-readable`` section with absolute links to
+  ``schema.json`` and ``content-index.json``.
+* One ``## <Type>`` section per content type that has published pages, in ``content_types``
+  order, then ``## Pages`` for pages with no content type.
+  Entries inside a section keep discovery order (sorted by source path).
+* Each entry is one line: ``- [<title>](<absolute .md variant URL>): <summary>``.
+  The summary is the page description, else its excerpt, else its title, with runs of
+  whitespace collapsed so an entry never spans lines.
+
+``llms-full.txt`` format: the same title and description header, then one block per
+published page in discovery order.
+A block is ``---``, ``# <title>``, ``URL: <absolute page URL>``, ``Date: <ISO date>`` when
+the page has one, a blank line, and the page's raw Markdown body (front matter removed).
+
+Both files list published pages only and carry no build timestamp, so the same input
+yields byte-identical output.
 """
 
 from __future__ import annotations
@@ -20,6 +40,7 @@ import json
 from typing import TYPE_CHECKING
 
 from bartleby.content_query import select_published
+from bartleby.urls import absolute_url
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -57,9 +78,9 @@ def generate_llms_txt(pages: list[Page], config: BartlebyConfig) -> str:
         lines.append(f"## {type_name.title()}")
         lines.append("")
         for page in group:
-            md_url = markdown_variant_url(page.output_url)
-            description = page.description or page.excerpt or page.title
-            lines.append(f"- [{page.title}]({md_url}): {description}")
+            md_url = absolute_url(config.site.url, markdown_variant_url(page.output_url))
+            summary = " ".join((page.description or page.excerpt or page.title).split())
+            lines.append(f"- [{page.title}]({md_url}): {summary}")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -70,7 +91,7 @@ def generate_llms_full_txt(pages: list[Page], config: BartlebyConfig) -> str:
     for page in select_published(pages):
         sections.append("---")
         sections.append(f"# {page.title}")
-        sections.append(f"URL: {page.output_url}")
+        sections.append(f"URL: {absolute_url(config.site.url, page.output_url)}")
         if page.date is not None:
             sections.append(f"Date: {page.date.isoformat()}")
         sections.append("")
@@ -105,7 +126,7 @@ def generate_jsonld(page: Page, site: SiteConfig) -> str:
         "name": page.title,
         "headline": page.title,
         "description": page.description or site.description or "",
-        "url": _absolute(site.url, page.output_url),
+        "url": absolute_url(site.url, page.output_url),
     }
     if jsonld_type == "Article" and page.date is not None:
         payload["datePublished"] = page.date.isoformat()
@@ -131,7 +152,3 @@ def _group_by_content_type(pages: list[Page], config: BartlebyConfig) -> dict[st
             groups[key] = []
         groups[key].append(page)
     return groups
-
-
-def _absolute(site_url: str, path: str) -> str:
-    return site_url.rstrip("/") + "/" + path.lstrip("/")

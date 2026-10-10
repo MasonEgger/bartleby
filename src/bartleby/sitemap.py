@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
 
 from bartleby.content_query import select_published
+from bartleby.urls import absolute_url
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -29,7 +30,7 @@ def generate_sitemap(pages: list[Page], site: SiteConfig) -> str:
     root = ET.Element(f"{{{_SITEMAP_NS}}}urlset")
     for page in select_published(pages):
         url_element = ET.SubElement(root, f"{{{_SITEMAP_NS}}}url")
-        ET.SubElement(url_element, f"{{{_SITEMAP_NS}}}loc").text = _absolute(
+        ET.SubElement(url_element, f"{{{_SITEMAP_NS}}}loc").text = absolute_url(
             site.url, page.output_url
         )
         if page.date is not None:
@@ -57,7 +58,7 @@ def generate_robots_txt(site: SiteConfig, ai_config: AIConfig) -> str:
         lines.extend([f"User-agent: {crawler}", "Allow: /", ""])
     for crawler in ai_config.robots.get("disallow", []):
         lines.extend([f"User-agent: {crawler}", "Disallow: /", ""])
-    lines.append(f"Sitemap: {_absolute(site.url, '/sitemap.xml')}")
+    lines.append(f"Sitemap: {absolute_url(site.url, '/sitemap.xml')}")
     return "\n".join(lines) + "\n"
 
 
@@ -72,8 +73,3 @@ def write_robots_txt(
     if static_override_exists:
         return
     (output_dir / "robots.txt").write_text(generate_robots_txt(site, ai_config), encoding="utf-8")
-
-
-def _absolute(site_url: str, path: str) -> str:
-    """Join the site URL with a path, ensuring a single ``/`` between them."""
-    return site_url.rstrip("/") + "/" + path.lstrip("/")

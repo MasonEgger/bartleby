@@ -75,3 +75,6 @@ Look at `src/bartleby/config.py` and `src/bartleby/authors.py` for the canonical
 - Taxonomy URLs: `taxonomies.term_url` is the single builder, used by page generation and by `Page.taxonomy_links` (`TermLink`, `url=None` when the term has no page). Posts in a content type link to its scoped term page.
 - Excerpts: `Page.excerpt` is plain text (feeds, llms.txt); `Page.excerpt_html` is rendered and crossref-rewritten (list and taxonomy templates). The agent surface uses `description`.
 - Agent surface: `llm.py` (Markdown variants, `llms.txt`, JSON-LD), `agent_surface.py` (`schema.json`, `content-index.json`), `schema_introspection.py`, `skills.py` (deterministic skill generation). This is the differentiator; keep it the most consistent part of the tool.
+- Absolute URLs: `urls.absolute_url` is the single builder for site-absolute URLs (seo, sitemap, feeds, llm, agent_surface all use it). Do not add per-module copies.
+- `schema.json` carries a `theme` block `{name, chain, features: {enabled, implemented, active}}`; `active` is the intersection and the value agents should rely on. The four agent files (`llms.txt`, `llms-full.txt`, `schema.json`, `content-index.json`) are byte-identical across builds and a test pins it.
+- `export --include-html` renders through `build.render_content`, which shares `_render_page_bodies` with the build.

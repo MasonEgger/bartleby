@@ -107,6 +107,54 @@ def test_llms_full_txt_includes_content() -> None:
     assert "---" in text
 
 
+def test_llms_txt_links_are_absolute_urls() -> None:
+    """Every page link in ``llms.txt`` is an absolute URL on the site."""
+    pages = [_page(source="blog/posts/a.md", title="A")]
+    text = generate_llms_txt(pages, _config())
+    assert "- [A](https://example.com/blog/posts/a/index.md): " in text
+
+
+def test_llms_txt_lists_sections_with_titles_and_skips_drafts() -> None:
+    """Sections follow the config order, static pages land under Pages, drafts are absent."""
+    draft = _page(source="blog/posts/d.md", title="Draft Post")
+    draft.draft = True
+    pages = [
+        _page(source="blog/posts/a.md", title="A Post", description="About A"),
+        _page(source="about.md", title="About", content_type_name=None),
+        draft,
+    ]
+    text = generate_llms_txt(pages, _config())
+    assert text.index("## Blog") < text.index("## Pages")
+    assert "- [A Post](https://example.com/blog/posts/a/index.md): About A" in text
+    assert "- [About](https://example.com/about/index.md)" in text
+    assert "Draft Post" not in text
+
+
+def test_llms_txt_entry_stays_on_one_line() -> None:
+    """A multi-line description or excerpt cannot break the list entry."""
+    page = _page(source="blog/posts/a.md", title="A")
+    page.excerpt = "First line.\n\nSecond   paragraph."
+    text = generate_llms_txt([page], _config())
+    assert (
+        "- [A](https://example.com/blog/posts/a/index.md): First line. Second paragraph." in text
+    )
+
+
+def test_llms_full_txt_has_title_absolute_url_and_body_per_published_page() -> None:
+    """Each section of ``llms-full.txt`` carries the title, absolute URL, and body."""
+    draft = _page(source="blog/posts/d.md", title="Draft Post", raw="Secret.")
+    draft.draft = True
+    pages = [
+        _page(
+            source="blog/posts/a.md", title="A", raw="First body.", date=datetime.date(2026, 1, 2)
+        ),
+        draft,
+    ]
+    text = generate_llms_full_txt(pages, _config())
+    assert "# A\nURL: https://example.com/blog/posts/a/\nDate: 2026-01-02\n\nFirst body." in text
+    assert "Secret." not in text
+
+
 def test_markdown_variant_written(tmp_path: Path) -> None:
     """A page at ``/blog/posts/a/`` produces ``/blog/posts/a/index.md`` next to the HTML."""
     page = _page(source="blog/posts/a.md", title="A", raw="Body content.\n")

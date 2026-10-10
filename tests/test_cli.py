@@ -10,6 +10,7 @@ import pytest
 
 from bartleby.cli import _discover_shortcode_names, main
 from bartleby.config import load_config
+from bartleby.plugins import KNOWN_EVENTS
 from bartleby.theme_loader import ResolvedTheme, ThemeLayer, ThemeManifest
 
 if TYPE_CHECKING:
@@ -797,6 +798,137 @@ def test_export_include_content_embeds_body(
     main(["export", "--include-content"])
     captured = capsys.readouterr()
     assert "Unique body text." in captured.out
+
+
+def test_export_include_html_returns_the_built_page_body(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby export --include-html`` embeds the HTML the build puts in the page."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    site = tmp_path / "mysite"
+    monkeypatch.chdir(site)
+    post = site / "content" / "blog" / "posts" / "p.md"
+    post.write_text(
+        '---\ntitle: "P"\ndate: 2026-05-01\ndraft: false\ndescription: "d"\n---\n\n'
+        "## Heading\n\nUnique *body* text.\n",
+        encoding="utf-8",
+    )
+    draft = site / "content" / "blog" / "posts" / "d.md"
+    draft.write_text('---\ntitle: "D"\ndate: 2026-05-02\ndraft: true\n---\n\nHidden.\n')
+    capsys.readouterr()
+
+    main(["export", "--include-html"])
+    records = [
+        json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")
+    ]
+    exported = next(record for record in records if record["title"] == "P")
+    assert "<em>body</em>" in str(exported["html"])
+    assert all(record["title"] != "D" for record in records)
+    assert all(record["html"] for record in records)
+
+    # The export and the build share one render path: the built page holds the same HTML.
+    main(["build"])
+    page_dir = site / "site" / str(exported["url"]).strip("/")
+    built = (page_dir / "index.html").read_text(encoding="utf-8")
+    assert str(exported["html"]) in built
+    assert not [path for path in site.iterdir() if path.name.startswith(".bartleby-build-")]
+
+
+def _site_with_event_recorder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Scaffold a site whose project hook appends every event it receives to fired.log."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    site = tmp_path / "mysite"
+    monkeypatch.chdir(site)
+    hooks_dir = site / "hooks"
+    hooks_dir.mkdir(exist_ok=True)
+    handlers = "".join(
+        f"def {event}(*args, **kwargs):\n    record({event!r}, args)\n\n\n"
+        for event in sorted(KNOWN_EVENTS)
+    )
+    (hooks_dir / "recorder.py").write_text(
+        "# ABOUTME: Test hook that records every event it receives.\n"
+        "# Appends one line per event to fired.log in the project root.\n"
+        "from pathlib import Path\n\n"
+        "LOG = Path(__file__).parent.parent / 'fired.log'\n\n\n"
+        "def record(event, args):\n"
+        "    argument = args[0] if event == 'on_startup' else ''\n"
+        "    with LOG.open('a', encoding='utf-8') as handle:\n"
+        "        handle.write(f'{event} {argument}'.strip() + '\\n')\n\n\n" + handlers,
+        encoding="utf-8",
+    )
+    return site
+
+
+def test_export_include_html_fires_the_documented_hooks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``export --include-html`` fires the load, body-render, and shutdown hooks only.
+
+    ``on_shutdown`` fires exactly once, last, as it does at the end of a build.
+    ``docs/content/reference/pages/plugin-hooks.md`` lists these events. Change the set
+    here and in that page together.
+    """
+    site = _site_with_event_recorder(tmp_path, monkeypatch)
+    capsys.readouterr()
+
+    main(["export", "--include-html"])
+
+    fired = (site / "fired.log").read_text(encoding="utf-8").splitlines()
+    assert fired[0] == "on_startup export"
+    assert fired[-1] == "on_shutdown"
+    assert fired.count("on_shutdown") == 1
+    assert {line.split()[0] for line in fired} == {
+        "on_startup",
+        "on_config",
+        "on_pre_build",
+        "on_files",
+        "on_nav",
+        "on_env",
+        "on_pre_page",
+        "on_page_read_source",
+        "on_page_markdown",
+        "on_page_content",
+        "on_shutdown",
+    }
+
+
+def test_export_include_html_failure_fires_build_error_then_shutdown_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A page that fails to render fires ``on_build_error`` then ``on_shutdown``, once each."""
+    site = _site_with_event_recorder(tmp_path, monkeypatch)
+    first_page = next((site / "content").rglob("*.md"))
+    first_page.write_text(
+        first_page.read_text(encoding="utf-8") + "\n[% totally_unknown_shortcode %]\n",
+        encoding="utf-8",
+    )
+    capsys.readouterr()
+
+    with pytest.raises(SystemExit):
+        main(["export", "--include-html"])
+
+    fired = (site / "fired.log").read_text(encoding="utf-8").splitlines()
+    assert fired[-2:] == ["on_build_error", "on_shutdown"]
+    assert fired.count("on_build_error") == 1
+    assert fired.count("on_shutdown") == 1
+
+
+def test_export_without_include_html_does_not_render(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Plain ``bartleby export`` carries no ``html`` key."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    monkeypatch.chdir(tmp_path / "mysite")
+    capsys.readouterr()
+    main(["export"])
+    records = [
+        json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")
+    ]
+    assert records
+    assert all("html" not in record for record in records)
 
 
 def test_generate_skill_writes_three_skills(

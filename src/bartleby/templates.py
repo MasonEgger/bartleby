@@ -14,7 +14,7 @@ import yaml
 from bartleby.feeds import feed_links_for_page
 from bartleby.llm import generate_jsonld
 from bartleby.seo import generate_all_meta_tags
-from bartleby.theme import get_theme_templates_dir
+from bartleby.theme_loader import default_theme
 
 if TYPE_CHECKING:
     import datetime
@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from bartleby.authors import Author
     from bartleby.config import BartlebyConfig, SiteConfig
     from bartleby.content import Page
+    from bartleby.theme_loader import ResolvedTheme
 
 _LOGGER = logging.getLogger("bartleby")
 
@@ -56,7 +57,7 @@ def make_feature_checker(features: list[str]) -> Callable[[str], bool]:
     return feature
 
 
-def template_search_bases(project_dir: Path) -> list[Path]:
+def template_search_bases(project_dir: Path, theme: ResolvedTheme | None = None) -> list[Path]:
     """Return the base directories the Jinja loader searches, in cascade order.
 
     Single source of truth for the template search cascade: both
@@ -68,28 +69,34 @@ def template_search_bases(project_dir: Path) -> list[Path]:
     :param project_dir: Directory containing the user's site (where
         ``overrides/``, ``templates/``, ``partials/``, ``shortcodes/``, and
         ``data/`` live).
-    :returns: Candidate base directories, in cascade order (most specific
-        override first, built-in theme last).
+    :param theme: The resolved theme chain. Defaults to the default theme.
+    :returns: Candidate base directories, in cascade order: project
+        ``overrides/``, ``templates/``, the project root, then each theme
+        layer's ``templates/`` directory leaf-first (child before parent).
     """
+    active_theme = default_theme() if theme is None else theme
     return [
         project_dir / "overrides",
         project_dir / "templates",
         project_dir,
-        get_theme_templates_dir(),
+        *active_theme.templates_dirs(),
     ]
 
 
-def create_jinja_env(config: BartlebyConfig, project_dir: Path) -> jinja2.Environment:
+def create_jinja_env(
+    config: BartlebyConfig, project_dir: Path, theme: ResolvedTheme | None = None
+) -> jinja2.Environment:
     """Build the project's Jinja2 environment with the 6-level search cascade.
 
     :param config: Parsed Bartleby config.
     :param project_dir: Directory containing the user's site (where
         ``overrides/``, ``templates/``, ``partials/``, ``shortcodes/``, and
         ``data/`` live).
+    :param theme: The resolved theme chain. Defaults to the default theme.
     :returns: A configured :class:`jinja2.Environment` with autoescaping on
         for ``.html`` files.
     """
-    search_paths = [str(base) for base in template_search_bases(project_dir)]
+    search_paths = [str(base) for base in template_search_bases(project_dir, theme)]
     loader = jinja2.FileSystemLoader(search_paths)
     env = jinja2.Environment(
         loader=loader,
@@ -100,7 +107,7 @@ def create_jinja_env(config: BartlebyConfig, project_dir: Path) -> jinja2.Enviro
     return env
 
 
-def shortcode_search_roots(project_dir: Path) -> list[Path]:
+def shortcode_search_roots(project_dir: Path, theme: ResolvedTheme | None = None) -> list[Path]:
     """Return the directories searched for ``shortcodes/{name}.html`` templates.
 
     Derived from :func:`template_search_bases`, the same base list
@@ -112,19 +119,23 @@ def shortcode_search_roots(project_dir: Path) -> list[Path]:
     they cannot drift.
 
     :param project_dir: Directory containing the user's site.
+    :param theme: The resolved theme chain. Defaults to the default theme.
     :returns: Candidate shortcode directories, in cascade order. Callers
         should check :meth:`Path.is_dir` before globbing; none of these are
         guaranteed to exist.
     """
-    return [base / "shortcodes" for base in template_search_bases(project_dir)]
+    return [base / "shortcodes" for base in template_search_bases(project_dir, theme)]
 
 
-def resolve_template_name(page: Page, template_type: str, project_dir: Path) -> str:
+def resolve_template_name(
+    page: Page, template_type: str, project_dir: Path, theme: ResolvedTheme | None = None
+) -> str:
     """Return the template name to render for ``page``.
 
     Implements the 6-level lookup cascade documented in spec.md. Each level is
-    checked, in order, against ``overrides/`` then ``templates/`` then the theme
-    (first existing file wins):
+    checked, in order, against ``overrides/``, then ``templates/``, then each theme
+    layer's templates directory leaf-first (first existing file wins, so a child
+    theme's copy beats its parent's):
 
     1. Page front matter ``template`` override (returned immediately)
     2. Content-type taxonomy templates (only when ``template_type`` is
@@ -139,6 +150,7 @@ def resolve_template_name(page: Page, template_type: str, project_dir: Path) -> 
     :param template_type: One of ``"post"``, ``"list"``, ``"page"``,
         ``"taxonomy"``, ``"taxonomy_index"``.
     :param project_dir: The user's project directory.
+    :param theme: The resolved theme chain. Defaults to the default theme.
     :returns: A template name resolvable by the Jinja2 environment. When no
         candidate exists on disk the last candidate is returned, so Jinja2's
         ``TemplateNotFound`` surfaces the concrete missing name.
@@ -161,16 +173,15 @@ def resolve_template_name(page: Page, template_type: str, project_dir: Path) -> 
     if template_type != "page":
         candidates.append("page.html")
 
-    overrides_dir = project_dir / "overrides"
-    templates_dir = project_dir / "templates"
-    theme_dir = get_theme_templates_dir()
+    active_theme = default_theme() if theme is None else theme
+    lookup_dirs = [
+        project_dir / "overrides",
+        project_dir / "templates",
+        *active_theme.templates_dirs(),
+    ]
 
     for candidate in candidates:
-        if (overrides_dir / candidate).exists():
-            return candidate
-        if (templates_dir / candidate).exists():
-            return candidate
-        if (theme_dir / candidate).exists():
+        if any((lookup_dir / candidate).exists() for lookup_dir in lookup_dirs):
             return candidate
     # Nothing matched on disk. Log the full candidate list so the eventual
     # Jinja2 TemplateNotFound has context, then return the last candidate so

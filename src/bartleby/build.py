@@ -22,6 +22,7 @@ from bartleby.assets import (
     AssetCollisionError,
     copy_colocated_assets,
     copy_static_files,
+    copy_theme_static,
     drop_draft_only_assets,
 )
 from bartleby.authors import load_authors
@@ -58,7 +59,7 @@ from bartleby.templates import (
     load_data_files,
     resolve_template_name,
 )
-from bartleby.theme import get_theme_templates_dir
+from bartleby.theme_loader import default_theme
 from bartleby.urls import generate_all_urls
 
 if TYPE_CHECKING:
@@ -67,6 +68,7 @@ if TYPE_CHECKING:
     from bartleby.authors import Author
     from bartleby.config import BartlebyConfig
     from bartleby.content import ColocatedAsset, Page
+    from bartleby.theme_loader import ResolvedTheme
 
 
 @dataclass(slots=True)
@@ -85,6 +87,7 @@ class _BuildState:
     authors: dict[str, Author]
     pages: list[Page]
     assets: list[ColocatedAsset]
+    theme: ResolvedTheme
     all_pages: list[Page] = field(default_factory=list)
     taxonomy_data: AllTaxonomies | None = None
     nav: Any = None
@@ -185,6 +188,7 @@ def build(
     include_drafts: bool = False,
     strict: bool = False,
     dry_run: bool = False,
+    theme: ResolvedTheme | None = None,
 ) -> BuildResult | DryRunResult:
     """Run the full Bartleby build pipeline against ``config_path``.
 
@@ -197,6 +201,8 @@ def build(
     :param dry_run: When ``True``, the freshly rendered output is compared to
         the existing ``site/`` and a :class:`DryRunResult` is returned; nothing
         is written to disk and the previous ``site/`` is left untouched.
+    :param theme: The resolved theme chain to render with. Defaults to the
+        default theme until config selects one.
     :returns: A :class:`BuildResult` for a normal build, or a
         :class:`DryRunResult` when ``dry_run`` is set.
     :raises BuildError: When metadata validation fails, or when ``strict``
@@ -208,7 +214,7 @@ def build(
     """
     started = time.perf_counter()
 
-    state = _load_inputs(config_path)
+    state = _load_inputs(config_path, theme)
     try:
         _filter_and_validate(state, include_drafts=include_drafts)
         rendered_html = _render_all_pages(state, strict=strict)
@@ -225,7 +231,7 @@ def build(
             shutil.rmtree(state.output_dir, ignore_errors=True)
 
 
-def _load_inputs(config_path: Path) -> _BuildState:
+def _load_inputs(config_path: Path, theme: ResolvedTheme | None) -> _BuildState:
     """Phase 1: load config, discover plugins/hooks, and read authors + content.
 
     Fires the early lifecycle hooks (``on_startup``, ``on_config``,
@@ -255,6 +261,7 @@ def _load_inputs(config_path: Path) -> _BuildState:
         authors=authors,
         pages=pages,
         assets=assets,
+        theme=default_theme() if theme is None else theme,
     )
 
 
@@ -303,7 +310,7 @@ def _filter_and_validate(state: _BuildState, *, include_drafts: bool) -> None:
     link_pages(nav)
     state.nav = plugins.run_event("on_nav", nav, config=config)
 
-    env = create_jinja_env(config, state.project_dir)
+    env = create_jinja_env(config, state.project_dir, state.theme)
     state.env = plugins.run_event("on_env", env, config=config)
 
     state.data = load_data_files(state.project_dir)
@@ -397,7 +404,9 @@ def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
         )
         template_type = _template_type_for(page, content_type)
         try:
-            template_name = resolve_template_name(page, template_type, state.project_dir)
+            template_name = resolve_template_name(
+                page, template_type, state.project_dir, state.theme
+            )
             template = env.get_template(template_name)
             context = build_page_context(
                 page=page,
@@ -451,8 +460,7 @@ def _emit_outputs(state: _BuildState, rendered_html: list[str]) -> None:
     output_dir = state.output_dir
     project_dir = state.project_dir
 
-    theme_static = get_theme_templates_dir().parent / "static"
-    static_file_count = copy_static_files(theme_static, output_dir)
+    static_file_count = copy_theme_static(state.theme.static_dirs(), output_dir)
     static_file_count += copy_static_files(project_dir / "static", output_dir)
     _apply_compiled_theme_css(project_dir, output_dir)
     try:
@@ -477,9 +485,10 @@ def _emit_outputs(state: _BuildState, rendered_html: list[str]) -> None:
         **{pack: bool(value) for pack, value in config.theme.icon_packs.items()},
     }
     tree_shake_icons(
-        rendered_html + _template_sources(project_dir),
+        rendered_html + _template_sources(project_dir, state.theme),
         icon_packs,
         output_dir,
+        state.theme.icons_dirs(),
     )
     write_search_index(build_search_index(state.pages, config), output_dir)
     generate_feeds(state.pages, config, output_dir)
@@ -645,7 +654,7 @@ def _render_404(
     return template.render(**context)
 
 
-def _template_sources(project_dir: Path) -> list[str]:
+def _template_sources(project_dir: Path, theme: ResolvedTheme) -> list[str]:
     """Return the raw text of every theme and project template.
 
     Tree-shaking scans rendered HTML for icon references, but icons can also be
@@ -654,7 +663,7 @@ def _template_sources(project_dir: Path) -> list[str]:
     the template sources ensures those references are retained too.
     """
     sources: list[str] = []
-    template_roots = [get_theme_templates_dir(), project_dir / "templates"]
+    template_roots = [*theme.templates_dirs(), project_dir / "templates"]
     for root in template_roots:
         if not root.is_dir():
             continue

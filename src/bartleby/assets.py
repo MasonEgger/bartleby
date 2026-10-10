@@ -58,6 +58,25 @@ def copy_static_files(static_dir: Path, output_dir: Path) -> int:
     return copied
 
 
+def copy_theme_static(static_dirs: list[Path], output_dir: Path) -> int:
+    """Copy a theme chain's ``static/`` directories into ``output_dir``, child winning.
+
+    ``static_dirs`` is leaf-first (the order of
+    :meth:`bartleby.theme_loader.ResolvedTheme.static_dirs`). The copy runs
+    root-first so a child layer overwrites a parent's file at the same path.
+
+    :returns: The number of distinct output files written, so a path shared by
+        two layers counts once.
+    """
+    written: set[Path] = set()
+    for static_dir in reversed(static_dirs):
+        copy_static_files(static_dir, output_dir)
+        written.update(
+            source.relative_to(static_dir) for source in static_dir.rglob("*") if source.is_file()
+        )
+    return len(written)
+
+
 def copy_colocated_assets(
     assets: list[ColocatedAsset],
     pages: list[Page],

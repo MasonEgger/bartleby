@@ -19,6 +19,7 @@ from bartleby.build import (
 )
 from bartleby.config import ConfigError
 from bartleby.theme import get_theme_static_dir
+from bartleby.theme_loader import resolve_theme
 
 
 @pytest.fixture
@@ -777,3 +778,22 @@ def test_build_ignores_stale_compiled_theme_css(project: Path) -> None:
 
     rendered_css = (project / "site" / "css" / "main.css").read_text(encoding="utf-8")
     assert "compiled-but-stale" not in rendered_css
+
+
+def test_build_renders_with_path_theme_chain(tmp_path: Path) -> None:
+    """A child path theme supplies page.html; the parent supplies 404.html and static files."""
+    themes = Path(__file__).parent / "fixtures" / "themes"
+    (tmp_path / "content").mkdir()
+    (tmp_path / "content" / "index.md").write_text("---\ntitle: Home\n---\n\nHello.\n")
+    (tmp_path / "bartleby.yml").write_text(
+        'site:\n  title: "Themed"\n  url: "https://themed.example.com"\n', encoding="utf-8"
+    )
+    theme = resolve_theme(project_dir=tmp_path, path=str(themes / "child"))
+
+    build(tmp_path / "bartleby.yml", theme=theme)
+
+    site_dir = tmp_path / "site"
+    assert "CHILD-PAGE-TEMPLATE Home" in (site_dir / "index.html").read_text(encoding="utf-8")
+    assert "Parent 404" in (site_dir / "404.html").read_text(encoding="utf-8")
+    assert (site_dir / "parent.txt").exists()
+    assert (site_dir / "shared.txt").read_text(encoding="utf-8") == "child version\n"

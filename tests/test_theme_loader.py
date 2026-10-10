@@ -114,8 +114,14 @@ def test_layer_dirs_are_leaf_first_and_only_existing() -> None:
         THEMES / "child" / "templates",
         THEMES / "parent" / "templates",
     ]
-    assert resolved.static_dirs() == []
-    assert resolved.icons_dirs() == []
+    assert resolved.static_dirs() == [
+        THEMES / "child" / "static",
+        THEMES / "parent" / "static",
+    ]
+    assert resolved.icons_dirs() == [
+        THEMES / "child" / "icons",
+        THEMES / "parent" / "icons",
+    ]
 
 
 def test_cyclic_extends_names_both_themes() -> None:

@@ -10,6 +10,7 @@ import pytest
 
 from bartleby.cli import _discover_shortcode_names, main
 from bartleby.config import load_config
+from bartleby.theme_loader import ResolvedTheme, ThemeLayer, ThemeManifest
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -900,14 +901,21 @@ def test_discover_shortcode_names_finds_templates_shortcodes_location(tmp_path: 
     assert _discover_shortcode_names(tmp_path) == ["bar"]
 
 
+def _single_layer_theme(root: Path) -> ResolvedTheme:
+    manifest = ThemeManifest(name="stub")
+    return ResolvedTheme(chain=[ThemeLayer(name="stub", root=root, manifest=manifest)])
+
+
 def test_discover_shortcode_names_includes_builtin_theme_shortcodes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Built-in theme shortcodes (``get_theme_templates_dir()/shortcodes/*.html``) are included."""
+    """Built-in theme shortcodes (``<theme>/templates/shortcodes/*.html``) are included."""
     theme_dir = tmp_path / "theme"
-    (theme_dir / "shortcodes").mkdir(parents=True)
-    (theme_dir / "shortcodes" / "baked_in.html").write_text("baked in\n", encoding="utf-8")
-    monkeypatch.setattr("bartleby.templates.get_theme_templates_dir", lambda: theme_dir)
+    (theme_dir / "templates" / "shortcodes").mkdir(parents=True)
+    (theme_dir / "templates" / "shortcodes" / "baked_in.html").write_text(
+        "baked in\n", encoding="utf-8"
+    )
+    monkeypatch.setattr("bartleby.templates.default_theme", lambda: _single_layer_theme(theme_dir))
 
     project_dir = tmp_path / "project"
     project_dir.mkdir()
@@ -956,9 +964,11 @@ def test_discover_shortcode_names_deduplicates_across_locations(
 ) -> None:
     """A name defined in multiple locations appears once, sorted."""
     theme_dir = tmp_path / "theme"
-    (theme_dir / "shortcodes").mkdir(parents=True)
-    (theme_dir / "shortcodes" / "note.html").write_text("theme note\n", encoding="utf-8")
-    monkeypatch.setattr("bartleby.templates.get_theme_templates_dir", lambda: theme_dir)
+    (theme_dir / "templates" / "shortcodes").mkdir(parents=True)
+    (theme_dir / "templates" / "shortcodes" / "note.html").write_text(
+        "theme note\n", encoding="utf-8"
+    )
+    monkeypatch.setattr("bartleby.templates.default_theme", lambda: _single_layer_theme(theme_dir))
 
     project_dir = tmp_path / "project"
     (project_dir / "shortcodes").mkdir(parents=True)

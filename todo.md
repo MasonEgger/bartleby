@@ -15,14 +15,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 8. Verify: coverage + `just check`
 
 ### Step 2: Resolution chain drives templates, static assets, and icons (feature)
-- [ ] 1. RED: cascade tests (search bases order, parent fallback, child wins, overrides/ beats all), static copy child-wins, icon lookup leaf-first
-- [ ] 2. Document: docstrings for template_search_bases, resolve_template_name, icon lookup
-- [ ] 3. GREEN: templates.py takes ResolvedTheme; icons.py chain-aware; build.py resolves once + copies static root-first
-- [ ] 4. RED: integration build on theme.path fixture child
-- [ ] 5. GREEN: wire into build.py
-- [ ] 6. REFACTOR: drop get_theme_templates_dir/get_theme_static_dir
-- [ ] 7. Document: none beyond docstrings
-- [ ] 8. Verify: coverage + `just check`
+- [x] 1. RED: cascade tests (search bases order, parent fallback, child wins, overrides/ beats all), static copy child-wins, icon lookup leaf-first
+- [x] 2. Document: docstrings for template_search_bases, resolve_template_name, icon lookup
+- [x] 3. GREEN: templates.py takes ResolvedTheme; icons.py chain-aware; build.py resolves once + copies static root-first
+- [x] 4. RED: integration build on theme.path fixture child
+- [x] 5. GREEN: wire into build.py
+- [x] 6. REFACTOR: drop get_theme_templates_dir/get_theme_static_dir
+- [x] 7. Document: none beyond docstrings
+- [x] 8. Verify: coverage + `just check`
 
 ### Step 3: Native theme config vocabulary and the feature contract (feature)
 - [ ] 1. RED: one-of name/path/package; native feature names only; tokens map; logo/favicon/icon_packs; old mkdocs names -> ConfigError with hint; unimplemented-feature warning tests

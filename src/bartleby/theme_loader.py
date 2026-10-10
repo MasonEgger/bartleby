@@ -37,6 +37,7 @@ from typing import Any
 
 import yaml
 
+from bartleby.theme import get_theme_templates_dir
 from bartleby.themes import BUNDLED_THEME_NAMES, bundled_theme_root
 
 THEME_ENTRY_POINT_GROUP = "bartleby.themes"
@@ -106,6 +107,20 @@ class ResolvedTheme:
     def _existing_dirs(self, subdirectory: str) -> list[Path]:
         candidates = (layer.root / subdirectory for layer in self.chain)
         return [candidate for candidate in candidates if candidate.is_dir()]
+
+
+def default_theme() -> ResolvedTheme:
+    """The theme used when no theme is selected: the package in ``bartleby/theme/``.
+
+    It has no manifest on disk; it is wrapped here as a single-layer chain so the
+    build treats it like any other resolved theme.
+
+    Returns:
+        A one-layer chain named ``default``.
+    """
+    root = get_theme_templates_dir().parent
+    manifest = ThemeManifest(name="default")
+    return ResolvedTheme(chain=[ThemeLayer(name="default", root=root, manifest=manifest)])
 
 
 def load_manifest(root: Path) -> ThemeManifest:

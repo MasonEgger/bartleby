@@ -64,11 +64,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 ## Section 2: The `material` theme
 
 ### Step 7: Material design sources (task)
-- [ ] 1. Scope: themes/material/{tailwind.config.js,tailwind.css,safelist.txt}
-- [ ] 2. Tooling: frontend-design; theme compile on scratch project
-- [ ] 3. Do: dark mode on [data-theme], Material-faithful palette/type via --bb-* tokens, typography plugin, component + layout classes
-- [ ] 4. Verify: compile exits 0 with prose + component rules
-- [ ] 5. Document: config comment block
+- [x] 1. Scope: themes/material/{tailwind.config.js,tailwind.css,safelist.txt}
+- [x] 2. Tooling: frontend-design; theme compile on scratch project
+- [x] 3. Do: dark mode on [data-theme], Material-faithful palette/type via --bb-* tokens, typography plugin, component + layout classes
+- [x] 4. Verify: compile exits 0 with prose + component rules
+- [x] 5. Document: config comment block
 
 ### Step 8: Material shell and content templates (task)
 - [ ] 1. Scope: header, nav, footer, page, post, list under themes/material

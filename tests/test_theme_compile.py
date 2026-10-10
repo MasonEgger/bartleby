@@ -29,7 +29,6 @@ from bartleby.theme_compile import (
 from bartleby.theme_loader import (
     ResolvedTheme,
     ThemeLayer,
-    default_theme,
     load_manifest,
     resolve_theme,
 )
@@ -431,7 +430,9 @@ def test_compile_fallback_input_has_directives_and_no_config(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """With no tailwind.css in any layer, a generated input is used and --config is omitted."""
-    project_dir, recorder = _compile(tmp_path, monkeypatch, default_theme())
+    project_dir, recorder = _compile(
+        tmp_path, monkeypatch, resolve_theme(project_dir=tmp_path, name="base")
+    )
 
     generated = project_dir / ".bartleby" / "input.css"
     assert _arg(recorder.command, "--input") == str(generated)

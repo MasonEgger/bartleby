@@ -1,20 +1,81 @@
-# Curated Tailwind safelist for the shipped theme CSS.
-# These utility classes are always present in the package-built main.css even
-# when no bundled template references them statically, so common runtime-toggled
-# states (dark mode, search modal open/close, prose variants) render correctly
-# without the user running `bartleby theme compile`.
+# ABOUTME: Curated Tailwind safelist for the material theme.
+# ABOUTME: tailwind.config.js reads this file; one class per line, # starts a comment.
 #
-# Compiled into static/css/main.css at package build time. See the `theme-css`
-# recipe in the Justfile and the "Theme Asset Pipeline" section of spec.md.
+# Classes listed here are always emitted, even when no template references them
+# statically. Component classes defined under @layer components are purged when
+# unused, so every semantic class the material templates (or Markdown content)
+# can produce is named here. Runtime-toggled utilities live here too.
+#
+# Layout regions
+layout-docs
+layout-prose
+docs-content
+sidebar-nav
+nav-tabs
+toc-sidebar
+toc-nav
+# Header, navigation, footer
+site-header
+header-inner
+site-title
+site-nav
+site-footer
+site-meta
+theme-toggle
+nav-link
+nav-section
+nav-section-title
+nav-item
+# Search modal
+search-modal
+search-trigger
+search-overlay
+search-panel
+search-input
+search-results
+# Page furniture
+prev-next
+not-found
+taxonomy-index
+taxonomy-term
+tag-list
+tag
+post-meta
+back-to-top
+code-copy-button
+# Markdown content helpers
+md-button
+md-button--primary
+cards
+# Classes emitted by Markdown extensions, never present in templates
+admonition
+admonition-title
+note
+abstract
+info
+tip
+success
+question
+warning
+failure
+danger
+bug
+example
+quote
+tabbed-set
+tabbed-labels
+tabbed-content
+tabbed-block
+tabbed-alternate
+# Utilities toggled at runtime or by Markdown attributes
 hidden
 block
 flex
 grid
-prose
-prose-invert
-dark
-dark:bg-gray-900
-dark:text-gray-100
 sr-only
 container
 mx-auto
+prose
+prose-invert
+dark:prose-invert
+active

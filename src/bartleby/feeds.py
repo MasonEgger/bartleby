@@ -7,6 +7,8 @@ import datetime
 from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
 
+from bartleby.content_query import select_published
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -129,7 +131,7 @@ def generate_feeds(pages: list[Page], config: BartlebyConfig, output_dir: Path) 
     The site-wide aggregate, when enabled, lands at the output root as
     ``feed.xml`` and ``atom.xml`` per ``site.feed.formats``.
     """
-    publishable = [page for page in pages if not page.draft and page.content_type_name is not None]
+    publishable = [page for page in select_published(pages) if page.content_type_name is not None]
     by_type: dict[str, list[Page]] = {}
     for page in publishable:
         assert page.content_type_name is not None

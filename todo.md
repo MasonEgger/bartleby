@@ -185,14 +185,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 ## Section 7: Agent surface consistency and correctness
 
 ### Step 22: Every published page has a valid Markdown variant and JSON-LD (feature)
-- [ ] 1. RED: index.md per published page; JSON-LD valid with required fields; drafts excluded; parametrized over both themes
-- [ ] 2. Document: per-page guarantee in llm.py
-- [ ] 3. GREEN: close gaps in llm.py / base jsonld partial
-- [ ] 4. RED: integration counts + parse
-- [ ] 5. GREEN: wire into build.py if needed
-- [ ] 6. REFACTOR: share published-page set with sitemap/feeds
-- [ ] 7. Document: agent-surface reference note
-- [ ] 8. Verify: coverage + `just check`
+- [x] 1. RED: index.md per published page; JSON-LD valid with required fields; drafts excluded; parametrized over both themes
+- [x] 2. Document: per-page guarantee in llm.py
+- [x] 3. GREEN: close gaps in llm.py / base jsonld partial
+- [x] 4. RED: integration counts + parse
+- [x] 5. GREEN: wire into build.py if needed
+- [x] 6. REFACTOR: share published-page set with sitemap/feeds
+- [x] 7. Document: agent-surface reference note
+- [x] 8. Verify: coverage + `just check`
 
 ### Step 23: llms.txt, schema.json, and content-index.json are correct (feature)
 - [ ] 1. RED: llms.txt/llms-full.txt; schema.json incl. theme block; content-index published only

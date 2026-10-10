@@ -1,10 +1,25 @@
 # ABOUTME: LLM-friendly output — llms.txt, llms-full.txt, markdown variants, JSON-LD.
 # Produces the agent-readable artifacts that make Bartleby sites navigable by LLMs.
+"""Agent-readable page output.
+
+Per-page guarantee: every published page discovered from ``content/`` has a Markdown
+variant at ``<output_url>/index.md`` (when ``ai.markdown_variants`` is on), and every
+rendered HTML page carries exactly one JSON-LD block that parses as JSON with
+``@context``, ``@type``, ``name``, ``headline``, and ``url``.
+Drafts and ``exclude_patterns`` matches are never rendered, so they get neither.
+Pages the build synthesizes (listings, taxonomy pages) and the 404 page have no
+Markdown source, so they get JSON-LD but no variant, and their HTML never links to one.
+The ``<link rel="alternate" type="text/markdown">`` tag is emitted only when the variant
+exists: the build passes the set of variant URLs to the template context, and the
+theme reads ``markdown_url``.
+"""
 
 from __future__ import annotations
 
 import json
 from typing import TYPE_CHECKING
+
+from bartleby.content_query import select_published
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -42,7 +57,7 @@ def generate_llms_txt(pages: list[Page], config: BartlebyConfig) -> str:
         lines.append(f"## {type_name.title()}")
         lines.append("")
         for page in group:
-            md_url = page.output_url.rstrip("/") + "/index.md"
+            md_url = markdown_variant_url(page.output_url)
             description = page.description or page.excerpt or page.title
             lines.append(f"- [{page.title}]({md_url}): {description}")
         lines.append("")
@@ -52,9 +67,7 @@ def generate_llms_txt(pages: list[Page], config: BartlebyConfig) -> str:
 def generate_llms_full_txt(pages: list[Page], config: BartlebyConfig) -> str:
     """Render ``llms-full.txt`` with the raw body of every published page inlined."""
     sections: list[str] = [f"# {config.site.title}", "", config.site.description or "", ""]
-    for page in pages:
-        if page.draft:
-            continue
+    for page in select_published(pages):
         sections.append("---")
         sections.append(f"# {page.title}")
         sections.append(f"URL: {page.output_url}")
@@ -66,20 +79,30 @@ def generate_llms_full_txt(pages: list[Page], config: BartlebyConfig) -> str:
     return "\n".join(sections).rstrip() + "\n"
 
 
+def markdown_variant_url(output_url: str) -> str:
+    """Return the root-relative URL of the Markdown variant for a page at ``output_url``."""
+    return output_url.rstrip("/") + "/index.md"
+
+
 def write_markdown_variant(page: Page, output_dir: Path) -> None:
     """Write the page's raw markdown body to ``<output_url>/index.md``."""
-    url = page.output_url.strip("/")
-    destination = output_dir / "index.md" if not url else output_dir / url / "index.md"
+    destination = output_dir / markdown_variant_url(page.output_url).lstrip("/")
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(page.raw_content, encoding="utf-8")
 
 
 def generate_jsonld(page: Page, site: SiteConfig) -> str:
     """Render the JSON-LD structured data block for ``page``."""
-    jsonld_type = "Article" if page.content_type_name is not None else "WebPage"
+    if page.generated:
+        jsonld_type = "CollectionPage"
+    elif page.content_type_name is not None:
+        jsonld_type = "Article"
+    else:
+        jsonld_type = "WebPage"
     payload: dict[str, object] = {
         "@context": "https://schema.org",
         "@type": jsonld_type,
+        "name": page.title,
         "headline": page.title,
         "description": page.description or site.description or "",
         "url": _absolute(site.url, page.output_url),
@@ -102,9 +125,7 @@ def _group_by_content_type(pages: list[Page], config: BartlebyConfig) -> dict[st
     """Group ``pages`` by content type, keeping the config's content_types order."""
     groups: dict[str, list[Page]] = {name: [] for name in config.content_types}
     groups["pages"] = []
-    for page in pages:
-        if page.draft:
-            continue
+    for page in select_published(pages):
         key = page.content_type_name or "pages"
         if key not in groups:
             groups[key] = []

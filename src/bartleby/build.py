@@ -94,6 +94,11 @@ class _BuildState:
     assets: list[ColocatedAsset]
     theme: ResolvedTheme
     all_pages: list[Page] = field(default_factory=list)
+    #: The published content pages, computed once so variants, llms.txt, feeds, and the
+    #: sitemap all agree on which pages exist.
+    published: list[Page] = field(default_factory=list)
+    #: Output URLs that have a Markdown variant; the alternate link renders only for these.
+    markdown_variant_urls: frozenset[str] = frozenset()
     taxonomy_data: AllTaxonomies | None = None
     nav: Any = None
     env: Environment | None = None
@@ -355,6 +360,9 @@ def _filter_and_validate(state: _BuildState, *, include_drafts: bool) -> None:
     state.md_renderer = create_markdown_renderer(config)
     listing_pages = generate_listing_pages(pages, config, state.content_dir, state.md_renderer)
     state.all_pages = pages + taxonomy_pages + listing_pages
+    state.published = select_published(pages)
+    if config.ai.markdown_variants:
+        state.markdown_variant_urls = frozenset(page.output_url for page in state.published)
 
     nav = build_navigation(config, pages)
     link_pages(nav)
@@ -472,6 +480,7 @@ def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
                 build_info=build_info,
                 data=state.data,
                 authors=state.authors,
+                markdown_variant_urls=state.markdown_variant_urls,
             )
             context = plugins.run_event("on_page_context", context, page=page, config=config)
             html = template.render(**context)
@@ -545,20 +554,20 @@ def _emit_outputs(state: _BuildState, rendered_html: list[str]) -> None:
         state.theme.icons_dirs(),
     )
     write_search_index(build_search_index(state.pages, config), output_dir)
-    generate_feeds(state.pages, config, output_dir)
+    generate_feeds(state.published, config, output_dir)
     if config.ai.markdown_variants:
-        for page in state.pages:
-            if not page.draft and page.raw_content:
-                write_markdown_variant(page, output_dir)
+        for page in state.published:
+            write_markdown_variant(page, output_dir)
     if config.ai.llms_txt:
         (output_dir / "llms.txt").write_text(
-            generate_llms_txt(state.pages, config), encoding="utf-8"
+            generate_llms_txt(state.published, config), encoding="utf-8"
         )
     if config.ai.llms_full_txt:
         (output_dir / "llms-full.txt").write_text(
-            generate_llms_full_txt(state.pages, config), encoding="utf-8"
+            generate_llms_full_txt(state.published, config), encoding="utf-8"
         )
-    write_sitemap(state.all_pages, config.site, output_dir)
+    # The sitemap lists every rendered page: the published content plus the generated ones.
+    write_sitemap(state.published + state.all_pages[len(state.pages) :], config.site, output_dir)
     if config.ai.agent_surface:
         write_agent_surface(state.pages, config, state.authors, output_dir)
     static_robots_exists = (project_dir / "static" / "robots.txt").exists()

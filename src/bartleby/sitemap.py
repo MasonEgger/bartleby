@@ -7,6 +7,8 @@ import gzip
 from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
 
+from bartleby.content_query import select_published
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -25,9 +27,7 @@ def generate_sitemap(pages: list[Page], site: SiteConfig) -> str:
     :returns: Sitemap XML as a UTF-8 string with declaration.
     """
     root = ET.Element(f"{{{_SITEMAP_NS}}}urlset")
-    for page in pages:
-        if page.draft:
-            continue
+    for page in select_published(pages):
         url_element = ET.SubElement(root, f"{{{_SITEMAP_NS}}}url")
         ET.SubElement(url_element, f"{{{_SITEMAP_NS}}}loc").text = _absolute(
             site.url, page.output_url

@@ -69,7 +69,7 @@ The numbered steps below group into five stages.
 26. **Tree-shake icons.** Scan the rendered HTML and templates, and copy only the SVGs they reference.
 27. **Write the search index** to `search/search_index.json`.
 28. **Generate feeds.** Write RSS and Atom files for content types that enable them, plus the site-wide feed.
-29. **Write Markdown variants** to `<url>/index.md` for every published page, if `ai.markdown_variants` is on.
+29. **Write Markdown variants** to `<url>/index.md` for every published content page (not listing, taxonomy, or 404 pages), if `ai.markdown_variants` is on.
 30. **Write `llms.txt`,** if `ai.llms_txt` is on.
 31. **Write `llms-full.txt`,** if `ai.llms_full_txt` is on.
 32. **Write the sitemap** as `sitemap.xml` and `sitemap.xml.gz`.

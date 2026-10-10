@@ -10,8 +10,8 @@
   {% set favicon = config.theme.favicon if config is defined and config and config.theme else None %}
   {% if favicon %}<link rel="icon" href="{{ favicon }}">{% endif %}
   {% include "partials/seo_meta.html" %}
-  {% if page.url %}
-  <link rel="alternate" type="text/markdown" href="/{{ (page.url.strip('/') ~ '/index.md') if page.url.strip('/') else 'index.md' }}">
+  {% if markdown_url %}
+  <link rel="alternate" type="text/markdown" href="{{ markdown_url }}">
   {% endif %}
   {% for feed_link in feed_links | default([]) %}
   <link rel="alternate" type="{{ feed_link.type }}" href="{{ feed_link.href }}" title="{{ feed_link.title }}">

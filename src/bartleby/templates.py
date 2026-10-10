@@ -12,7 +12,7 @@ import jinja2
 import yaml
 
 from bartleby.feeds import feed_links_for_page
-from bartleby.llm import generate_jsonld
+from bartleby.llm import generate_jsonld, markdown_variant_url
 from bartleby.seo import generate_all_meta_tags
 from bartleby.taxonomies import taxonomy_links_for
 from bartleby.theme_loader import default_theme
@@ -231,8 +231,13 @@ def build_page_context(
     build_info: BuildInfo,
     data: dict[str, object],
     authors: dict[str, Author] | None = None,
+    markdown_variant_urls: frozenset[str] = frozenset(),
 ) -> dict[str, object]:
     """Build the template context dict for one page.
+
+    :param markdown_variant_urls: Output URLs that have a Markdown variant on disk.
+        ``markdown_url`` is the page's variant URL when it is in this set, else ``None``,
+        so the alternate link and the variant file cannot disagree.
 
     :param authors: Optional mapping of author key to :class:`Author` object,
         used to resolve ``page.author_keys`` into rich objects with ``name``,
@@ -243,7 +248,7 @@ def build_page_context(
     :returns: Mapping with the standard Bartleby context keys: ``site``,
         ``page``, ``nav``, ``pages``, ``taxonomies``, ``config``, ``build``,
         ``data``, ``extra_css``, ``extra_js``, ``seo``, ``feed_links``,
-        ``jsonld``. The ``page`` value is the :class:`Page` dataclass itself,
+        ``jsonld``, ``markdown_url``. The ``page`` value is the :class:`Page` dataclass itself,
         so every page attribute is reachable in templates without this
         builder enumerating it. ``jsonld`` is the pre-serialized JSON-LD
         string from :func:`bartleby.llm.generate_jsonld`, so the template and
@@ -270,6 +275,11 @@ def build_page_context(
         "seo": generate_all_meta_tags(page, site_config),
         "feed_links": feed_links_for_page(page, config),
         "jsonld": generate_jsonld(page, site_config),
+        "markdown_url": (
+            markdown_variant_url(page.output_url)
+            if page.output_url in markdown_variant_urls
+            else None
+        ),
     }
 
 

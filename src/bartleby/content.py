@@ -98,6 +98,11 @@ class Page:
         return self.output_url
 
     @property
+    def generated(self) -> bool:
+        """Whether the build synthesized this page (listing or taxonomy) rather than read it."""
+        return self.source_path.parts[:1] == ("__generated__",)
+
+    @property
     def taxonomies(self) -> dict[str, list[str]]:
         """Template-facing alias for :attr:`taxonomy_values`."""
         return self.taxonomy_values

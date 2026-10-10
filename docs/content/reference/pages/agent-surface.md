@@ -24,6 +24,16 @@ Bartleby writes these files to the site root on every build.
 | `content-index.json` | `ai.agent_surface` | One entry per published page, described below |
 | `robots.txt` | none | Crawler directives from `ai.robots`, unless `static/robots.txt` exists |
 
+### Per-Page Guarantee
+
+Every published page from `content/` has a Markdown variant at `<url>/index.md` when `ai.markdown_variants` is on.
+Every HTML page, including `404.html`, carries exactly one JSON-LD block.
+The block parses as JSON and has `@context`, `@type`, `name`, `headline`, and `url`.
+Posts are `Article`, listing and taxonomy pages are `CollectionPage`, and other pages are `WebPage`.
+Drafts and pages matched by `exclude_patterns` are never rendered, so they get neither.
+Listing pages, taxonomy pages, and `404.html` have no Markdown source and no variant.
+Their HTML omits the `text/markdown` alternate link, which the theme emits only when the variant exists.
+
 A published page may not use `schema.json` or `content-index.json` as its output path.
 The build stops with an `AgentSurfaceError` that names the page.
 

@@ -7,6 +7,8 @@ import json
 import re
 from typing import TYPE_CHECKING
 
+from bartleby.content_query import select_published
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -28,9 +30,7 @@ def build_search_index(pages: list[Page], config: BartlebyConfig) -> dict[str, o
     """
     del config  # not yet used — placeholder for future i18n-aware config
     docs: list[dict[str, object]] = []
-    for page in pages:
-        if page.draft:
-            continue
+    for page in select_published(pages):
         tags = page.taxonomy_values.get("tags", [])
         docs.append(
             {

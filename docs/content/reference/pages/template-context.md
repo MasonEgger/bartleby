@@ -138,6 +138,11 @@ The `partials/seo_meta.html` partial in the `base` theme loops over these values
 A list of `{type, href, title}` dicts, one for each feed that applies to the page.
 The base layout renders them as `<link rel="alternate">` tags.
 
+### `markdown_url`
+
+The root-relative URL of the page's Markdown variant, such as `/blog/posts/first/index.md`, or `None` when the page has no variant.
+The `base` layout renders `<link rel="alternate" type="text/markdown">` only when this value is set, so the link and the file always agree.
+
 ### `jsonld`
 
 The page's JSON-LD block as a serialized string.

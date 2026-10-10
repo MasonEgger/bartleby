@@ -14,3 +14,15 @@ def material_theme() -> ResolvedTheme:
         The resolved material chain, independent of ``DEFAULT_THEME_NAME``.
     """
     return resolve_theme(name="material", project_dir=bundled_theme_root("material").parent)
+
+
+def bundled_theme(name: str) -> ResolvedTheme:
+    """Resolve a bundled theme chain by name, independent of the default theme.
+
+    Args:
+        name: A bundled theme name such as ``"material"`` or ``"scrivener"``.
+
+    Returns:
+        The resolved chain for that theme.
+    """
+    return resolve_theme(name=name, project_dir=bundled_theme_root(name).parent)

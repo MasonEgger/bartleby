@@ -1,0 +1,34 @@
+{# Scrivener search: markup only. The engine (index fetch, lunr query, ?h= highlight) is base's static/js/search.js, #}
+{# exposed as the Alpine component bartlebySearch. #}
+{# base.html includes this partial on every page, so the modal is always present. #}
+{# The trigger is partials/search_trigger.html (included by the header); it opens this modal with the bartleby:search-open window event. #}
+<div class="search-modal" x-cloak x-data="bartlebySearch()" x-on:keydown.escape.window="open && close()">
+  <div class="search-overlay" x-show="open" x-cloak>
+    <div class="search-panel" role="dialog" aria-modal="true" aria-label="Search" x-on:click.outside="open && close()">
+      <div class="search-head">
+        <input
+          type="search"
+          class="search-input"
+          placeholder="Search the site"
+          aria-label="Search the site"
+          autocomplete="off"
+          x-ref="input"
+          x-model="query"
+          x-on:input.debounce.150ms="search()"
+          x-on:keydown.enter.prevent="go()">
+        <button type="button" class="search-close" x-on:click="close()">Close</button>
+      </div>
+      <p class="search-status" role="status" aria-live="polite" x-text="status()"></p>
+      <ul class="search-results">
+        <template x-for="result in results" :key="result.href">
+          <li>
+            <a x-bind:href="result.href">
+              <span class="search-result-title" x-effect="mark($el, result.title)"></span>
+              <span class="search-result-snippet" x-effect="mark($el, result.snippet)"></span>
+            </a>
+          </li>
+        </template>
+      </ul>
+    </div>
+  </div>
+</div>

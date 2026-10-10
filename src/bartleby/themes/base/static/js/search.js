@@ -11,12 +11,19 @@
  * markup binds to it with x-data="bartlebySearch()" and may use:
  *   state:    open (bool), query (string, bind with x-model), results (list of
  *             {title, snippet, href}), failed (bool), loading (bool)
- *   methods:  show() opens and loads the index, close() closes and refocuses the
- *             trigger, search() runs the query (call on input), go() follows the
+ *   methods:  show() opens and loads the index, close() closes and returns focus
+ *             (to x-ref="trigger" when present, else to whatever had focus before
+ *             show()), search() runs the query (call on input), go() follows the
  *             first result, status() returns a message for a live region,
  *             mark(element, text) fills element with text, wrapping query terms
  *             in <mark class="search-hit"> when highlighting is on
- *   refs:     x-ref="trigger" (the opening button) and x-ref="input" (the field)
+ *   refs:     x-ref="trigger" (an opening button inside the modal's scope, optional)
+ *             and x-ref="input" (the field)
+ *   opening:  the component also opens on the `bartleby:search-open` window event
+ *             (dispatch it from a trigger outside the modal's scope), on "/" when
+ *             focus is not in an input, textarea, select, or contenteditable
+ *             element, and on Ctrl+K or Cmd+K. Search stays reachable even if a
+ *             theme override drops its trigger.
  * The theme owns every class name and all presentation.
  */
 (function () {
@@ -102,14 +109,33 @@
         results: [],
         failed: false,
         loading: false,
+        returnFocus: null,
+        init: function () {
+          var component = this;
+          window.addEventListener("bartleby:search-open", function () { component.show(); });
+          document.addEventListener("keydown", function (event) {
+            if (component.open) { return; }
+            var target = event.target;
+            var typing = target instanceof HTMLElement &&
+              (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+            var slash = event.key === "/" && !typing && !event.ctrlKey && !event.metaKey && !event.altKey;
+            var chord = (event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "k";
+            if (slash || chord) {
+              event.preventDefault();
+              component.show();
+            }
+          });
+        },
         show: function () {
+          this.returnFocus = document.activeElement;
           this.open = true;
           this.load();
           this.$nextTick(function () { this.$refs.input.focus(); }.bind(this));
         },
         close: function () {
           this.open = false;
-          this.$refs.trigger.focus();
+          var target = this.$refs.trigger || this.returnFocus;
+          if (target instanceof HTMLElement) { target.focus(); }
         },
         load: function () {
           if (index || this.loading) { return Promise.resolve(); }

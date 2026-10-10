@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{# Scrivener taxonomy index: a ledger of terms, name on the left and page count in the right-hand column. #}
+{% block content %}
+{% set taxonomy_name = page.custom_metadata.taxonomy_name %}
+{% if page.content_type_name %}
+  {% set scoped = (taxonomies['by_content_type'][page.content_type_name] or {}) if taxonomies else {} %}
+{% else %}
+  {% set scoped = taxonomies['global'] if taxonomies else {} %}
+{% endif %}
+{% set data = scoped[taxonomy_name] if taxonomy_name in scoped else none %}
+{% set terms = (data.terms.values() | sort(attribute="name") | list) if data else [] %}
+{% set base_url = ("/" ~ page.content_type_name ~ "/" if page.content_type_name else "/") ~ taxonomy_name ~ "/" %}
+<div class="layout-prose">
+  <section class="prose-column taxonomy-index">
+    <div class="prose dark:prose-invert max-w-none">
+      <h1>{{ page.title }}</h1>
+    </div>
+    <p class="taxonomy-count">{{ terms | length }} {{ "term" if terms | length == 1 else "terms" }}</p>
+    {% if terms %}
+    <ul class="term-list">
+      {% for term in terms %}
+      <li><a class="term-link" href="{{ base_url }}{{ term.slug }}/"><span>{{ term.name }}</span><span class="term-count">{{ term.count }}</span></a></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p>No pages use this taxonomy yet.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

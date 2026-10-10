@@ -5,7 +5,8 @@
     <a href="/" class="site-title">{{ site.title }}</a>
     {% set tabs = feature is defined and feature('nav.tabs') %}
     {% if not tabs %}{% include "partials/nav.html" %}{% endif %}
-    {# Search trigger hook: the search modal partial (Step 14) owns its own trigger and opens bartlebySearch. #}
+    {# The trigger lives here; the modal comes from base.html. Dropping this include leaves the "/" and Ctrl/Cmd+K shortcuts working. #}
+    {% if feature is defined and feature('search') %}{% include "partials/search_trigger.html" %}{% endif %}
     {% set color_mode = (config.theme.color_mode if config is defined and config and config.theme else None) %}
     {% if color_mode and color_mode.toggle %}
     <button

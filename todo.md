@@ -115,11 +115,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 5. Document: none
 
 ### Step 14: Scrivener taxonomy, 404, search, and interactive partials (task)
-- [ ] 1. Scope: taxonomy, taxonomy_index, 404, search, back_to_top, code_copy
-- [ ] 2. Tooling: frontend-design; build docs
-- [ ] 3. Do: implement incl. search.highlight; preserve attributes
-- [ ] 4. Verify: styled; highlight works; exit 0; no UndefinedError
-- [ ] 5. Document: none
+- [x] 1. Scope: taxonomy, taxonomy_index, 404, search, back_to_top, code_copy
+- [x] 2. Tooling: frontend-design; build docs
+- [x] 3. Do: implement incl. search.highlight; preserve attributes
+- [x] 4. Verify: styled; highlight works; exit 0; no UndefinedError
+- [x] 5. Document: none
 
 ## Section 4: Compile, ship, and browser-verify both themes
 

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{# Scrivener taxonomy term page: a ledger of the tagged pages, date in the margin column, as in a listing. #}
+{% block content %}
+{% set posts = page.custom_metadata.posts or [] %}
+{% set index_url = ("/" ~ page.content_type_name ~ "/" if page.content_type_name else "/") ~ page.custom_metadata.taxonomy_name ~ "/" %}
+<div class="layout-prose">
+  <section class="prose-column taxonomy-term">
+    <p class="taxonomy-crumb"><a href="{{ index_url }}">All {{ page.custom_metadata.taxonomy_name }}</a></p>
+    <div class="prose dark:prose-invert max-w-none">
+      <h1>{{ page.title }}</h1>
+    </div>
+    <p class="taxonomy-count">{{ posts | length }} {{ "page" if posts | length == 1 else "pages" }} with this term</p>
+    <ul class="post-list">
+      {% for post in posts %}
+      <li class="post-list-item">
+        {% if post.date %}<time datetime="{{ post.date }}">{{ post.date }}</time>{% else %}<span></span>{% endif %}
+        <div>
+          <h2><a href="{{ post.output_url }}">{{ post.title }}</a></h2>
+          {% if post.excerpt %}<div class="prose dark:prose-invert max-w-none">{{ post.excerpt | safe }}</div>{% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+{% endblock %}

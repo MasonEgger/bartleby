@@ -484,12 +484,6 @@
   .not-found-label {
     margin: 0;
   }
-  .taxonomy-index,
-  .taxonomy-term {
-    max-width: calc(var(--sc-measure) + 2 * var(--sc-ruling-unit));
-    margin: 0 auto;
-    padding: calc(var(--sc-ruling-unit) * 2) var(--sc-ruling-unit) calc(var(--sc-ruling-unit) * 3);
-  }
   .taxonomy-crumb {
     margin: 0;
     font-family: var(--sc-font-ui);
@@ -502,8 +496,7 @@
   }
   .term-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
-    gap: 0 var(--sc-ruling-unit);
+    grid-template-columns: minmax(0, 1fr);
     margin: 0;
     padding: 0;
     list-style: none;

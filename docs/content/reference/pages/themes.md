@@ -122,7 +122,8 @@ Both `theme.features` in `bartleby.yml` and `features` in a manifest accept only
 
 Templates test a feature with `feature('<name>')`.
 A feature that is enabled in `bartleby.yml` but declared by no manifest in the chain produces a build warning, not an error.
-The toggle also needs `theme.color_mode.toggle: true`.
+The `color-mode.toggle` feature alone switches the toggle on.
+The old `theme.color_mode.toggle` key is a config error.
 
 ## Tokens
 
@@ -151,6 +152,11 @@ Bartleby does not validate token names, so a name that no theme reads has no eff
 | `font.ui` | no | no | yes |
 | `font.code` | no | yes | yes |
 | `radius` | no | yes | yes |
+| `logo.height` | no | yes | yes |
+
+The `logo.height` token sets the height of the image from `theme.logo`.
+The default is `1.75rem` in `material` and `2rem` in `scrivener`.
+The width follows the image's aspect ratio.
 
 ## Compiling Theme CSS
 
@@ -179,7 +185,7 @@ A theme that extends `base` keeps these promises:
 | Search event | The search component opens on the `bartleby:search-open` window event, on `/`, and on Ctrl+K or Cmd+K. |
 | Search modal | `base.html` includes `partials/search.html` inside the `header` block when `search` is on. |
 | Helper macros | `partials/nav_macros.html` provides `holds` and `first_url`. `partials/toc_macros.html` provides `entries` and `tracker`. |
-| Color mode | The pre-paint script in `base.html` reads the `localStorage` key `bartleby-color-mode`, then `theme.color_mode.default`, then the system setting. It sets `data-theme` on `<html>`. |
+| Color mode | When `feature('color-mode.toggle')` is on, the pre-paint script in `base.html` reads the `localStorage` key `bartleby-color-mode`, then `theme.color_mode.default`, then the system setting. It sets `data-theme` on `<html>`. |
 | Stylesheet | `base.html` links `/css/main.css`. |
 | Safelist | A `tailwind.config.js` that reads `safelist.txt` builds the path from `__dirname`. |
 
@@ -225,7 +231,7 @@ Eject copies each file from the layer that wins it into one directory.
 It writes a `theme.yml` with the leaf theme's `name`, `version`, and `description`, the union of features from the whole chain, and no `extends`.
 
 ```
-Ejected theme 'scrivener' (53 files) to themes/scrivener
+Ejected theme 'scrivener' (56 files) to themes/scrivener
 Add this to bartleby.yml:
 theme:
   path: themes/scrivener
@@ -234,7 +240,7 @@ theme:
 An existing destination without `--force` is a theme error:
 
 ```
-error [theme_error] /path/to/site/themes/scrivener already exists (use --force to overwrite)
+error [theme_error] /path/to/site/themes/scrivener: destination already exists (fix: pass --force to overwrite it, or choose another --to)
 ```
 
 The destination cannot be, contain, or sit inside a theme directory of the chain.
@@ -267,10 +273,13 @@ Theme problems exit with code 1 and the error code `theme_error`.
 
 | Cause | Message contains |
 |-------|---------------------|
-| More than one of `name`, `path`, `package` | `specify exactly one of name, path, or package` |
+| More than one of `name`, `path`, `package` | `more than one of name, path, and package is set` |
 | Unknown bundled theme | `unknown bundled theme` |
 | `path` does not exist | `theme path does not exist` |
 | Entry point missing | `theme package ... not found in entry-point group` |
 | Missing manifest | `missing theme.yml` |
 | Unknown feature | `unknown feature ... in 'features'` |
 | Cyclic `extends` | `cyclic theme extends` |
+
+Every theme error also carries a `(fix: ...)` hint.
+[Error messages](errors.md) lists the common ones.

@@ -86,5 +86,5 @@ A shortcode can therefore produce Markdown that later extensions, such as admoni
 
 ## Errors
 
-A shortcode that names a template Bartleby cannot find raises `ShortcodeError` with the name, such as `unknown shortcode: 'note'`.
+A shortcode that names a template Bartleby cannot find raises `ShortcodeError` with the name and the template to create, such as `unknown shortcode 'note' (fix: create shortcodes/note.html under your project's templates/ directory, or fix the name in the page)`.
 The build fails, and there is no silent passthrough.

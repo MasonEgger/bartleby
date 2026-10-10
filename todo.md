@@ -163,14 +163,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 ## Section 6: Developer experience
 
 ### Step 20: Clear, actionable error messages (feature)
-- [ ] 1. RED: config/author/metadata/theme-path/build error tests (file + key/id + hint; substring assertions)
-- [ ] 2. Document: error-message contracts in docstrings
-- [ ] 3. GREEN: enrich raise sites incl. theme_loader.py
-- [ ] 4. RED: CLI integration asserts text + non-zero exit
-- [ ] 5. GREEN: wire CLI/formatter
-- [ ] 6. REFACTOR: one file+key+hint helper
-- [ ] 7. Document: troubleshooting note if warranted
-- [ ] 8. Verify: coverage + `just check`
+- [x] 1. RED: config/author/metadata/theme-path/build error tests (file + key/id + hint; substring assertions)
+- [x] 2. Document: error-message contracts in docstrings
+- [x] 3. GREEN: enrich raise sites incl. theme_loader.py
+- [x] 4. RED: CLI integration asserts text + non-zero exit
+- [x] 5. GREEN: wire CLI/formatter
+- [x] 6. REFACTOR: one file+key+hint helper
+- [x] 7. Document: troubleshooting note if warranted
+- [x] 8. Verify: coverage + `just check`
 
 ### Step 21: Scaffolding that builds and renders well out of the box (feature)
 - [ ] 1. RED: scaffold layout; theme.name scrivener + native features in manifest; build produces outputs with no warnings

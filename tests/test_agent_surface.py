@@ -353,3 +353,14 @@ def test_agent_surface_enabled_writes_both_artifacts(project: Path) -> None:
     assert index_path.exists()
     json.loads(schema_path.read_text(encoding="utf-8"))
     json.loads(index_path.read_text(encoding="utf-8"))
+
+
+def test_collision_error_names_the_page_source_and_the_reserved_path(tmp_path: Path) -> None:
+    """The error names the colliding source file, the artifact path, and a fix."""
+    colliding = _page(name="schema", title="Collide", output_url="content-index.json")
+    with pytest.raises(AgentSurfaceError) as excinfo:
+        write_agent_surface([colliding], _config(), _authors(), tmp_path)
+    message = str(excinfo.value)
+    assert "blog/posts/schema.md" in message
+    assert "content-index.json" in message
+    assert "fix:" in message

@@ -145,7 +145,6 @@ theme:
     - content.code.copy
     - color-mode.toggle
   color_mode:
-    toggle: true
     default: light
   tokens:
     color.primary: "#2a4b7c"
@@ -166,11 +165,10 @@ theme:
 | `path` | none | A theme directory, relative to the project or absolute |
 | `package` | none | The name of an entry point in the `bartleby.themes` group |
 | `features` | `[]` | Features to switch on, from the list below |
-| `color_mode.toggle` | `false` | Show the light and dark toggle in the header |
 | `color_mode.default` | none | Starting mode: `light` or `dark`. Without it, the toggle follows the reader's system setting. |
 | `tokens` | `{}` | Design tokens, a flat map of dotted names to CSS values |
 | `icon_packs` | all `true` | Enable or disable a bundled icon pack: `material`, `fontawesome`, `octicons`, `simple` |
-| `logo`, `favicon` | none | Paths to the site logo and favicon. Templates can read them as `config.theme.logo` and `config.theme.favicon`. The bundled themes do not use them. |
+| `logo`, `favicon` | none | The site logo and favicon, as a path relative to `static/` or a full URL. `img/logo.svg` is the file `static/img/logo.svg`. The bundled themes show the logo before the site title in the header and link the favicon from the `<head>`. Templates read them as `config.theme.logo` and `config.theme.favicon`, both root-relative URLs such as `/img/logo.svg`. |
 
 Set at most one of `name`, `path`, and `package`.
 Setting more than one is a config error.
@@ -196,8 +194,10 @@ A feature that the active theme chain does not declare in a manifest produces a 
 | `content.code.copy` | Code blocks get a copy button |
 | `color-mode.toggle` | The header shows a light and dark toggle |
 
-The header renders the toggle only when `color_mode.toggle` is `true`.
-The `color-mode.toggle` feature name is valid but does not render the toggle by itself, so set both.
+The `color-mode.toggle` feature is the only switch for the toggle.
+It also controls the small script in `<head>` that applies the saved or system color mode before the page paints.
+`color_mode.default` works with or without the feature.
+The old `color_mode.toggle` key is a config error that points at this feature.
 
 ### Tokens
 
@@ -316,8 +316,7 @@ ai:
 | `robots.disallow` | `[]` | Crawler names that get a `Disallow: /` group |
 | `skills.output_dir` | `.claude/skills` | Where `generate-skill` writes |
 | `skills.style_guide` | none | A Markdown file whose text goes into the generated skills. A missing file is a usage error. |
-| `skills.include_examples` | `3` | Parsed, with no effect yet |
-| `skills.regenerate_on_build` | `false` | Parsed, with no effect yet |
+| `skills.regenerate_on_build` | `false` | Rewrite the skills after every `bartleby build`, as `generate-skill` does. A dry run and the dev server do not. |
 | `agent_context.voice` | none | Voice description, copied into the write and review skills |
 | `agent_context.audience` | none | Audience description, copied the same way |
 | `agent_context.constraints` | `[]` | List of rules, copied the same way |

@@ -60,6 +60,7 @@ nav:
       - Markdown Extensions: reference/pages/markdown-extensions.md
       - Agent Surface: reference/pages/agent-surface.md
       - Build Pipeline: reference/pages/build-pipeline.md
+      - Error Messages: reference/pages/errors.md
 
 theme:
   name: scrivener
@@ -72,8 +73,6 @@ theme:
     - nav.back-to-top
     - content.code.copy
     - color-mode.toggle
-  color_mode:
-    toggle: true
 
 exclude_patterns:
   - "_drafts/**"

@@ -1002,3 +1002,14 @@ def test_build_agent_outputs_use_plain_text_excerpts(project: Path) -> None:
     llms_txt = (project / "site" / "llms.txt").read_text(encoding="utf-8")
     assert "Run bartleby build and read the first post." in llms_txt
     assert "`" not in llms_txt.split("Code Post", 1)[1].splitlines()[0]
+
+
+def test_missing_content_directory_names_the_path_and_a_fix(project: Path) -> None:
+    """A project without ``content/`` fails with the path and how to create it."""
+    shutil.rmtree(project / "content")
+    with pytest.raises(BuildError) as excinfo:
+        build(project / "bartleby.yml")
+    message = str(excinfo.value)
+    assert str(project / "content") in message
+    assert "fix:" in message
+    assert "bartleby new site" in message

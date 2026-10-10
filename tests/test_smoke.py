@@ -230,7 +230,7 @@ def test_scaffold_build_and_serve_compose_output_dir_draft_and_quoted_title(
 
     # R4 + R5 groundwork: DevServer.run() serves the configured output_dir
     # and carries the live-reload snippet (serve mode only).
-    server = DevServer(config_path, host="127.0.0.1", port=0, dirty=False)
+    server = DevServer(config_path, host="127.0.0.1", port=0)
     worker, port, httpd = _start_running_server(server)
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=10) as response:

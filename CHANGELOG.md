@@ -27,6 +27,29 @@ Old mkdocs-material names are a `ConfigError` that names the replacement.
 The native feature names are `search`, `search.highlight`, `nav.tabs`, `nav.sidebar`, `nav.section-index`, `nav.back-to-top`, `content.code.copy`, and `color-mode.toggle`.
 Any other mkdocs-material feature (`navigation.footer`, `navigation.tracking`, `content.code.annotate`, `content.code.select`, `content.tabs.link`, `content.tooltips`, `content.footnote.tooltips`, `content.action.edit`, `content.action.view`, `search.suggest`, `search.share`, `toc.follow`) is not a Bartleby feature and is rejected.
 
+### Changed
+
+Errors name the file, the key path or id, and a concrete fix, in one shape: `<file>: <key path>: <message> (fix: <hint>)`.
+`bartleby.yml` now rejects unknown top-level keys, unknown metadata field types, and a non-list `choices`.
+Invalid YAML in `bartleby.yml`, `.authors.yml`, `theme.yml`, and page front matter is a clean error, not a traceback.
+A duplicated author id is an `author_error`.
+A build with no `content/` directory fails and says how to fix it.
+A page that would overwrite `schema.json` or `content-index.json` is an `agent_surface_error` with exit code 1.
+
+`--quiet` hides warnings and the text confirmation of `new`, `build`, and `generate-skill`.
+`--verbose` logs per-phase progress to stderr, and the two flags cannot be combined.
+`ai.skills.regenerate_on_build` rewrites the skills after `bartleby build`.
+`theme.logo` and `theme.favicon` render in all three bundled themes.
+They are paths relative to `static/`, or full URLs.
+
+### Removed (Breaking)
+
+`theme.color_mode.toggle` is a `ConfigError`.
+The `color-mode.toggle` feature is the only switch for the light and dark toggle.
+`ai.skills.include_examples` is a `ConfigError`, because generated skills never included examples.
+`bartleby serve --dirty` is gone.
+Incremental rebuilds are a non-goal, and the flag always ran a full rebuild.
+
 ### Added
 
 - `theme.name`, `theme.path`, and `theme.package` select a theme; set at most one.

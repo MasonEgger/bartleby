@@ -120,3 +120,13 @@ def test_shortcode_outside_code_still_renders(env: jinja2.Environment) -> None:
     out = process_shortcodes(source, {"build": {"bartleby_version": "1.2.3"}}, env)
     assert "[% nonexistent %]" in out
     assert "1.2.3" in out
+
+
+def test_unknown_shortcode_names_the_template_to_create(env: jinja2.Environment) -> None:
+    """The error says which shortcode and which template file would define it."""
+    with pytest.raises(ShortcodeError) as exc:
+        process_shortcodes("[% banner %]", {}, env)
+    message = str(exc.value)
+    assert "banner" in message
+    assert "shortcodes/banner.html" in message
+    assert "fix:" in message

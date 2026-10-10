@@ -93,6 +93,13 @@
     margin: 0 auto;
     padding: 0 1rem;
   }
+  .site-logo {
+    display: inline-block;
+    width: auto;
+    height: var(--bb-logo-height, 1.75rem);
+    margin-right: 0.5rem;
+    vertical-align: middle;
+  }
   .site-title {
     margin-right: auto;
     color: inherit;

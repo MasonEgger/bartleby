@@ -473,7 +473,7 @@ def test_on_serve_fires_with_server_and_config(project: Path) -> None:
         "        'ok' if ok else 'bad', encoding='utf-8')\n",
         encoding="utf-8",
     )
-    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
     sentinel_server = object()
     server.dispatch_on_serve(sentinel_server)
     assert (project / "serve.txt").read_text(encoding="utf-8") == "ok"

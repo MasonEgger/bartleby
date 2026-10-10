@@ -1,4 +1,4 @@
-# ABOUTME: Development server with live reload, file watching, and dirty builds.
+# ABOUTME: Development server with live reload, file watching, and full rebuilds on change.
 # Wraps the synchronous build pipeline with HTTP/WS serving and watchdog change detection.
 
 from __future__ import annotations
@@ -100,13 +100,6 @@ def classify_change(rel_path: str) -> str:
         if normalised.startswith(prefix):
             return "content"
     return "other"
-
-
-def should_trigger_full_rebuild(kind: str, *, dirty: bool) -> bool:
-    """Decide whether ``kind`` of change forces a full rebuild."""
-    if not dirty:
-        return True
-    return kind in {"config", "template"}
 
 
 def inject_reload_snippet(html: str) -> str:
@@ -284,13 +277,11 @@ class DevServer:
         *,
         host: str,
         port: int,
-        dirty: bool,
         events: bool = False,
     ) -> None:
         self.config_path = config_path
         self.host = host
         self.port = port
-        self.dirty = dirty
         self.events = events
         # Set by :meth:`run` once the reload WebSocket channel is bound; stays
         # ``None`` outside serve mode (the synchronous helpers used by tests
@@ -390,8 +381,7 @@ class DevServer:
         kind = classify_change(rel_path)
         if kind == "other":
             return
-        # Both full and dirty modes currently run a full build; incremental
-        # rebuilds are a deferred optimization.
+        # Every watched change runs a full build; incremental builds are a non-goal.
         self.build_once()
 
     def emit_event(self, event: dict[str, object]) -> None:

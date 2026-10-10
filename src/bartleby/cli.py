@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from jinja2 import TemplateNotFound
 from slugify import slugify
 
+from bartleby.agent_surface import AgentSurfaceError
 from bartleby.authors import AuthorError, load_authors
 from bartleby.build import (
     BuildError,
@@ -34,6 +35,7 @@ from bartleby.content_query import (
     select_published,
 )
 from bartleby.crossrefs import resolve_all_crossrefs, resolve_page_crossrefs
+from bartleby.errors import format_error
 from bartleby.export import export_content
 from bartleby.linting import lint_site
 from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
@@ -87,6 +89,7 @@ _ERROR_CODES: dict[type[Exception], str] = {
     ThemeCompileError: "theme_compile_error",
     ThemeError: "theme_error",
     ContentError: "content_error",
+    AgentSurfaceError: "agent_surface_error",
 }
 
 
@@ -104,9 +107,11 @@ class UsageError(Exception):
 
 def main(argv: list[str] | None = None) -> None:
     """Top-level CLI entry point."""
-    _configure_logging()
     parser = _build_parser()
     args = parser.parse_args(argv)
+    _configure_logging(
+        quiet=getattr(args, "quiet", False), verbose=getattr(args, "verbose", False)
+    )
     handler = getattr(args, "_handler", None)
     if handler is None:
         parser.print_help()
@@ -123,20 +128,32 @@ def main(argv: list[str] | None = None) -> None:
         ThemeCompileError,
         ThemeError,
         ContentError,
+        AgentSurfaceError,
     ) as exc:
         _report_error(exc, fmt)
     else:
         if result is not None:
-            _emit_result(result, fmt)
+            _emit_result(result, fmt, quiet=getattr(args, "quiet", False))
 
 
-def _emit_result(result: Result, fmt: str) -> None:
+# Results that only confirm a command ran. ``--quiet`` drops their text form; every
+# other result (a report, a query payload, a failure) is the command's product.
+_STATUS_RESULTS = (BuildOutput, NewSiteOutput, NewPostOutput, GenerateSkillOutput)
+
+
+def _emit_result(result: Result, fmt: str, *, quiet: bool = False) -> None:
     """Print a successful command result in the requested format and exit non-zero on error.
 
     Successful results print to stdout. A result whose ``exit_code`` is non-zero
-    (e.g. a failed validation) still prints, then raises ``SystemExit``.
+    (e.g. a failed validation) still prints, then raises ``SystemExit``. With
+    ``quiet``, a text-mode confirmation (:data:`_STATUS_RESULTS`) with exit code 0
+    is not printed; JSON output is a machine contract and always prints.
     """
-    print(render(result, fmt))
+    confirmation_only = (
+        quiet and fmt == "text" and result.exit_code == 0 and isinstance(result, _STATUS_RESULTS)
+    )
+    if not confirmation_only:
+        print(render(result, fmt))
     if result.exit_code != 0:
         raise SystemExit(result.exit_code)
 
@@ -150,18 +167,24 @@ def _emit_error(error: ErrorOutput, fmt: str) -> None:
     raise SystemExit(error.exit_code)
 
 
-def _configure_logging() -> None:
+def _configure_logging(*, quiet: bool = False, verbose: bool = False) -> None:
     """Route the ``bartleby`` logger's non-essential output to stderr.
 
     Build results stay on stdout (printed directly); warnings such as broken
-    cross-references go through ``logging`` to stderr. ``BARTLEBY_DEBUG`` lowers
-    the threshold to ``DEBUG`` for development.
+    cross-references go through ``logging`` to stderr. ``--verbose`` or
+    ``BARTLEBY_DEBUG`` lowers the threshold to ``DEBUG``; ``--quiet`` raises it to
+    ``ERROR`` so only failures reach stderr.
 
     The handler is attached once; repeat ``main()`` calls (e.g. in tests) do not
     stack duplicate handlers.
     """
     logger = logging.getLogger("bartleby")
-    level = logging.DEBUG if os.environ.get("BARTLEBY_DEBUG") else logging.INFO
+    if verbose or os.environ.get("BARTLEBY_DEBUG"):
+        level = logging.DEBUG
+    elif quiet:
+        level = logging.ERROR
+    else:
+        level = logging.INFO
     logger.setLevel(level)
     if not logger.handlers:
         handler = logging.StreamHandler(sys.stderr)
@@ -170,7 +193,13 @@ def _configure_logging() -> None:
 
 
 def _report_error(
-    exc: BuildError | ConfigError | AuthorError | ThemeCompileError | ThemeError | ContentError,
+    exc: BuildError
+    | ConfigError
+    | AuthorError
+    | ThemeCompileError
+    | ThemeError
+    | ContentError
+    | AgentSurfaceError,
     fmt: str,
 ) -> None:
     """Surface a build/config/author/content failure in the requested format and exit 1.
@@ -220,8 +249,15 @@ def _global_flags() -> argparse.ArgumentParser:
     parent.add_argument(
         "--config", default=None, help="Path to bartleby.yml (default: ./bartleby.yml)"
     )
-    parent.add_argument("--quiet", action="store_true", help="Suppress non-essential output")
-    parent.add_argument("--verbose", action="store_true", help="Show detailed progress")
+    verbosity = parent.add_mutually_exclusive_group()
+    verbosity.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress warnings and success confirmations (errors and data still print)",
+    )
+    verbosity.add_argument(
+        "--verbose", action="store_true", help="Log detailed progress to stderr"
+    )
     return parent
 
 
@@ -270,9 +306,6 @@ def _build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--host", default=None, help="Bind host (default from config)")
     serve_parser.add_argument(
         "--port", type=int, default=None, help="Bind port (default from config)"
-    )
-    serve_parser.add_argument(
-        "--dirty", action="store_true", help="Only rebuild files that changed"
     )
     serve_parser.add_argument(
         "--events",
@@ -402,15 +435,37 @@ def _resolve_config_path(args: argparse.Namespace) -> Path:
     """
     config_path = Path(args.config) if args.config else Path.cwd() / "bartleby.yml"
     if not config_path.exists():
-        raise UsageError(f"no bartleby.yml at {config_path}", code="usage_error")
+        raise UsageError(
+            format_error(
+                f"no bartleby.yml at {config_path}",
+                hint="run from the directory holding bartleby.yml, pass --config PATH, "
+                "or create a project with `bartleby new site <name>`",
+            ),
+            code="usage_error",
+        )
     return config_path
+
+
+def _unknown_content_type(name: str, config: BartlebyConfig) -> UsageError:
+    """Build the usage error for a ``--type`` that bartleby.yml does not define."""
+    defined = ", ".join(config.content_types) or "none defined"
+    return UsageError(
+        format_error(
+            f"unknown content type {name!r}",
+            hint=f"use one of the content types in bartleby.yml ({defined})",
+        )
+    )
 
 
 def _cmd_new_site(args: argparse.Namespace) -> NewSiteOutput:
     """Scaffold a fresh project under ``./{args.name}/``."""
     target = Path.cwd() / args.name
     if target.exists():
-        raise UsageError(f"{target} already exists")
+        raise UsageError(
+            format_error(
+                f"{target} already exists", hint="choose another name or delete the directory"
+            )
+        )
 
     target.mkdir(parents=True)
     (target / "content" / "blog" / "posts").mkdir(parents=True)
@@ -430,14 +485,18 @@ def _cmd_new_post(args: argparse.Namespace) -> NewPostOutput:
     project_dir = config_path.parent
     config = load_config(config_path)
     if args.type not in config.content_types:
-        raise UsageError(f"unknown content type {args.type!r}")
+        raise _unknown_content_type(args.type, config)
     content_type = config.content_types[args.type]
     posts_dir = project_dir / "content" / content_type.path
     posts_dir.mkdir(parents=True, exist_ok=True)
     slug = slugify(args.title)
     destination = posts_dir / f"{slug}.md"
     if destination.exists():
-        raise UsageError(f"{destination} already exists")
+        raise UsageError(
+            format_error(
+                f"{destination} already exists", hint="choose a different title or edit that file"
+            )
+        )
     today = datetime.date.today().isoformat()
     front_matter = (
         f'---\ntitle: "{args.title}"\ndate: {today}\ndraft: true\n---\n\nWrite something here.\n'
@@ -451,6 +510,8 @@ def _cmd_build(args: argparse.Namespace) -> BuildOutput | DryRunOutput:
 
     With ``--dry-run`` the build renders into a temp tree, diffs it against the
     existing ``site/``, and reports the change set without writing to disk.
+    When ``ai.skills.regenerate_on_build`` is set, a real build also rewrites the
+    agent skills (as ``generate-skill`` does); a dry run never does.
     """
     config_path = _resolve_config_path(args)
     if args.dry_run:
@@ -464,6 +525,8 @@ def _cmd_build(args: argparse.Namespace) -> BuildOutput | DryRunOutput:
     result = asyncio.run(
         async_build(config_path, include_drafts=args.include_drafts, strict=args.strict)
     )
+    if result.config.ai.skills.regenerate_on_build:
+        _write_skills(config_path, result.config)
     return BuildOutput(
         pages=result.page_count,
         static_files=result.static_file_count,
@@ -730,7 +793,7 @@ def _cmd_export(args: argparse.Namespace) -> RawOutput:
     config = load_config(config_path)
     pages, _assets = discover_content(config, config.config_dir / "content")
     if args.type is not None and args.type not in config.content_types:
-        raise UsageError(f"unknown content type {args.type!r}")
+        raise _unknown_content_type(args.type, config)
     payload = export_content(
         pages,
         config,
@@ -753,8 +816,12 @@ def _cmd_generate_skill(args: argparse.Namespace) -> GenerateSkillOutput:
     generation is deterministic, so writes are always idempotent.
     """
     config_path = _resolve_config_path(args)
+    return _write_skills(config_path, load_config(config_path))
+
+
+def _write_skills(config_path: Path, config: BartlebyConfig) -> GenerateSkillOutput:
+    """Render the agent skills for the site at ``config_path`` and write them to disk."""
     project_dir = config_path.parent
-    config = load_config(config_path)
     authors = load_authors(project_dir / config.authors_file)
     pages, _assets = discover_content(config, project_dir / "content")
     generate_all_urls(pages, config)
@@ -804,7 +871,12 @@ def _load_style_guide(project_dir: Path, style_guide: str | None) -> str | None:
         return None
     path = project_dir / style_guide
     if not path.exists():
-        raise UsageError(f"style guide not found at {path}")
+        raise UsageError(
+            format_error(
+                f"style guide not found at {path}",
+                hint="fix ai.skills.style_guide in bartleby.yml, which is relative to the project",
+            )
+        )
     return path.read_text(encoding="utf-8")
 
 
@@ -872,7 +944,7 @@ def _cmd_serve(args: argparse.Namespace) -> None:
     config = load_config(config_path)
     host = args.host or config.dev_server.host
     port = args.port if args.port is not None else config.dev_server.port
-    DevServer(config_path, host=host, port=port, dirty=args.dirty, events=args.events).run()
+    DevServer(config_path, host=host, port=port, events=args.events).run()
 
 
 _DEFAULT_CONFIG = """site:

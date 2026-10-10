@@ -272,3 +272,57 @@ def test_bundled_scrivener_resolves() -> None:
     resolved = resolve_theme(name="scrivener", project_dir=THEMES)
 
     assert resolved.chain[0].name == "scrivener"
+
+
+# --- error-message contract: path + what a theme directory needs -----------
+
+
+def test_theme_dir_without_manifest_names_path_and_what_a_theme_needs(tmp_path: Path) -> None:
+    """A theme.path directory with no theme.yml says what a theme directory must hold."""
+    theme_dir = tmp_path / "my-theme"
+    theme_dir.mkdir()
+    with pytest.raises(ThemeError) as excinfo:
+        resolve_theme(path="my-theme", project_dir=tmp_path)
+    message = str(excinfo.value)
+    assert "my-theme" in message
+    assert "theme.yml" in message
+    assert "name:" in message
+    assert "fix:" in message
+
+
+def test_nonexistent_theme_path_says_how_to_fix_it(tmp_path: Path) -> None:
+    """A theme.path that does not exist names the resolved path and the config key."""
+    with pytest.raises(ThemeError) as excinfo:
+        resolve_theme(path="no-such-theme", project_dir=tmp_path)
+    message = str(excinfo.value)
+    assert str(tmp_path / "no-such-theme") in message
+    assert "theme.path" in message
+    assert "bartleby theme eject" in message
+
+
+def test_unknown_bundled_theme_lists_the_bundled_names() -> None:
+    """An unknown theme.name lists the bundled names and the other ways to pick a theme."""
+    with pytest.raises(ThemeError) as excinfo:
+        resolve_theme(name="nonesuch", project_dir=THEMES)
+    message = str(excinfo.value)
+    assert "nonesuch" in message
+    assert "scrivener" in message
+    assert "theme.path" in message
+
+
+def test_manifest_with_invalid_yaml_names_the_manifest(tmp_path: Path) -> None:
+    """A YAML syntax error in theme.yml is a ThemeError naming the manifest."""
+    (tmp_path / "theme.yml").write_text("name: [unclosed\n", encoding="utf-8")
+    with pytest.raises(ThemeError) as excinfo:
+        load_manifest(tmp_path)
+    assert "theme.yml" in str(excinfo.value)
+
+
+def test_manifest_without_name_names_the_manifest_and_a_fix(tmp_path: Path) -> None:
+    """A manifest missing ``name`` names the file and shows the line to add."""
+    (tmp_path / "theme.yml").write_text("version: '1'\n", encoding="utf-8")
+    with pytest.raises(ThemeError) as excinfo:
+        load_manifest(tmp_path)
+    message = str(excinfo.value)
+    assert "theme.yml" in message
+    assert "name:" in message

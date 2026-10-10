@@ -2,13 +2,12 @@
 {# The double rule under the header comes from .site-header; the tab strip, when enabled, follows it. #}
 <header class="site-header">
   <div class="header-inner">
-    <a href="/" class="site-title">{{ site.title }}</a>
+    <a href="/" class="site-title">{% include "partials/logo.html" %}{{ site.title }}</a>
     {% set tabs = feature is defined and feature('nav.tabs') %}
     {% if not tabs %}{% include "partials/nav.html" %}{% endif %}
     {# The trigger lives here; the modal comes from base.html. Dropping this include leaves the "/" and Ctrl/Cmd+K shortcuts working. #}
     {% if feature is defined and feature('search') %}{% include "partials/search_trigger.html" %}{% endif %}
-    {% set color_mode = (config.theme.color_mode if config is defined and config and config.theme else None) %}
-    {% if color_mode and color_mode.toggle %}
+    {% if feature is defined and feature('color-mode.toggle') %}
     <button
       type="button"
       x-data="{ dark: document.documentElement.dataset.theme === 'dark' }"

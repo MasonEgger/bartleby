@@ -26,6 +26,13 @@ directory of the extending theme, then as a ``bartleby.themes`` entry point.
 
 The resolved chain is leaf-first: the requested theme comes first and each parent
 follows, so a lookup that takes the first hit lets a child override its parent.
+
+Error-message contract: a :class:`ThemeError` renders as
+``<theme directory or manifest>: <message> (fix: <hint>)`` (see
+:func:`bartleby.errors.format_error`). It names the directory or ``theme.yml`` at fault,
+says what a theme directory needs when the manifest is missing or invalid, lists the
+bundled theme names for an unknown ``theme.name``, and points a missing ``theme.path``
+at ``bartleby theme eject`` as the way to start a theme.
 """
 
 from __future__ import annotations
@@ -38,6 +45,7 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
+from bartleby.errors import format_error
 from bartleby.themes import BUNDLED_THEME_NAMES, bundled_theme_root
 
 if TYPE_CHECKING:
@@ -84,7 +92,32 @@ DEFAULT_THEME_NAME = "scrivener"
 
 
 class ThemeError(Exception):
-    """Raised when a theme manifest is invalid or a theme cannot be resolved."""
+    """Raised when a theme manifest is invalid or a theme cannot be resolved.
+
+    :ivar message: What is wrong.
+    :ivar source: The theme directory or manifest at fault, when there is one.
+    :ivar hint: A concrete fix.
+    """
+
+    def __init__(
+        self, message: str, *, source: Path | str | None = None, hint: str | None = None
+    ) -> None:
+        super().__init__(message)
+        self.message = message
+        self.source = source
+        self.hint = hint
+
+    def __str__(self) -> str:
+        return format_error(self.message, source=self.source, hint=self.hint)
+
+
+_THEME_DIR_NEEDS = (
+    "a theme directory needs a theme.yml with `name: my-theme`, "
+    "plus optional templates/, static/, and icons/ folders"
+)
+_THEME_SOURCES_HINT = (
+    "set exactly one of `name`, `path`, or `package` under `theme:` in bartleby.yml"
+)
 
 
 @dataclass(slots=True)
@@ -254,10 +287,23 @@ def load_manifest(root: Path) -> ThemeManifest:
     """
     manifest_path = root / MANIFEST_FILENAME
     if not manifest_path.is_file():
-        raise ThemeError(f"{root}: missing {MANIFEST_FILENAME}")
-    parsed: Any = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+        raise ThemeError(f"missing {MANIFEST_FILENAME}", source=root, hint=_THEME_DIR_NEEDS)
+    try:
+        parsed: Any = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        mark = getattr(exc, "problem_mark", None)
+        where = f" at line {mark.line + 1}" if mark is not None else ""
+        raise ThemeError(
+            f"invalid YAML{where}",
+            source=manifest_path,
+            hint="fix the syntax at that line (check indentation, quotes, and brackets)",
+        ) from exc
     if not isinstance(parsed, dict):
-        raise ThemeError(f"{root}: {MANIFEST_FILENAME} must be a YAML mapping")
+        raise ThemeError(
+            "the manifest must be a YAML mapping",
+            source=manifest_path,
+            hint=_THEME_DIR_NEEDS,
+        )
     return ThemeManifest(
         name=_parse_name(parsed.get("name"), root),
         version=_parse_optional_str(parsed.get("version"), "version", root),
@@ -293,7 +339,9 @@ def resolve_theme(
     """
     sources = [value for value in (name, path, package) if value is not None]
     if len(sources) > 1:
-        raise ThemeError("specify exactly one of name, path, or package")
+        raise ThemeError(
+            "more than one of name, path, and package is set", hint=_THEME_SOURCES_HINT
+        )
 
     if name is not None:
         root = _bundled_root(name)
@@ -302,14 +350,18 @@ def resolve_theme(
     elif package is not None:
         root = _package_root(package)
     else:
-        raise ThemeError("specify exactly one of name, path, or package")
+        raise ThemeError("none of name, path, or package is set", hint=_THEME_SOURCES_HINT)
 
     chain: list[ThemeLayer] = []
     while True:
         manifest = load_manifest(root)
         if any(layer.name == manifest.name for layer in chain):
             names = [layer.name for layer in chain] + [manifest.name]
-            raise ThemeError(f"cyclic theme extends: {' -> '.join(names)}")
+            raise ThemeError(
+                f"cyclic theme extends: {' -> '.join(names)}",
+                source=root,
+                hint="remove `extends:` from one theme.yml in that chain",
+            )
         chain.append(ThemeLayer(name=manifest.name, root=root, manifest=manifest))
         if manifest.extends is None:
             return ResolvedTheme(chain=chain)
@@ -318,7 +370,11 @@ def resolve_theme(
 
 def _parse_name(value: Any, root: Path) -> str:
     if not isinstance(value, str) or not value:
-        raise ThemeError(f"{root}: {MANIFEST_FILENAME} is missing required key 'name'")
+        raise ThemeError(
+            "missing required key 'name'",
+            source=root / MANIFEST_FILENAME,
+            hint="add a line such as `name: my-theme`",
+        )
     return value
 
 
@@ -326,7 +382,11 @@ def _parse_optional_str(value: Any, key: str, root: Path) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str):
-        raise ThemeError(f"{root}: '{key}' must be a string")
+        raise ThemeError(
+            f"'{key}' must be a string",
+            source=root / MANIFEST_FILENAME,
+            hint=f'write it as `{key}: "text"`',
+        )
     return value
 
 
@@ -334,12 +394,18 @@ def _parse_features(value: Any, root: Path) -> list[str]:
     if value is None:
         return []
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-        raise ThemeError(f"{root}: 'features' must be a list of strings")
+        raise ThemeError(
+            "'features' must be a list of strings",
+            source=root / MANIFEST_FILENAME,
+            hint="write one `- feature.name` line per feature",
+        )
     unknown = [item for item in value if item not in THEME_FEATURES]
     if unknown:
         known = ", ".join(sorted(THEME_FEATURES))
         raise ThemeError(
-            f"{root}: unknown feature {unknown[0]!r} in 'features' (native features: {known})"
+            f"unknown feature {unknown[0]!r} in 'features'",
+            source=root / MANIFEST_FILENAME,
+            hint=f"use native features only: {known}",
         )
     return list(value)
 
@@ -347,10 +413,20 @@ def _parse_features(value: Any, root: Path) -> list[str]:
 def _bundled_root(name: str) -> Path:
     if name not in BUNDLED_THEME_NAMES:
         known = ", ".join(BUNDLED_THEME_NAMES)
-        raise ThemeError(f"unknown bundled theme {name!r} (bundled themes: {known})")
+        raise ThemeError(
+            f"unknown bundled theme {name!r}",
+            hint=(
+                f"set theme.name to one of the bundled themes ({known}), "
+                "or use theme.path for a theme directory in your project"
+            ),
+        )
     root = bundled_theme_root(name)
     if not root.is_dir():
-        raise ThemeError(f"bundled theme {name!r} not found at {root}")
+        raise ThemeError(
+            f"bundled theme {name!r} is missing from the install",
+            source=root,
+            hint="reinstall bartleby-ssg",
+        )
     return root
 
 
@@ -359,7 +435,14 @@ def _path_root(path: str, project_dir: Path) -> Path:
     if not root.is_absolute():
         root = project_dir / root
     if not root.is_dir():
-        raise ThemeError(f"theme path does not exist: {root}")
+        raise ThemeError(
+            "theme path does not exist",
+            source=root,
+            hint=(
+                "set theme.path to an existing directory, relative to the project, "
+                "or create one with `bartleby theme eject`"
+            ),
+        )
     return root
 
 
@@ -369,13 +452,21 @@ def _package_root(package: str) -> Path:
             continue
         loaded: Any = entry_point.load()
         if not isinstance(loaded, str | Path):
-            raise ThemeError(f"theme package {package!r} must load to a directory path")
+            raise ThemeError(
+                f"theme package {package!r} must load to a directory path",
+                hint="make the entry point return a Path or str naming the theme directory",
+            )
         root = Path(loaded)
         if not root.is_dir():
-            raise ThemeError(f"theme package {package!r} points at a missing directory: {root}")
+            raise ThemeError(
+                f"theme package {package!r} points at a missing directory",
+                source=root,
+                hint="reinstall the package, or fix the directory its entry point returns",
+            )
         return root
     raise ThemeError(
-        f"theme package {package!r} not found in entry-point group {THEME_ENTRY_POINT_GROUP!r}"
+        f"theme package {package!r} not found in entry-point group {THEME_ENTRY_POINT_GROUP!r}",
+        hint="install the package that provides it, or check theme.package for a typo",
     )
 
 
@@ -517,20 +608,27 @@ def flatten_chain(
             directory in the chain being flattened, inside one, or contains one.
     """
     if destination.exists() and not force:
-        raise ThemeError(f"{destination} already exists (use --force to overwrite)")
+        raise ThemeError(
+            "destination already exists",
+            source=destination,
+            hint="pass --force to overwrite it, or choose another --to",
+        )
     resolved_destination = destination.resolve()
     for layer in resolved.chain:
         layer_root = layer.root.resolve()
         if resolved_destination == layer_root:
             raise ThemeError(
-                f"{destination} is part of the theme being ejected; choose another --to"
+                "destination is part of the theme being ejected",
+                source=destination,
+                hint="choose another --to",
             )
         if resolved_destination.is_relative_to(layer_root) or layer_root.is_relative_to(
             resolved_destination
         ):
             raise ThemeError(
-                f"{destination} and theme directory {layer.root} are inside one another; "
-                "choose another --to"
+                f"destination and theme directory {layer.root} are inside one another",
+                source=destination,
+                hint="choose another --to",
             )
 
     # Copy each file from its winning layer

@@ -112,11 +112,12 @@ Installed entries can be folded into plan.md per-section Tools blocks; not-insta
 
 ## Component boundaries
 
-The implementation is 33 single-responsibility modules under `src/bartleby/`, grouped by build-pipeline phase.
+The implementation is 34 single-responsibility modules under `src/bartleby/`, grouped by build-pipeline phase.
 
 Config layer:
 - `config.py`: load and validate `bartleby.yml`.
 - `authors.py`: author definition loading, validation, and resolution.
+- `errors.py`: the shared `file: key path: message (fix: hint)` formatter behind every structured error.
 
 Content layer:
 - `content.py`: content discovery, front matter parsing, and page data objects.
@@ -164,7 +165,7 @@ Orchestration and surfaces:
 - `build.py`: the build pipeline orchestrator wiring all components together.
 - `output.py`: structured result dataclasses plus a text/JSON formatter.
 - `cli.py`: the argparse CLI commands.
-- `server.py`: the dev server with live reload, file watching, and dirty builds.
+- `server.py`: the dev server with live reload, file watching, and a full rebuild on every change.
 
 ## Success criteria
 

@@ -1,12 +1,22 @@
 # ABOUTME: Shortcode preprocessing — parse [% %] syntax and render as Jinja2 fragments.
 # Resolves shortcodes/{name}.html templates before markdown rendering runs.
 
+"""Shortcode preprocessing.
+
+Error-message contract: a :class:`ShortcodeError` names the shortcode and the template
+file that would define it, as ``unknown shortcode 'x' (fix: create shortcodes/x.html ...)``
+(see :func:`bartleby.errors.format_error`). The build prefixes the page file, so the
+reader sees which page used it and which template to add.
+"""
+
 from __future__ import annotations
 
 import re
 from typing import TYPE_CHECKING
 
 import jinja2
+
+from bartleby.errors import format_error
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -150,7 +160,15 @@ def _render_shortcode(
     try:
         template = jinja_env.get_template(f"shortcodes/{name}.html")
     except jinja2.TemplateNotFound as exc:
-        raise ShortcodeError(f"unknown shortcode: {name!r}") from exc
+        raise ShortcodeError(
+            format_error(
+                f"unknown shortcode {name!r}",
+                hint=(
+                    f"create shortcodes/{name}.html under your project's templates/ "
+                    "directory, or fix the name in the page"
+                ),
+            )
+        ) from exc
     render_context: dict[str, object] = dict(context)
     render_context.update(arguments)
     render_context["content"] = content

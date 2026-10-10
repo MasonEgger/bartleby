@@ -1,0 +1,3 @@
+{# The site logo, shown ahead of the site title when theme.logo is set. config.theme.logo is a root-relative URL. #}
+{% set logo = config.theme.logo if config is defined and config and config.theme else None %}
+{% if logo %}<img class="site-logo" src="{{ logo }}" alt="" height="28">{% endif %}

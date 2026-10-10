@@ -16,8 +16,8 @@ Every command that does work accepts these flags, before or after the subcommand
 |------|---------|---------|
 | `--output {text,json}` | `text` | Output format. `json` is machine-readable and is the stable contract for agents. |
 | `--config CONFIG` | `./bartleby.yml` | Path to `bartleby.yml`. |
-| `--quiet` | off | Accepted to suppress non-essential output. It does not change any output yet. |
-| `--verbose` | off | Accepted to show detailed progress. It does not change any output yet. |
+| `--quiet` | off | Hide warnings and the text confirmation of `new`, `build`, and `generate-skill`. Errors, JSON output, and commands that return data still print. |
+| `--verbose` | off | Log detailed progress to stderr, such as how many pages were found and where the build wrote them. |
 
 Commands run from the directory that holds `bartleby.yml`, or take `--config` with a path to it.
 Commands do not take a site directory as an argument.
@@ -105,17 +105,16 @@ The command exits 1 only when it finds errors.
 Run the development server.
 
 ```
-bartleby serve [--host HOST] [--port PORT] [--dirty] [--events]
+bartleby serve [--host HOST] [--port PORT] [--events]
 ```
 
 - `--host` defaults to `dev_server.host` from the config, which defaults to `127.0.0.1`.
 - `--port` defaults to `dev_server.port`, which defaults to `8000`.
-- `--dirty` asks for incremental rebuilds.
-  Every change still triggers a full rebuild.
 - `--events` prints one JSON object per line on stdout for each change and rebuild.
   The `type` key is `change`, `rebuild`, or `error`.
 
 The server always includes drafts.
+Every change triggers a full rebuild, because Bartleby has no incremental build.
 A failed rebuild keeps serving the last good output.
 
 ## `bartleby render`
@@ -233,4 +232,5 @@ A file that your `overrides/` directory replaces gets a `[shadowed by overrides/
 
 With `--output text`, errors go to stderr in the form `error [code] message`.
 With `--output json`, an error is a JSON object on stdout with `error` and `code` keys, and a `file` key when one applies.
-The codes are `usage_error`, `build_error`, `config_error`, `author_error`, `content_error`, `theme_error`, and `theme_compile_error`.
+The codes are `usage_error`, `build_error`, `config_error`, `author_error`, `content_error`, `theme_error`, `theme_compile_error`, and `agent_surface_error`.
+Each message follows one shape, described in [Error messages](errors.md).

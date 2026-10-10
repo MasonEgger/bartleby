@@ -1,13 +1,27 @@
 # ABOUTME: Configuration loading and validation for bartleby.yml.
 # Provides typed dataclass representation and structured validation errors.
 
+"""Configuration loading for ``bartleby.yml``.
+
+Error-message contract: every :class:`ConfigError` raised while loading a file
+renders as ``<config file>: <key path>: <message> (fix: <hint>)`` (see
+:func:`bartleby.errors.format_error`). The file is attached by :func:`load_config`,
+so a raise site only supplies the key path, the message, and a concrete hint. A key
+path names the offending field (``site.url``, ``content_types.blog.metadata.rating.type``)
+and is absent only when the whole file is at fault (empty, invalid YAML, not a mapping).
+Unknown top-level keys, unknown metadata field types, and removed ``theme`` keys
+all follow this shape, so tests assert on substrings of it, not exact strings.
+"""
+
 from __future__ import annotations
 
+import difflib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import yaml
 
+from bartleby.errors import format_error
 from bartleby.theme_loader import DEFAULT_THEME_NAME, THEME_FEATURES
 
 if TYPE_CHECKING:
@@ -22,20 +36,64 @@ _RENAMED_FEATURES: dict[str, str] = {
 }
 """mkdocs-material feature names that have a native Bartleby replacement."""
 
+_TOP_LEVEL_KEYS: tuple[str, ...] = (
+    "site",
+    "nav",
+    "theme",
+    "authors_file",
+    "content_types",
+    "taxonomies",
+    "exclude_patterns",
+    "markdown_extensions",
+    "plugins",
+    "extra_css",
+    "extra_js",
+    "ai",
+    "dev_server",
+    "output_dir",
+)
+"""Every key ``bartleby.yml`` accepts at the top level."""
+
+METADATA_FIELD_TYPES: tuple[str, ...] = ("string", "integer", "boolean", "date", "list")
+"""The ``type`` values a content type's ``metadata`` schema accepts."""
+
 
 class ConfigError(Exception):
     """Raised when ``bartleby.yml`` is malformed or fails validation.
 
+    ``str(error)`` is ``<source>: <key_path>: <message> (fix: <hint>)`` with absent
+    parts dropped; :func:`load_config` fills in ``source`` as the error leaves it.
+
     :ivar message: The validation message describing the problem.
     :ivar key_path: The dotted key path identifying the offending field,
         or ``None`` when the problem is not tied to a specific field.
+    :ivar hint: A concrete fix, or ``None`` when there is nothing more to say.
+    :ivar source: The config file the error came from, once known.
     """
 
-    def __init__(self, message: str, key_path: str | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        key_path: str | None = None,
+        *,
+        hint: str | None = None,
+        source: Path | None = None,
+    ) -> None:
+        super().__init__(message)
         self.message = message
         self.key_path = key_path
-        full = f"{key_path}: {message}" if key_path else message
-        super().__init__(full)
+        self.hint = hint
+        self.source = source
+
+    def __str__(self) -> str:
+        return format_error(
+            self.message, source=self.source, key_path=self.key_path, hint=self.hint
+        )
+
+
+def _expected(key_path: str, kind: str, example: str) -> ConfigError:
+    """Build the error for a value of the wrong shape (``mapping`` or ``list``)."""
+    return ConfigError(f"must be a {kind}", key_path=key_path, hint=f"write {example}")
 
 
 @dataclass(slots=True)
@@ -130,10 +188,12 @@ class ThemeConfig:
         :data:`bartleby.theme_loader.THEME_FEATURES`.
     :ivar tokens: Design-token overrides, a flat map of dotted token names
         (``color.primary``, ``font.text``, ``radius``) to CSS values.
-    :ivar color_mode: Light/dark settings (``default``, ``toggle``) read by the header.
+    :ivar color_mode: Light/dark settings; only ``default`` (``light`` or ``dark``) is read.
     :ivar icon_packs: Icon pack name to enabled flag.
-    :ivar logo: Path to the site logo.
-    :ivar favicon: Path to the site favicon.
+    :ivar logo: The site logo as a URL: a path relative to ``static/`` becomes
+        root-relative (``img/logo.svg`` is ``/img/logo.svg``); an ``http(s)`` URL or a
+        rooted path is kept as written.
+    :ivar favicon: The site favicon, normalized the same way as ``logo``.
     """
 
     name: str = DEFAULT_THEME_NAME
@@ -141,7 +201,7 @@ class ThemeConfig:
     package: str | None = None
     features: list[str] = field(default_factory=list)
     tokens: dict[str, str] = field(default_factory=dict)
-    color_mode: dict[str, str | bool] = field(default_factory=dict)
+    color_mode: dict[str, str] = field(default_factory=dict)
     icon_packs: dict[str, bool] = field(default_factory=dict)
     logo: str | None = None
     favicon: str | None = None
@@ -152,7 +212,6 @@ class SkillsConfig:
     """Settings for deterministic agent-skill generation (``ai.skills``)."""
 
     output_dir: str = ".claude/skills"
-    include_examples: int = 3
     style_guide: str | None = None
     regenerate_on_build: bool = False
 
@@ -228,17 +287,59 @@ def load_config(config_path: Path) -> BartlebyConfig:
     if not config_path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
+    try:
+        return _load_config_text(config_path)
+    except ConfigError as exc:
+        exc.source = config_path
+        raise
+
+
+def _load_config_text(config_path: Path) -> BartlebyConfig:
+    """Parse and validate the file at ``config_path``; the caller attaches the source."""
     raw_text = config_path.read_text(encoding="utf-8")
-    parsed: Any = yaml.safe_load(raw_text)
+    try:
+        parsed: Any = yaml.safe_load(raw_text)
+    except yaml.YAMLError as exc:
+        raise ConfigError(
+            f"invalid YAML{_yaml_location(exc)}",
+            hint="fix the syntax at that line (check indentation, quotes, and brackets)",
+        ) from exc
 
     if parsed is None:
-        raise ConfigError("config file is empty")
+        raise ConfigError(
+            "config file is empty",
+            hint="add a `site:` section with `title:` and `url:`",
+        )
     if not isinstance(parsed, dict):
-        raise ConfigError("config root must be a YAML mapping")
+        raise ConfigError(
+            "config root must be a YAML mapping",
+            hint="start with top-level keys such as `site:`, one per line",
+        )
 
+    _reject_unknown_top_level_keys(parsed)
     config = _parse_config(parsed, config_path.parent)
     _validate_config(config)
     return config
+
+
+def _yaml_location(exc: yaml.YAMLError) -> str:
+    """Return `` at line N`` for a YAML syntax error that carries a position."""
+    mark = getattr(exc, "problem_mark", None)
+    return f" at line {mark.line + 1}" if mark is not None else ""
+
+
+def _reject_unknown_top_level_keys(parsed: dict[str, Any]) -> None:
+    """Raise for the first top-level key ``bartleby.yml`` does not define."""
+    for key in parsed:
+        if key in _TOP_LEVEL_KEYS:
+            continue
+        close = difflib.get_close_matches(str(key), _TOP_LEVEL_KEYS, n=1)
+        hint = (
+            f"did you mean {close[0]!r}?"
+            if close
+            else f"valid top-level keys are {', '.join(_TOP_LEVEL_KEYS)}"
+        )
+        raise ConfigError("unknown top-level key", key_path=str(key), hint=hint)
 
 
 def _parse_config(raw: dict[str, Any], config_dir: Path) -> BartlebyConfig:
@@ -317,11 +418,18 @@ def _parse_plugins(raw: Any) -> tuple[list[str], set[str]]:
 def _parse_site(raw: Any) -> SiteConfig:
     """Parse the ``site`` section, raising :class:`ConfigError` if required fields are missing."""
     if not isinstance(raw, dict):
-        raise ConfigError("site section is required", key_path="site")
-    if "title" not in raw:
-        raise ConfigError("required field is missing", key_path="site.title")
-    if "url" not in raw:
-        raise ConfigError("required field is missing", key_path="site.url")
+        raise ConfigError(
+            "site section is required",
+            key_path="site",
+            hint="add `site:` with `title:` and `url:` lines under it",
+        )
+    for required in ("title", "url"):
+        if required not in raw:
+            raise ConfigError(
+                "required field is missing",
+                key_path=f"site.{required}",
+                hint=f"add a `{required}:` line under `site:`",
+            )
     return SiteConfig(
         title=str(raw["title"]),
         url=str(raw["url"]),
@@ -338,13 +446,13 @@ def _parse_feed(raw: Any) -> FeedConfig:
     if raw is None:
         return FeedConfig()
     if not isinstance(raw, dict):
-        raise ConfigError("site.feed must be a mapping", key_path="site.feed")
+        raise _expected("site.feed", "mapping", "`feed:` followed by indented `key: value` lines")
     formats_raw = raw.get("formats", ["rss", "atom"])
     if not isinstance(formats_raw, list):
-        raise ConfigError("site.feed.formats must be a list", key_path="site.feed.formats")
+        raise _expected("site.feed.formats", "list", "`formats: [rss, atom]`")
     include_raw = raw.get("include", [])
     if not isinstance(include_raw, list):
-        raise ConfigError("site.feed.include must be a list", key_path="site.feed.include")
+        raise _expected("site.feed.include", "list", "`include: [blog]`")
     return FeedConfig(
         enabled=bool(raw.get("enabled", True)),
         formats=[str(fmt) for fmt in formats_raw],
@@ -359,13 +467,16 @@ def _parse_theme(raw: Any) -> ThemeConfig:
     if raw is None:
         return ThemeConfig()
     if not isinstance(raw, dict):
-        raise ConfigError("theme must be a mapping", key_path="theme")
+        raise _expected(
+            "theme", "mapping", "`theme:` followed by indented keys such as `name: scrivener`"
+        )
     _reject_removed_theme_keys(raw)
     sources = [key for key in ("name", "path", "package") if raw.get(key) is not None]
     if len(sources) > 1:
         raise ConfigError(
             f"set only one of name, path, or package (found {' and '.join(sources)})",
             key_path="theme",
+            hint=f"delete all but one of {', '.join(sources)} under `theme:`",
         )
     name = _optional_str(raw.get("name"))
     return ThemeConfig(
@@ -374,11 +485,30 @@ def _parse_theme(raw: Any) -> ThemeConfig:
         package=_optional_str(raw.get("package")),
         features=_parse_theme_features(raw.get("features")),
         tokens=_parse_theme_tokens(raw.get("tokens")),
-        color_mode=dict(raw.get("color_mode") or {}),
+        color_mode=_parse_color_mode(raw.get("color_mode")),
         icon_packs={str(key): bool(value) for key, value in (raw.get("icon_packs") or {}).items()},
-        logo=_optional_str(raw.get("logo")),
-        favicon=_optional_str(raw.get("favicon")),
+        logo=_site_url(raw.get("logo")),
+        favicon=_site_url(raw.get("favicon")),
     )
+
+
+def _parse_color_mode(raw: Any) -> dict[str, str]:
+    """Parse ``theme.color_mode``, which carries only ``default`` (``light`` or ``dark``).
+
+    The header toggle is the ``color-mode.toggle`` feature, so the old
+    ``color_mode.toggle`` switch is rejected with a pointer to ``theme.features``.
+    """
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise _expected("theme.color_mode", "mapping", "`color_mode:` followed by `default: dark`")
+    if "toggle" in raw:
+        raise ConfigError(
+            "'toggle' is not a color_mode key",
+            key_path="theme.color_mode.toggle",
+            hint="enable the toggle with the `color-mode.toggle` feature under theme.features",
+        )
+    return {str(key): str(value) for key, value in raw.items()}
 
 
 def _reject_removed_theme_keys(raw: dict[str, Any]) -> None:
@@ -386,9 +516,9 @@ def _reject_removed_theme_keys(raw: dict[str, Any]) -> None:
     for key, example in (("palette", "color.primary"), ("font", "font.text")):
         if key in raw:
             raise ConfigError(
-                f"{key!r} is not a Bartleby theme key; set design tokens under "
-                f"theme.tokens instead (for example {example})",
+                f"{key!r} is not a Bartleby theme key",
                 key_path=f"theme.{key}",
+                hint=f"set design tokens under theme.tokens instead (for example {example})",
             )
 
 
@@ -401,14 +531,15 @@ def _parse_theme_features(raw: Any) -> list[str]:
         replacement = _RENAMED_FEATURES.get(feature_name)
         if replacement is not None:
             raise ConfigError(
-                f"unknown feature {feature_name!r}; the native name is {replacement!r}",
+                f"unknown feature {feature_name!r}",
                 key_path="theme.features",
+                hint=f"the native name is {replacement!r}",
             )
         native = ", ".join(sorted(THEME_FEATURES))
         raise ConfigError(
-            f"unknown feature {feature_name!r}: not a Bartleby feature "
-            f"(native features: {native})",
+            f"unknown feature {feature_name!r}: not a Bartleby feature",
             key_path="theme.features",
+            hint=f"use one of the native features: {native}",
         )
     return features
 
@@ -418,13 +549,18 @@ def _parse_theme_tokens(raw: Any) -> dict[str, str]:
     if raw is None:
         return {}
     if not isinstance(raw, dict):
-        raise ConfigError("tokens must be a mapping", key_path="theme.tokens")
+        raise _expected(
+            "theme.tokens",
+            "mapping",
+            '`tokens:` followed by lines like `color.primary: "#336699"`',
+        )
     tokens: dict[str, str] = {}
     for token_name, value in raw.items():
         if not isinstance(value, str):
             raise ConfigError(
                 f"token value must be a string, got {type(value).__name__}",
                 key_path=f"theme.tokens.{token_name}",
+                hint=f'quote the value, for example `{token_name}: "{value}"`',
             )
         tokens[str(token_name)] = value
     return tokens
@@ -435,7 +571,9 @@ def _parse_content_types(raw: Any) -> dict[str, ContentTypeConfig]:
     if raw is None:
         return {}
     if not isinstance(raw, dict):
-        raise ConfigError("content_types must be a mapping", key_path="content_types")
+        raise _expected(
+            "content_types", "mapping", "`content_types:` followed by one named entry per type"
+        )
     result: dict[str, ContentTypeConfig] = {}
     for type_name, definition in raw.items():
         result[str(type_name)] = _parse_content_type(str(type_name), definition)
@@ -446,9 +584,15 @@ def _parse_content_type(type_name: str, raw: Any) -> ContentTypeConfig:
     """Parse a single content type definition."""
     key_path = f"content_types.{type_name}"
     if not isinstance(raw, dict):
-        raise ConfigError("content type must be a mapping", key_path=key_path)
+        raise _expected(
+            key_path, "mapping", "the type name followed by indented keys such as `path: blog`"
+        )
     if "path" not in raw:
-        raise ConfigError("required field is missing", key_path=f"{key_path}.path")
+        raise ConfigError(
+            "required field is missing",
+            key_path=f"{key_path}.path",
+            hint=f"add `path:` under `{type_name}:`, the directory under content/ for this type",
+        )
     return ContentTypeConfig(
         name=type_name,
         path=str(raw["path"]),
@@ -468,7 +612,9 @@ def _parse_pagination(raw: Any, parent_key: str) -> PaginationConfig:
     if raw is None:
         return PaginationConfig()
     if not isinstance(raw, dict):
-        raise ConfigError("pagination must be a mapping", key_path=f"{parent_key}.pagination")
+        raise _expected(
+            f"{parent_key}.pagination", "mapping", "`pagination:` followed by `enabled: true`"
+        )
     return PaginationConfig(
         enabled=bool(raw.get("enabled", False)),
         per_page=int(raw.get("per_page", 10)),
@@ -481,20 +627,34 @@ def _parse_metadata_schema(raw: Any, parent_key: str) -> dict[str, MetadataField
     if raw is None:
         return {}
     if not isinstance(raw, dict):
-        raise ConfigError("metadata must be a mapping", key_path=f"{parent_key}.metadata")
+        raise _expected(
+            f"{parent_key}.metadata", "mapping", "`metadata:` followed by one entry per field"
+        )
     result: dict[str, MetadataFieldSchema] = {}
     for field_name, definition in raw.items():
         field_key = f"{parent_key}.metadata.{field_name}"
         if not isinstance(definition, dict):
-            raise ConfigError("metadata field must be a mapping", key_path=field_key)
+            raise _expected(field_key, "mapping", "the field name followed by `type: string`")
+        valid_types = ", ".join(METADATA_FIELD_TYPES)
         if "type" not in definition:
-            raise ConfigError("required field is missing", key_path=f"{field_key}.type")
+            raise ConfigError(
+                "required field is missing",
+                key_path=f"{field_key}.type",
+                hint=f"add `type:` under `{field_name}:`, one of {valid_types}",
+            )
+        field_type = str(definition["type"])
+        if field_type not in METADATA_FIELD_TYPES:
+            raise ConfigError(
+                f"unknown field type {field_type!r}",
+                key_path=f"{field_key}.type",
+                hint=f"use one of {valid_types}",
+            )
         choices_raw = definition.get("choices")
-        choices = (
-            [str(choice) for choice in choices_raw] if isinstance(choices_raw, list) else None
-        )
+        if choices_raw is not None and not isinstance(choices_raw, list):
+            raise _expected(f"{field_key}.choices", "list", "`choices: [easy, hard]`")
+        choices = [str(choice) for choice in choices_raw] if choices_raw is not None else None
         result[str(field_name)] = MetadataFieldSchema(
-            field_type=str(definition["type"]),
+            field_type=field_type,
             required=bool(definition.get("required", False)),
             choices=choices,
         )
@@ -506,12 +666,16 @@ def _parse_taxonomies(raw: Any) -> dict[str, TaxonomyConfig]:
     if raw is None:
         return {}
     if not isinstance(raw, dict):
-        raise ConfigError("taxonomies must be a mapping", key_path="taxonomies")
+        raise _expected(
+            "taxonomies", "mapping", "`taxonomies:` followed by one named entry per taxonomy"
+        )
     result: dict[str, TaxonomyConfig] = {}
     for taxonomy_name, definition in raw.items():
         key_path = f"taxonomies.{taxonomy_name}"
         if not isinstance(definition, dict):
-            raise ConfigError("taxonomy must be a mapping", key_path=key_path)
+            raise _expected(
+                key_path, "mapping", 'the taxonomy name followed by `slug_format: "{slug}"`'
+            )
         result[str(taxonomy_name)] = TaxonomyConfig(
             name=str(taxonomy_name),
             slug_format=str(definition.get("slug_format", "{slug}")),
@@ -524,10 +688,14 @@ def _parse_ai(raw: Any) -> AIConfig:
     if raw is None:
         return AIConfig()
     if not isinstance(raw, dict):
-        raise ConfigError("ai must be a mapping", key_path="ai")
+        raise _expected(
+            "ai", "mapping", "`ai:` followed by indented keys such as `llms_txt: true`"
+        )
     robots_raw = raw.get("robots") or {}
     if not isinstance(robots_raw, dict):
-        raise ConfigError("ai.robots must be a mapping", key_path="ai.robots")
+        raise _expected(
+            "ai.robots", "mapping", "`robots:` followed by lines like `disallow: [GPTBot]`"
+        )
     robots: dict[str, list[str]] = {
         str(directive): [str(crawler) for crawler in (crawlers or [])]
         for directive, crawlers in robots_raw.items()
@@ -548,16 +716,23 @@ def _parse_skills(raw: Any) -> SkillsConfig:
     if raw is None:
         return SkillsConfig()
     if not isinstance(raw, dict):
-        raise ConfigError("ai.skills must be a mapping", key_path="ai.skills")
+        raise _expected("ai.skills", "mapping", "`skills:` followed by indented keys")
     if "analyze_content" in raw:
         raise ConfigError(
             "ai.skills.analyze_content is not yet supported (content analysis is "
             "deferred from v1)",
             key_path="ai.skills.analyze_content",
+            hint="delete the key; describe voice and audience under ai.agent_context instead",
+        )
+    if "include_examples" in raw:
+        raise ConfigError(
+            "ai.skills.include_examples is not yet supported (generated skills carry "
+            "no example pages)",
+            key_path="ai.skills.include_examples",
+            hint="delete the key; put example guidance in ai.skills.style_guide instead",
         )
     return SkillsConfig(
         output_dir=str(raw.get("output_dir", ".claude/skills")),
-        include_examples=int(raw.get("include_examples", 3)),
         style_guide=_optional_str(raw.get("style_guide")),
         regenerate_on_build=bool(raw.get("regenerate_on_build", False)),
     )
@@ -568,13 +743,12 @@ def _parse_agent_context(raw: Any) -> AgentContext:
     if raw is None:
         return AgentContext()
     if not isinstance(raw, dict):
-        raise ConfigError("ai.agent_context must be a mapping", key_path="ai.agent_context")
+        raise _expected(
+            "ai.agent_context", "mapping", "`agent_context:` followed by `voice:` and `audience:`"
+        )
     constraints_raw = raw.get("constraints") or []
     if not isinstance(constraints_raw, list):
-        raise ConfigError(
-            "ai.agent_context.constraints must be a list",
-            key_path="ai.agent_context.constraints",
-        )
+        raise _expected("ai.agent_context.constraints", "list", "one `- constraint` line per rule")
     return AgentContext(
         voice=_optional_str(raw.get("voice")),
         audience=_optional_str(raw.get("audience")),
@@ -587,7 +761,7 @@ def _parse_dev_server(raw: Any) -> DevServerConfig:
     if raw is None:
         return DevServerConfig()
     if not isinstance(raw, dict):
-        raise ConfigError("dev_server must be a mapping", key_path="dev_server")
+        raise _expected("dev_server", "mapping", "`dev_server:` followed by `host:` and `port:`")
     return DevServerConfig(
         host=str(raw.get("host", "127.0.0.1")),
         port=int(raw.get("port", 8000)),
@@ -607,6 +781,10 @@ def _validate_config(config: BartlebyConfig) -> None:
                 raise ConfigError(
                     f"references undefined taxonomy {taxonomy_name!r}",
                     key_path=f"content_types.{content_type_name}.taxonomies",
+                    hint=(
+                        f"declare it under `taxonomies:` (for example `{taxonomy_name}:`), "
+                        "or remove it from this list"
+                    ),
                 )
 
     for include_name in config.site.feed.include:
@@ -615,12 +793,27 @@ def _validate_config(config: BartlebyConfig) -> None:
             raise ConfigError(
                 f"references undefined content type {include_name!r}",
                 key_path="site.feed.include",
+                hint=f"use a name from `content_types:` ({', '.join(config.content_types)})",
             )
         if not included_type.feeds:
             raise ConfigError(
                 f"content type {include_name!r} has no feeds of its own to aggregate",
                 key_path="site.feed.include",
+                hint=f"add `feeds: [rss]` under content_types.{include_name}, or drop it here",
             )
+
+
+def _site_url(value: Any) -> str | None:
+    """Normalize a ``static/``-relative asset path to a root-relative URL.
+
+    ``None`` stays ``None``; ``http(s)://`` URLs and paths starting with ``/`` pass through.
+    """
+    if value is None:
+        return None
+    text = str(value)
+    if text.startswith(("http://", "https://", "/")):
+        return text
+    return f"/{text}"
 
 
 def _optional_str(value: Any) -> str | None:

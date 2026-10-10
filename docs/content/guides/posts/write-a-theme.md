@@ -135,9 +135,10 @@ Break one and the matching feature fails quietly.
 - **The navigation and table of contents helpers.** `partials/nav_macros.html` provides the `holds` and `first_url` macros, and `partials/toc_macros.html` provides `entries` and `tracker`.
   Import them with `{% from "partials/nav_macros.html" import holds %}` instead of copying the logic.
   Because your theme extends `base`, the imports resolve with no extra work.
-- **The color-mode script.** When `theme.color_mode.toggle` is on, `base.html` runs a small script in `<head>` before the page paints.
+- **The color-mode script.** When the `color-mode.toggle` feature is on, `base.html` runs a small script in `<head>` before the page paints.
   It reads the `localStorage` key `bartleby-color-mode`, falls back to `color_mode.default`, then to the system setting, and sets `data-theme` on `<html>`.
-  A toggle button in your header must write the same key, `bartleby-color-mode`, with the value `light` or `dark`, and set `document.documentElement.dataset.theme`.
+  Gate your toggle button on `feature('color-mode.toggle')` too.
+  The button must write the same key, `bartleby-color-mode`, with the value `light` or `dark`, and set `document.documentElement.dataset.theme`.
 - **The stylesheet link.** `base.html` links `/css/main.css`.
   Your theme provides that file in `static/css/main.css`, or users produce it with `bartleby theme compile`.
 

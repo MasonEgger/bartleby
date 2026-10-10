@@ -64,7 +64,7 @@ Version 0.1.0. The initial 27-step build plus the v0.1.0 hardening pass (18 delt
 A few items are intentionally deferred for follow-up releases:
 
 - Parallel build (asyncio + `ProcessPoolExecutor`); the build is synchronous and documented as such
-- Incremental rebuilds (`--dirty`)
+- Incremental rebuilds (the dev server always runs a full rebuild)
 - Voice/tone content analysis for skill generation
 - A public theme API and additional themes
 

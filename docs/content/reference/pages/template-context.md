@@ -90,6 +90,8 @@ Each `TaxonomyData` has `name`, `terms` (a dict keyed by term name), and `conten
 
 The full parsed `BartlebyConfig`.
 Templates read theme settings from `config.theme`, which has `name`, `features`, `tokens`, `color_mode`, `icon_packs`, `logo`, and `favicon`.
+`color_mode` holds only `default`, and `logo` and `favicon` are root-relative URLs or `None`.
+The bundled themes render them, so a custom header can include `partials/logo.html` to show the logo.
 They read the AI toggles from `config.ai`.
 
 ### `build`

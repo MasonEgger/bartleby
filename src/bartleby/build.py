@@ -30,6 +30,7 @@ from bartleby.config import load_config
 from bartleby.content import discover_content
 from bartleby.content_query import select_published
 from bartleby.crossrefs import resolve_all_crossrefs
+from bartleby.errors import format_error
 from bartleby.feeds import generate_feeds
 from bartleby.icons import DEFAULT_ICON_PACKS, tree_shake_icons
 from bartleby.listings import LISTING_KIND_KEY, ListingKind, generate_listing_pages
@@ -116,10 +117,12 @@ class BuildResult:
         variants, llms.txt files, sitemap, agent-surface JSON, robots.txt,
         tree-shaken icon SVGs).
     :ivar output_dir: The directory the finished site was written to.
+    :ivar config: The configuration the build ran with, after ``on_config`` plugins.
     """
 
     page_count: int
     duration_seconds: float
+    config: BartlebyConfig
     static_file_count: int = 0
     output_dir: str = "site"
 
@@ -158,6 +161,12 @@ class BuildError(Exception):
     The render pass collects every page-level failure instead of stopping on
     the first, so :attr:`errors` carries the full list. The pre-existing
     ``site/`` output is left untouched when this is raised.
+
+    Message contract: each error prints as ``<file>: <message>``, where the message
+    follows :func:`bartleby.errors.format_error` (``<detail> (fix: <hint>)``) when a
+    concrete fix exists. Metadata errors name the schema entry
+    (``content_types.<type>.metadata.<field>``), an unreadable ``content/`` directory
+    names its path, and a shortcode error names the template to create.
 
     :ivar errors: Every :class:`PageError` collected during the build.
     """
@@ -219,6 +228,7 @@ def build(
     started = time.perf_counter()
 
     state = _load_inputs(config_path, theme)
+    _LOGGER.debug("loaded %s with theme %r", config_path, state.theme.chain[0].name)
     try:
         _filter_and_validate(state, include_drafts=include_drafts)
         rendered_html = _render_all_pages(state, strict=strict)
@@ -257,7 +267,29 @@ def _load_inputs(config_path: Path, theme: ResolvedTheme | None) -> _BuildState:
     _warn_unimplemented_features(config, active_theme)
 
     content_dir = project_dir / "content"
+    if not content_dir.is_dir():
+        raise BuildError(
+            [
+                PageError(
+                    file_path=str(content_dir),
+                    message=format_error(
+                        "content directory does not exist",
+                        hint=(
+                            "create it and add Markdown files, or run `bartleby new site <name>` "
+                            "to scaffold a project (builds run from the directory holding "
+                            "bartleby.yml, or pass --config)"
+                        ),
+                    ),
+                )
+            ]
+        )
     pages, assets = discover_content(config, content_dir)
+    _LOGGER.debug(
+        "discovered %d content pages and %d co-located assets in %s",
+        len(pages),
+        len(assets),
+        content_dir,
+    )
 
     return _BuildState(
         plugins=plugins,
@@ -564,9 +596,13 @@ def _finish_build(
     plugins.run_lifecycle("on_shutdown")
 
     duration = time.perf_counter() - started
+    _LOGGER.debug(
+        "wrote %d pages to %s in %.0f ms", len(state.all_pages), final_output_dir, duration * 1000
+    )
     return BuildResult(
         page_count=len(state.all_pages),
         duration_seconds=duration,
+        config=config,
         static_file_count=state.static_file_count,
         output_dir=f"{final_output_dir.name}/",
     )

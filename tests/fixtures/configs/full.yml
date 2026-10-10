@@ -26,10 +26,10 @@ theme:
     font.text: Roboto
     font.code: Roboto Mono
   color_mode:
-    default: system
-    toggle: true
+    default: dark
   features:
     - search
+    - color-mode.toggle
     - nav.tabs
     - nav.sidebar
     - content.code.copy
@@ -115,7 +115,6 @@ ai:
     allow: [GPTBot, ClaudeBot, PerplexityBot]
   skills:
     output_dir: .claude/skills
-    include_examples: 5
     style_guide: content/style-guide.md
     regenerate_on_build: true
   agent_context:

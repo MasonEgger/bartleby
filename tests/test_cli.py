@@ -1043,3 +1043,282 @@ def test_build_warns_when_theme_lacks_enabled_feature_and_still_succeeds(
     assert (tmp_path / "mysite" / "site" / "index.html").exists()
     messages = [record.getMessage() for record in caplog.records if record.levelname == "WARNING"]
     assert any("nav.tabs" in message and "does not implement" in message for message in messages)
+
+
+# --- error-message contract through the CLI --------------------------------
+
+
+def _run_failing_build(capsys: pytest.CaptureFixture[str], *argv: str) -> str:
+    """Run the CLI expecting exit 1 and no traceback; return the stderr text."""
+    with pytest.raises(SystemExit) as exc:
+        main(list(argv))
+    assert exc.value.code == 1
+    captured = capsys.readouterr()
+    assert "Traceback" not in captured.err
+    assert "Traceback" not in captured.out
+    return captured.err
+
+
+def test_build_unknown_top_level_key_surfaces_file_key_and_hint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A misspelled top-level key exits 1 with the file, the key, and the suggestion."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    _append_to_config("\ncontent_type:\n  docs:\n    path: docs\n")
+    err = _run_failing_build(capsys, "build")
+    assert "config_error" in err
+    assert "bartleby.yml" in err
+    assert "content_type" in err
+    assert "content_types" in err
+
+
+def test_build_bad_metadata_schema_type_surfaces_content_type_and_field(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A metadata field with an unknown type names the content type and field."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    config_path = tmp_path / "mysite" / "bartleby.yml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace(
+            "    readtime: true\n",
+            "    readtime: true\n    metadata:\n      rating:\n        type: number\n",
+        ),
+        encoding="utf-8",
+    )
+    err = _run_failing_build(capsys, "build")
+    assert "content_types.blog.metadata.rating.type" in err
+    assert "string" in err
+
+
+def test_build_duplicate_author_id_surfaces_file_and_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A duplicated author id exits 1 as author_error naming the authors file and the id."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    (tmp_path / "mysite" / ".authors.yml").write_text(
+        "authors:\n  default:\n    name: A\n  default:\n    name: B\n", encoding="utf-8"
+    )
+    err = _run_failing_build(capsys, "build")
+    assert "author_error" in err
+    assert ".authors.yml" in err
+    assert "default" in err
+    assert "duplicate" in err
+
+
+def test_build_unknown_post_author_surfaces_known_ids(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A post naming an unknown author fails the build listing the known author ids."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    post = tmp_path / "mysite" / "content" / "blog" / "posts" / "hello.md"
+    post.write_text("---\ntitle: Hello\nauthors: [nobody]\n---\n\nHi\n", encoding="utf-8")
+    err = _run_failing_build(capsys, "build")
+    assert "build_error" in err
+    assert "hello.md" in err
+    assert "nobody" in err
+    assert "default" in err
+
+
+def test_build_theme_path_without_manifest_surfaces_what_a_theme_needs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A theme.path directory with no theme.yml exits 1 as theme_error with the fix."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    (tmp_path / "mysite" / "my-theme").mkdir()
+    _append_to_config("\ntheme:\n  path: my-theme\n")
+    err = _run_failing_build(capsys, "build")
+    assert "theme_error" in err
+    assert "my-theme" in err
+    assert "theme.yml" in err
+    assert "fix:" in err
+
+
+def test_build_missing_content_directory_surfaces_path_and_fix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A project without content/ exits 1 as build_error naming the directory."""
+    import shutil
+
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    shutil.rmtree(tmp_path / "mysite" / "content")
+    err = _run_failing_build(capsys, "build")
+    assert "build_error" in err
+    assert str(tmp_path / "mysite" / "content") in err
+    assert "fix:" in err
+
+
+def test_build_page_colliding_with_schema_json_is_a_clean_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A page that would overwrite schema.json exits 1 as agent_surface_error, no traceback."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    page = tmp_path / "mysite" / "content" / "schema.md"
+    page.write_text("---\ntitle: Schema\nurl: schema.json\n---\n\nHi\n", encoding="utf-8")
+    err = _run_failing_build(capsys, "build")
+    assert "agent_surface_error" in err
+    assert "schema.md" in err
+    assert "schema.json" in err
+    assert "fix:" in err
+
+
+def test_build_page_colliding_with_schema_json_json_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """In JSON mode the collision is one error object with the stable code."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    page = tmp_path / "mysite" / "content" / "schema.md"
+    page.write_text("---\ntitle: Schema\nurl: schema.json\n---\n\nHi\n", encoding="utf-8")
+    with pytest.raises(SystemExit) as exc:
+        main(["build", "--output", "json"])
+    assert exc.value.code == 1
+    payload = _last_json(capsys.readouterr().out)
+    assert payload["code"] == "agent_surface_error"
+    assert "schema.json" in str(payload["error"])
+
+
+def test_build_unknown_shortcode_surfaces_template_to_create(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An unknown shortcode fails the build naming the page and the template to add."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    page = tmp_path / "mysite" / "content" / "blog" / "posts" / "hello.md"
+    page.write_text("---\ntitle: Hello\n---\n\n[% banner %]\n", encoding="utf-8")
+    err = _run_failing_build(capsys, "build")
+    assert "hello.md" in err
+    assert "shortcodes/banner.html" in err
+
+
+def test_missing_config_names_the_path_and_how_to_create_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Running build outside a project is a usage error (exit 2) with the next step."""
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit) as exc:
+        main(["build"])
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert "bartleby.yml" in err
+    assert "bartleby new site" in err
+    assert "--config" in err
+
+
+# --- global flags: --quiet and --verbose ------------------------------------
+
+
+def test_quiet_build_prints_no_summary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--quiet`` suppresses the text summary of a successful build."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    capsys.readouterr()
+    main(["build", "--quiet"])
+    assert capsys.readouterr().out == ""
+    assert (tmp_path / "mysite" / "site" / "index.html").exists()
+
+
+def test_quiet_does_not_hide_json_or_data_commands(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """JSON output and data-returning commands are the product, so quiet leaves them alone."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    capsys.readouterr()
+    main(["build", "--quiet", "--output", "json"])
+    assert "pages" in _last_json(capsys.readouterr().out)
+    main(["content", "list", "--quiet"])
+    assert capsys.readouterr().out.strip() != ""
+
+
+def test_quiet_still_reports_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--quiet`` never hides a failure."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    _append_to_config("\nbogus_key: 1\n")
+    with pytest.raises(SystemExit) as exc:
+        main(["build", "--quiet"])
+    assert exc.value.code == 1
+    assert "bogus_key" in capsys.readouterr().err
+
+
+def test_quiet_raises_log_threshold_and_verbose_lowers_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--quiet`` keeps only errors from the log; ``--verbose`` adds debug detail."""
+    import logging
+
+    monkeypatch.delenv("BARTLEBY_DEBUG", raising=False)
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["build", "--quiet"])
+    assert logging.getLogger("bartleby").level == logging.ERROR
+    main(["build", "--verbose"])
+    assert logging.getLogger("bartleby").level == logging.DEBUG
+    main(["build"])
+    assert logging.getLogger("bartleby").level == logging.INFO
+
+
+def test_verbose_build_logs_progress_detail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """``--verbose`` surfaces per-phase detail that a normal build does not log."""
+    monkeypatch.delenv("BARTLEBY_DEBUG", raising=False)
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    with caplog.at_level("DEBUG", logger="bartleby"):
+        main(["build", "--verbose"])
+    messages = [record.getMessage() for record in caplog.records if record.levelname == "DEBUG"]
+    assert any("discovered" in message for message in messages)
+    assert any("wrote" in message for message in messages)
+
+
+def test_quiet_and_verbose_conflict_is_a_usage_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Asking for both is contradictory; argparse reports it and exits 2."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    with pytest.raises(SystemExit) as exc:
+        main(["build", "--quiet", "--verbose"])
+    assert exc.value.code == 2
+    assert "not allowed with" in capsys.readouterr().err
+
+
+# --- ai.skills.regenerate_on_build -------------------------------------------
+
+
+def test_build_regenerates_skills_when_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``ai.skills.regenerate_on_build: true`` writes the three skills after a build."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    _append_to_config("\nai:\n  skills:\n    regenerate_on_build: true\n")
+    main(["build"])
+    skills_dir = tmp_path / "mysite" / ".claude" / "skills"
+    assert sorted(path.name for path in skills_dir.iterdir()) == [
+        "bartleby-ops.md",
+        "bartleby-review.md",
+        "bartleby-write.md",
+    ]
+
+
+def test_build_leaves_skills_alone_by_default_and_on_dry_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without the setting, or on a dry run, a build writes no skills."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["build"])
+    assert not (tmp_path / "mysite" / ".claude").exists()
+    _append_to_config("\nai:\n  skills:\n    regenerate_on_build: true\n")
+    main(["build", "--dry-run"])
+    assert not (tmp_path / "mysite" / ".claude").exists()
+
+
+# --- serve --dirty -----------------------------------------------------------
+
+
+def test_serve_dirty_flag_is_gone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Incremental rebuilds are a non-goal, so ``serve --dirty`` is an unknown argument."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    with pytest.raises(SystemExit) as exc:
+        main(["serve", "--dirty"])
+    assert exc.value.code == 2
+    assert "--dirty" in capsys.readouterr().err

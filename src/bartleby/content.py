@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
+from bartleby.errors import format_error
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -24,6 +26,9 @@ PageMetadataValue = str | int | bool | list[str] | datetime.date | object
 
 class ContentError(Exception):
     """Raised when a content file's front matter is malformed.
+
+    Message contract: ``<problem> (fix: <hint>)``. The file travels in
+    :attr:`source_path`, and the CLI prints it ahead of the message.
 
     :ivar source_path: The offending file path, when known.
     """
@@ -157,11 +162,26 @@ def parse_front_matter(text: str) -> tuple[dict[str, Any], str]:
     if not front_matter_block.strip():
         return {}, body
 
-    parsed: Any = yaml.safe_load(front_matter_block)
+    try:
+        parsed: Any = yaml.safe_load(front_matter_block)
+    except yaml.YAMLError as exc:
+        mark = getattr(exc, "problem_mark", None)
+        where = f" at front matter line {mark.line + 1}" if mark is not None else ""
+        raise ContentError(
+            format_error(
+                f"invalid YAML{where}",
+                hint="fix the syntax (check indentation, quotes, and brackets)",
+            )
+        ) from exc
     if parsed is None:
         return {}, body
     if not isinstance(parsed, dict):
-        raise ContentError(f"front matter must be a YAML mapping, got {type(parsed).__name__}")
+        raise ContentError(
+            format_error(
+                f"front matter must be a YAML mapping, got {type(parsed).__name__}",
+                hint="write `key: value` lines between the two `---` markers",
+            )
+        )
     return parsed, body
 
 

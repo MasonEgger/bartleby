@@ -111,6 +111,13 @@
     margin: 0 auto;
     padding: 0 var(--sc-ruling-unit);
   }
+  .site-logo {
+    display: inline-block;
+    width: auto;
+    height: var(--bb-logo-height, 2rem);
+    margin-right: var(--sc-half);
+    vertical-align: middle;
+  }
   .site-title {
     margin-right: auto;
     color: var(--sc-ink);

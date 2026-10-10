@@ -51,7 +51,7 @@ def _render(page: Page, template_name: str) -> str:
         "nav": [],
         "pages": [],
         "build": {"date": "2026-05-23", "bartleby_version": "0.1.0"},
-        "config": {"theme": {"color_mode": {"toggle": True}}},
+        "config": {"theme": {"color_mode": {}}},
         "extra_css": [],
         "extra_js": [],
         "seo": None,

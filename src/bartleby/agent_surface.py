@@ -1,12 +1,21 @@
 # ABOUTME: Static agent surface: schema.json and content-index.json build artifacts.
 # Reuses the schema derivation and curates page fields (semantic in, mechanical out).
 
+"""Static agent surface artifacts.
+
+Error-message contract: an :class:`AgentSurfaceError` names the colliding page source
+(relative to ``content/``) and the reserved output path, with a hint to rename the page
+or set a different ``url``, as ``content/<page>: would overwrite the generated artifact
+'<path>' (fix: ...)`` (see :func:`bartleby.errors.format_error`).
+"""
+
 from __future__ import annotations
 
 import json
 from typing import TYPE_CHECKING
 
 from bartleby.content_query import select_published
+from bartleby.errors import format_error
 from bartleby.feeds import aggregate_feed_path, feed_path
 from bartleby.schema_introspection import (
     derive_authors_schema,
@@ -27,7 +36,25 @@ CONTENT_INDEX_PATH = "content-index.json"
 
 
 class AgentSurfaceError(Exception):
-    """Raised when user content collides with a generated agent-surface artifact."""
+    """Raised when user content collides with a generated agent-surface artifact.
+
+    :ivar source_path: The colliding page, relative to ``content/``.
+    :ivar artifact: The reserved output path the page would overwrite.
+    """
+
+    def __init__(self, source_path: str, artifact: str) -> None:
+        super().__init__(
+            format_error(
+                f"would overwrite the generated artifact {artifact!r}",
+                source=f"content/{source_path}",
+                hint=(
+                    f"rename the page, or set a different `url:` in its front matter; "
+                    f"{artifact} is reserved for the agent surface"
+                ),
+            )
+        )
+        self.source_path = source_path
+        self.artifact = artifact
 
 
 def curate_page_fields(page: Page) -> dict[str, object]:
@@ -141,10 +168,7 @@ def _check_collisions(pages: list[Page]) -> None:
     for page in select_published(pages):
         normalised = page.output_url.strip("/")
         if normalised in reserved:
-            raise AgentSurfaceError(
-                f"content page {page.source_path} would overwrite the generated "
-                f"artifact {normalised!r}; rename the page or its url override"
-            )
+            raise AgentSurfaceError(page.source_path.as_posix(), normalised)
 
 
 def _resource_locations(config: BartlebyConfig) -> dict[str, object]:

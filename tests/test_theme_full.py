@@ -6,9 +6,10 @@ from __future__ import annotations
 import re
 
 import jinja2
+import pytest
 
 from bartleby.themes import bundled_theme_root
-from tests.theme_helpers import material_theme
+from tests.theme_helpers import bundled_theme, material_theme
 
 
 def _render_markdown(source: str) -> str:
@@ -68,7 +69,7 @@ def _admonition_variant_defined(kind: str) -> bool:
     return re.search(pattern, text) is not None
 
 
-def _env() -> jinja2.Environment:
+def _env(features: list[str] | None = None) -> jinja2.Environment:
     from bartleby.templates import make_feature_checker
     from bartleby.theme_loader import THEME_FEATURES
 
@@ -76,7 +77,9 @@ def _env() -> jinja2.Environment:
         loader=jinja2.FileSystemLoader([str(path) for path in material_theme().templates_dirs()]),
         autoescape=True,
     )
-    env.globals["feature"] = make_feature_checker(list(THEME_FEATURES))
+    env.globals["feature"] = make_feature_checker(
+        list(THEME_FEATURES) if features is None else features
+    )
     return env
 
 
@@ -96,7 +99,7 @@ def _ctx(**overrides: object) -> dict[str, object]:
         "nav": [],
         "pages": [],
         "build": {"date": "2026-05-23", "bartleby_version": "0.1.0"},
-        "config": {"theme": {"color_mode": {"toggle": True}}},
+        "config": {"theme": {"color_mode": {}}},
         "extra_css": [],
         "extra_js": [],
         "seo": None,
@@ -186,19 +189,20 @@ def _color_mode_ctx(color_mode: dict[str, object]) -> dict[str, object]:
 
 
 def test_configured_dark_default_sets_static_data_theme_without_toggle() -> None:
-    """With the toggle off, color_mode.default still picks the static data-theme."""
-    rendered = _env().get_template("base.html").render(**_color_mode_ctx({"default": "dark"}))
+    """With the feature off, color_mode.default still picks the static data-theme."""
+    from bartleby.theme_loader import THEME_FEATURES
+
+    features = [name for name in THEME_FEATURES if name != "color-mode.toggle"]
+    rendered = (
+        _env(features).get_template("base.html").render(**_color_mode_ctx({"default": "dark"}))
+    )
     assert '<html lang="en" data-theme="dark">' in rendered
     assert "bartleby-color-mode" not in rendered
 
 
 def test_configured_dark_default_reaches_pre_paint_script_with_toggle() -> None:
     """With the toggle on, the script falls back to the configured default before the OS."""
-    rendered = (
-        _env()
-        .get_template("base.html")
-        .render(**_color_mode_ctx({"default": "dark", "toggle": True}))
-    )
+    rendered = _env().get_template("base.html").render(**_color_mode_ctx({"default": "dark"}))
     assert '<html lang="en" data-theme="dark">' in rendered
     assert 'var configured = "dark";' in rendered
     assert rendered.index("mode = configured;") < rendered.index("prefers-color-scheme")
@@ -207,7 +211,7 @@ def test_configured_dark_default_reaches_pre_paint_script_with_toggle() -> None:
 def test_missing_or_unknown_default_keeps_light_and_script_falls_through() -> None:
     """No default, or an unrecognised one, leaves data-theme light and configured null."""
     template = _env().get_template("base.html")
-    for color_mode in ({"toggle": True}, {"default": "sepia", "toggle": True}):
+    for color_mode in ({}, {"default": "sepia"}):
         rendered = template.render(**_color_mode_ctx(color_mode))
         assert '<html lang="en" data-theme="light">' in rendered
         assert "var configured = null;" in rendered
@@ -252,3 +256,62 @@ def test_search_engine_uses_straight_quotes() -> None:
 
 def _search_engine() -> str:
     return (bundled_theme_root("base") / "static" / "js" / "search.js").read_text()
+
+
+# --- the color-mode.toggle feature is the only switch for the toggle -------
+
+
+@pytest.mark.parametrize("theme_name", ["base", "material", "scrivener"])
+@pytest.mark.parametrize("enabled", [True, False])
+def test_color_mode_toggle_follows_the_feature_alone(theme_name: str, enabled: bool) -> None:
+    """The pre-paint script and the header button appear exactly when the feature is on."""
+    from bartleby.templates import make_feature_checker
+
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(
+            [str(path) for path in bundled_theme(theme_name).templates_dirs()]
+        ),
+        autoescape=True,
+    )
+    env.globals["feature"] = make_feature_checker(["color-mode.toggle"] if enabled else [])
+    rendered = env.get_template("base.html").render(**_ctx(config={"theme": {"color_mode": {}}}))
+    assert ("bartleby-color-mode" in rendered) is enabled
+    if theme_name != "base":
+        assert ("theme-toggle" in rendered) is enabled
+
+
+# --- theme.logo and theme.favicon -------------------------------------------
+
+
+def _themed_env(theme_name: str) -> jinja2.Environment:
+    from bartleby.templates import make_feature_checker
+
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(
+            [str(path) for path in bundled_theme(theme_name).templates_dirs()]
+        ),
+        autoescape=True,
+    )
+    env.globals["feature"] = make_feature_checker([])
+    return env
+
+
+@pytest.mark.parametrize("theme_name", ["base", "material", "scrivener"])
+def test_configured_logo_and_favicon_render_in_head_and_header(theme_name: str) -> None:
+    """A configured favicon is a head link and a configured logo is an image in the header."""
+    config = {"theme": {"logo": "/img/logo.svg", "favicon": "/img/icon.png"}}
+    rendered = _themed_env(theme_name).get_template("base.html").render(**_ctx(config=config))
+    assert '<link rel="icon" href="/img/icon.png">' in rendered
+    assert 'class="site-logo" src="/img/logo.svg"' in rendered
+
+
+@pytest.mark.parametrize("theme_name", ["base", "material", "scrivener"])
+def test_no_logo_or_favicon_renders_neither(theme_name: str) -> None:
+    """Without the settings the head has no icon link and the header has no logo image."""
+    rendered = (
+        _themed_env(theme_name)
+        .get_template("base.html")
+        .render(**_ctx(config={"theme": {"color_mode": {}}}))
+    )
+    assert 'rel="icon"' not in rendered
+    assert "site-logo" not in rendered

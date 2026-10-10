@@ -31,7 +31,6 @@ def test_load_full_config() -> None:
     assert "search" in config.theme.features
     assert config.ai.llms_txt is True
     assert config.ai.markdown_variants is True
-    assert config.ai.skills.include_examples == 5
     assert config.ai.skills.style_guide == "content/style-guide.md"
     assert config.ai.skills.regenerate_on_build is True
     assert config.ai.agent_context.voice == "Technical but approachable. Second person."
@@ -78,7 +77,6 @@ def test_default_values_applied() -> None:
     assert config.ai.llms_txt is True
     assert config.ai.markdown_variants is True
     assert config.ai.skills.output_dir == ".claude/skills"
-    assert config.ai.skills.include_examples == 3
     assert config.ai.skills.style_guide is None
     assert config.ai.agent_context.voice is None
     assert config.ai.agent_context.constraints == []
@@ -349,16 +347,16 @@ def test_theme_tokens_must_be_a_mapping(tmp_path: Path) -> None:
 def test_theme_logo_favicon_icon_packs_and_color_mode_still_parse(tmp_path: Path) -> None:
     """The unchanged appearance keys keep parsing."""
     body = (
-        "  logo: static/logo.png\n"
-        "  favicon: static/favicon.ico\n"
+        "  logo: img/logo.png\n"
+        "  favicon: img/favicon.ico\n"
         "  icon_packs:\n    material: true\n    simple: false\n"
-        "  color_mode:\n    default: dark\n    toggle: true\n"
+        "  color_mode:\n    default: dark\n"
     )
     config = _load_theme_config(tmp_path, body)
-    assert config.theme.logo == "static/logo.png"
-    assert config.theme.favicon == "static/favicon.ico"
+    assert config.theme.logo == "/img/logo.png"
+    assert config.theme.favicon == "/img/favicon.ico"
     assert config.theme.icon_packs == {"material": True, "simple": False}
-    assert config.theme.color_mode == {"default": "dark", "toggle": True}
+    assert config.theme.color_mode == {"default": "dark"}
 
 
 def test_plugins_list_form_enables_names(tmp_path: Path) -> None:
@@ -465,3 +463,141 @@ def test_site_feed_include_type_without_own_feed_raises(tmp_path: Path) -> None:
         load_config(config_path)
     assert "pages" in str(excinfo.value)
     assert excinfo.value.key_path == "site.feed.include"
+
+
+# --- error-message contract: file + key path + fix hint --------------------
+
+
+def _write_config(tmp_path: Path, body: str) -> Path:
+    config_path = tmp_path / "bartleby.yml"
+    config_path.write_text(body, encoding="utf-8")
+    return config_path
+
+
+_BASE_CONFIG = "site:\n  title: Site\n  url: https://example.com\n"
+
+
+def test_unknown_top_level_key_names_file_key_and_suggestion(tmp_path: Path) -> None:
+    """A misspelled top-level key is rejected with the file, the key, and a close match."""
+    config_path = _write_config(
+        tmp_path, _BASE_CONFIG + "content_type:\n  blog:\n    path: blog\n"
+    )
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(config_path)
+    message = str(excinfo.value)
+    assert "bartleby.yml" in message
+    assert "content_type" in message
+    assert "content_types" in message
+    assert excinfo.value.key_path == "content_type"
+
+
+def test_unknown_top_level_key_without_close_match_lists_valid_keys(tmp_path: Path) -> None:
+    """With no near match the hint lists the valid top-level keys."""
+    config_path = _write_config(tmp_path, _BASE_CONFIG + "zzzzzz: 1\n")
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(config_path)
+    assert "site" in str(excinfo.value)
+    assert "taxonomies" in str(excinfo.value)
+
+
+def test_missing_required_field_names_the_file_and_a_fix(tmp_path: Path) -> None:
+    """A missing ``site.url`` names the config file, the key path, and what to add."""
+    config_path = _write_config(tmp_path, "site:\n  title: Site\n")
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(config_path)
+    message = str(excinfo.value)
+    assert "bartleby.yml" in message
+    assert "site.url" in message
+    assert "fix:" in message
+
+
+def test_empty_config_names_the_file_and_a_fix(tmp_path: Path) -> None:
+    """An empty config file says which file and what to put in it."""
+    config_path = _write_config(tmp_path, "")
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(config_path)
+    message = str(excinfo.value)
+    assert "bartleby.yml" in message
+    assert "site" in message
+
+
+def test_invalid_yaml_is_a_config_error_naming_file_and_line(tmp_path: Path) -> None:
+    """A YAML syntax error becomes a ConfigError with the file and the line number."""
+    config_path = _write_config(tmp_path, "site:\n  title: [unclosed\n")
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(config_path)
+    message = str(excinfo.value)
+    assert "bartleby.yml" in message
+    assert "line" in message
+
+
+def test_unknown_metadata_field_type_names_content_type_and_field(tmp_path: Path) -> None:
+    """A metadata field with an unknown ``type`` names the content type, field, and valid types."""
+    body = (
+        _BASE_CONFIG
+        + "content_types:\n  blog:\n    path: blog\n    metadata:\n"
+        + "      rating:\n        type: strng\n"
+    )
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(_write_config(tmp_path, body))
+    message = str(excinfo.value)
+    assert "content_types.blog.metadata.rating.type" in message
+    assert "strng" in message
+    assert "string" in message
+    assert "bartleby.yml" in message
+
+
+def test_metadata_choices_must_be_a_list(tmp_path: Path) -> None:
+    """A non-list ``choices`` is rejected instead of silently ignored."""
+    body = (
+        _BASE_CONFIG
+        + "content_types:\n  blog:\n    path: blog\n    metadata:\n"
+        + "      level:\n        type: string\n        choices: easy\n"
+    )
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(_write_config(tmp_path, body))
+    assert "content_types.blog.metadata.level.choices" in str(excinfo.value)
+
+
+def test_undefined_taxonomy_reference_names_the_taxonomy_and_a_fix(tmp_path: Path) -> None:
+    """A content type naming an undeclared taxonomy says how to declare it."""
+    body = _BASE_CONFIG + "content_types:\n  blog:\n    path: blog\n    taxonomies: [tags]\n"
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(_write_config(tmp_path, body))
+    message = str(excinfo.value)
+    assert "content_types.blog.taxonomies" in message
+    assert "tags" in message
+    assert "taxonomies:" in message
+
+
+def test_color_mode_toggle_key_points_at_the_feature(tmp_path: Path) -> None:
+    """``theme.color_mode.toggle`` is replaced by the ``color-mode.toggle`` feature."""
+    body = _BASE_CONFIG + "theme:\n  color_mode:\n    toggle: true\n"
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(_write_config(tmp_path, body))
+    message = str(excinfo.value)
+    assert "theme.color_mode.toggle" in message
+    assert "color-mode.toggle" in message
+    assert "theme.features" in message
+
+
+def test_logo_and_favicon_become_root_relative_urls_unless_absolute(tmp_path: Path) -> None:
+    """A static-relative logo path gets a leading slash; URLs and rooted paths pass through."""
+    config = _load_theme_config(
+        tmp_path, "  logo: img/logo.svg\n  favicon: https://cdn.example.com/icon.png\n"
+    )
+    assert config.theme.logo == "/img/logo.svg"
+    assert config.theme.favicon == "https://cdn.example.com/icon.png"
+    rooted = _load_theme_config(tmp_path, "  logo: /img/logo.svg\n")
+    assert rooted.theme.logo == "/img/logo.svg"
+
+
+def test_include_examples_is_rejected_as_unsupported(tmp_path: Path) -> None:
+    """``ai.skills.include_examples`` has no effect, so it is a ConfigError, not silent."""
+    body = _BASE_CONFIG + "ai:\n  skills:\n    include_examples: 3\n"
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(_write_config(tmp_path, body))
+    message = str(excinfo.value)
+    assert "ai.skills.include_examples" in message
+    assert "not yet supported" in message
+    assert "fix:" in message

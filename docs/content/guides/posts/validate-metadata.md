@@ -69,12 +69,15 @@ For example:
 
 ```
 validation failed (5 files checked)
-tutorials/posts/bad-date.md:0 [E001] : unknown author key: 'nobody'
-tutorials/posts/bad-date.md:0 [E001] : expected date for 'last_verified', got unparseable string
-tutorials/posts/bad-date.md:0 [E001] : expected boolean for 'featured', got str
-tutorials/posts/no-difficulty.md:0 [E001] : required field 'difficulty' is missing
-tutorials/posts/wrong-choice.md:0 [E001] : 'expert' is not one of the allowed choices: 'beginner', 'intermediate', 'advanced'
+tutorials/posts/bad-date.md:0 [E001] : authors: unknown author key 'nobody' (fix: use one of the known author ids (mason), or add the id to the authors file)
+tutorials/posts/bad-date.md:0 [E001] : content_types.tutorials.metadata.last_verified: expected date for 'last_verified', got unparseable string (fix: write a date value in the front matter, or change the field's `type:` in the schema)
+tutorials/posts/bad-date.md:0 [E001] : content_types.tutorials.metadata.featured: expected boolean for 'featured', got str (fix: write a boolean value in the front matter, or change the field's `type:` in the schema)
+tutorials/posts/no-difficulty.md:0 [E001] : content_types.tutorials.metadata.difficulty: required field 'difficulty' is missing (fix: add `difficulty:` to this file's front matter, or set `required: false` in the schema)
+tutorials/posts/wrong-choice.md:0 [E001] : content_types.tutorials.metadata.difficulty: 'expert' is not one of the allowed choices: 'beginner', 'intermediate', 'advanced' (fix: set `difficulty` to one of the listed choices)
 ```
+
+Each message names the schema entry that the page broke, so you can find both the front matter line and the schema line.
+The text after `fix:` says what to change.
 
 Those lines come from four sample pages:
 

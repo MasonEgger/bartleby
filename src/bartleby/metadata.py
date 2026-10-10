@@ -1,11 +1,24 @@
 # ABOUTME: Build-time metadata validation against content type schemas.
 # Checks required fields, type constraints, choice lists, and author references.
 
+"""Build-time metadata validation.
+
+Error-message contract: a :class:`ValidationError` message names the schema entry that
+the page broke, as ``content_types.<type>.metadata.<field>: <message> (fix: <hint>)``
+(see :func:`bartleby.errors.format_error`). The page file travels separately in
+``file_path``, so the build prints ``<file>: <message>``. An unknown author reference
+lists the ids the authors file defines. Hints say what to write in the page's front
+matter, or which schema line to relax.
+"""
+
 from __future__ import annotations
 
 import datetime
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from bartleby.authors import unknown_author_hint
+from bartleby.errors import format_error
 
 if TYPE_CHECKING:
     from bartleby.authors import Author
@@ -59,7 +72,11 @@ def validate_page_metadata(
                 ValidationError(
                     file_path=file_path,
                     field="authors",
-                    message=f"unknown author key: {key!r}",
+                    message=format_error(
+                        f"unknown author key {key!r}",
+                        key_path="authors",
+                        hint=unknown_author_hint(authors),
+                    ),
                 )
             )
 
@@ -98,24 +115,40 @@ def _validate_custom_metadata(
     """Apply the content type's metadata schema to ``page.custom_metadata``."""
     errors: list[ValidationError] = []
     for field_name, schema in content_type.metadata.items():
+        schema_key = f"content_types.{content_type.name}.metadata.{field_name}"
         value = page.custom_metadata.get(field_name)
         if value is None:
             if schema.required:
-                errors.append(
-                    ValidationError(
-                        file_path=file_path,
-                        field=field_name,
-                        message=f"required field {field_name!r} is missing",
-                    )
+                message = format_error(
+                    f"required field {field_name!r} is missing",
+                    key_path=schema_key,
+                    hint=(
+                        f"add `{field_name}:` to this file's front matter, "
+                        "or set `required: false` in the schema"
+                    ),
                 )
+                errors.append(ValidationError(file_path, field_name, message))
             continue
         type_error = _check_type(field_name, value, schema)
         if type_error is not None:
-            errors.append(ValidationError(file_path=file_path, **type_error))
+            message = format_error(
+                type_error["message"],
+                key_path=schema_key,
+                hint=(
+                    f"write a {schema.field_type} value in the front matter, "
+                    "or change the field's `type:` in the schema"
+                ),
+            )
+            errors.append(ValidationError(file_path, field_name, message))
             continue
         choice_error = _check_choices(field_name, value, schema)
         if choice_error is not None:
-            errors.append(ValidationError(file_path=file_path, **choice_error))
+            message = format_error(
+                choice_error["message"],
+                key_path=schema_key,
+                hint=f"set `{field_name}` to one of the listed choices",
+            )
+            errors.append(ValidationError(file_path, field_name, message))
     return errors
 
 

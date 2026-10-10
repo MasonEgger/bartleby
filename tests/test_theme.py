@@ -53,7 +53,7 @@ def _base_context(**overrides: object) -> dict[str, object]:
         "nav": [{"title": "Home", "url": "/"}, {"title": "Blog", "url": "/blog/"}],
         "pages": [],
         "build": {"date": "2026-05-23", "bartleby_version": "0.1.0"},
-        "config": {"theme": {"color_mode": {"toggle": True}}},
+        "config": {"theme": {"color_mode": {}}},
         "extra_css": [],
         "extra_js": [],
         "seo": None,
@@ -121,7 +121,7 @@ def test_header_has_site_title() -> None:
 
 
 def test_dark_mode_toggle() -> None:
-    """The theme toggle button is present when color_mode.toggle is true."""
+    """The theme toggle button is present when the color-mode.toggle feature is on."""
     rendered = _env().get_template("base.html").render(**_base_context())
     assert "theme-toggle" in rendered
     assert "x-data" in rendered

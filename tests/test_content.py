@@ -163,3 +163,22 @@ def test_discover_content_returns_colocated_assets_list(
     assert isinstance(assets, list)
     assert all(isinstance(page, Page) for page in pages)
     assert all(isinstance(asset, ColocatedAsset) for asset in assets)
+
+
+def test_invalid_front_matter_yaml_is_a_content_error_naming_the_file(tmp_path: Path) -> None:
+    """A YAML syntax error in front matter becomes a ContentError naming the file."""
+    from bartleby.config import load_config
+    from bartleby.content import ContentError, discover_content
+
+    (tmp_path / "bartleby.yml").write_text(
+        "site:\n  title: S\n  url: https://example.com\n", encoding="utf-8"
+    )
+    content_dir = tmp_path / "content"
+    content_dir.mkdir()
+    (content_dir / "broken.md").write_text(
+        "---\ntitle: [unclosed\n---\n\nBody\n", encoding="utf-8"
+    )
+    with pytest.raises(ContentError) as excinfo:
+        discover_content(load_config(tmp_path / "bartleby.yml"), content_dir)
+    assert excinfo.value.source_path == "broken.md"
+    assert "fix:" in str(excinfo.value)

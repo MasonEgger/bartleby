@@ -20,7 +20,6 @@ from bartleby.server import (
     classify_change,
     inject_reload_snippet,
     is_watched,
-    should_trigger_full_rebuild,
 )
 
 if TYPE_CHECKING:
@@ -71,32 +70,28 @@ def test_classify_change_unknown() -> None:
     assert classify_change("random/file.txt") == "other"
 
 
-def test_should_trigger_full_rebuild_for_config() -> None:
-    """Config changes always force a full rebuild regardless of mode."""
-    assert should_trigger_full_rebuild("config", dirty=True) is True
-    assert should_trigger_full_rebuild("config", dirty=False) is True
-
-
-def test_should_trigger_full_rebuild_for_template() -> None:
-    """Template changes force a full rebuild even when dirty mode is on."""
-    assert should_trigger_full_rebuild("template", dirty=True) is True
-
-
-def test_dirty_mode_skips_full_rebuild_for_content() -> None:
-    """In dirty mode, content-only changes do NOT trigger a full rebuild."""
-    assert should_trigger_full_rebuild("content", dirty=True) is False
+def test_content_change_runs_a_full_rebuild(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every watched kind of change, content included, runs the full build."""
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
+    builds: list[str] = []
+    monkeypatch.setattr(server, "build_once", lambda: builds.append("build"))
+    for rel_path in ("content/blog/posts/first-post.md", "templates/base.html", "bartleby.yml"):
+        server.handle_change(rel_path)
+    assert builds == ["build", "build", "build"]
 
 
 def test_devserver_initial_build(project: Path) -> None:
     """Constructing a DevServer triggers an initial build of the site."""
-    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
     server.build_once()
     assert (project / "site" / "index.html").exists()
 
 
 def test_devserver_rebuilds_on_change(project: Path) -> None:
     """``handle_change`` re-runs the build and updates the rendered HTML."""
-    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
     server.build_once()
     index = project / "content" / "index.md"
     index.write_text("---\ntitle: Home\n---\n\nUpdated body marker.\n", encoding="utf-8")
@@ -107,7 +102,7 @@ def test_devserver_rebuilds_on_change(project: Path) -> None:
 
 def test_devserver_includes_drafts(project: Path) -> None:
     """The dev server build pipeline always includes draft pages."""
-    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
     server.build_once()
     assert (project / "site" / "blog" / "posts" / "draft-post" / "index.html").exists()
 
@@ -149,7 +144,7 @@ def test_unwatched_path_does_not_trigger_rebuild() -> None:
 
 def test_dispatch_change_fires_rebuild_only_for_watched_paths(project: Path) -> None:
     """``dispatch_change`` invokes the rebuild callback only on watched paths."""
-    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
     fired: list[str] = []
     server.dispatch_change("content/index.md", rebuild=lambda: fired.append("rebuilt"))
     server.dispatch_change("site/index.html", rebuild=lambda: fired.append("rebuilt"))
@@ -165,7 +160,7 @@ def test_rebuild_reregisters_hooks(project: Path) -> None:
         "def on_post_page(html, **_):\n    return html + '<!--MARK-ONE-->'\n",
         encoding="utf-8",
     )
-    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
     errors = server.rebuild()
     assert errors == []
     rendered = (project / "site" / "index.html").read_text()
@@ -184,7 +179,7 @@ def test_rebuild_reregisters_hooks(project: Path) -> None:
 
 def test_failed_rebuild_keeps_last_good_build(project: Path) -> None:
     """A failed rebuild leaves the previous good output reachable and returns errors."""
-    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
     assert server.rebuild() == []
     good_html = (project / "site" / "index.html").read_text()
 
@@ -220,7 +215,7 @@ def test_events_stream_emits_one_json_object_per_line(
     project: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """``--events`` emits one parseable JSON object per line for change + rebuild."""
-    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
     server.rebuild_with_events("content/index.md")
     lines = [line for line in capsys.readouterr().out.splitlines() if line.strip()]
     events = [json.loads(line) for line in lines]
@@ -237,7 +232,7 @@ def test_events_stream_emits_error_object_on_failed_rebuild(
         "---\ntitle: Broken\ndate: 2026-01-01\nauthors: [does-not-exist]\n---\n\nBody.\n",
         encoding="utf-8",
     )
-    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
     server.rebuild_with_events("content/blog/posts/broken.md")
     lines = [line for line in capsys.readouterr().out.splitlines() if line.strip()]
     events = [json.loads(line) for line in lines]
@@ -284,7 +279,7 @@ def _run_and_fetch_root(project: Path) -> str:
     :param project: The project directory to serve.
     :returns: The decoded response body for a GET to ``/``.
     """
-    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
     worker, port, httpd = _start_running_server(server)
     try:
         body = _fetch(port)
@@ -333,7 +328,7 @@ def test_maybe_recompile_theme_prints_hint_when_no_binary_cached(
     # Ensure no tailwindcss leaks in from PATH for a deterministic miss.
     monkeypatch.setattr("shutil.which", lambda _name: None)
 
-    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
     assert server.maybe_recompile_theme() == "hint"
     assert "bartleby theme compile" in capsys.readouterr().out
 
@@ -347,7 +342,7 @@ def test_run_rebuilds_on_watched_content_change(project: Path) -> None:
     The new content becomes visible over HTTP within a bounded wait, driven by
     a real watchdog observer rather than a direct call to a rebuild method.
     """
-    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
     worker, port, httpd = _start_running_server(server)
     try:
         (project / "content" / "index.md").write_text(
@@ -374,7 +369,7 @@ def test_run_ignores_changes_outside_watched_paths(project: Path) -> None:
     test observes the rebuild callback directly rather than sleeping blind
     against ambiguous HTTP content.
     """
-    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
     calls: list[list[PageError]] = []
     original_rebuild = server.rebuild
 
@@ -431,7 +426,7 @@ def test_run_broadcasts_reload_over_websocket_after_rebuild(project: Path) -> No
     """A client connected to ``/__bartleby_reload`` gets a signal after a successful rebuild."""
     from websockets.sync.client import connect
 
-    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
     worker, _port, httpd = _start_running_server(server)
     try:
         ws_port = server.reload_ws_port
@@ -530,7 +525,7 @@ def test_reload_hub_stop_closes_the_event_loop() -> None:
 
 def test_run_retains_last_good_build_after_watcher_triggered_failure(project: Path) -> None:
     """A failed watcher-triggered rebuild keeps serving the last good build."""
-    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
     calls: list[list[PageError]] = []
     original_rebuild = server.rebuild
 

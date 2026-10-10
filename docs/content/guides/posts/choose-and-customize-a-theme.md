@@ -199,7 +199,7 @@ bartleby theme eject
 ```
 
 ```
-Ejected theme 'scrivener' (53 files) to themes/scrivener
+Ejected theme 'scrivener' (56 files) to themes/scrivener
 Add this to bartleby.yml:
 theme:
   path: themes/scrivener

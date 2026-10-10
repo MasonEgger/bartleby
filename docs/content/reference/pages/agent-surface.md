@@ -175,8 +175,26 @@ It adds `description`, `authors`, and one key per taxonomy when the page has the
 |------|----------|
 | `bartleby-write.md` | Each content type with its required and optional fields, the authors, the taxonomy terms in use, the available shortcodes, and the `bartleby new post` command |
 | `bartleby-review.md` | Each content type's metadata schema, the existing taxonomy terms, and the `bartleby validate` command |
-| `bartleby-ops.md` | The commands for building, validating, serving, querying, introspecting, and exporting |
+| `bartleby-ops.md` | The commands for building, validating, serving, querying, introspecting, and exporting, the active theme with its active features, and the `theme inspect`, `eject`, and `compile` commands |
 
 The write and review skills also include a voice and constraints section when `ai.agent_context` sets any value, and the contents of the file named by `ai.skills.style_guide`.
-The same inputs always produce the same files.
+
+### Generated-Skill Contract
+
+The generated skills describe the site as it is.
+
+- The same site always produces byte-identical files.
+  Lists are sorted, nothing reads the clock or the network, and discovery order does not matter.
+- Content types, fields, choices, authors, and taxonomy terms come from the same derivation as `schema.json`, so the two always agree.
+- The theme name, its chain, and its active features come from the `theme` object in `schema.json`.
+- Only published pages count.
+  A draft adds no term and no example path.
+- Every `bartleby` command in a skill parses against the CLI.
+  Commands use a real content type and a real page path from the site.
+- The output has no placeholder text.
+  A section with nothing to say says `none`.
+
+The write and review skills describe the schema, not the prose.
+No content analysis runs.
+
 See the [`ai` configuration](configuration.md#ai) for the keys that control generation.

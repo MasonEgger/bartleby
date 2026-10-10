@@ -1,11 +1,38 @@
-# ABOUTME: Deterministic agent-skill generation — bartleby-write/review/ops.
-# Renders bundled skill templates filled with the site's actual shape (no NLP, no LLM, no network).
+# ABOUTME: Deterministic agent-skill generation: bartleby-write, bartleby-review, bartleby-ops.
+# Renders skills filled with the site's actual shape (no NLP, no LLM, no network).
+
+"""Agent-skill generation.
+
+The determinism and fidelity contract:
+
+* Determinism. The same site yields byte-identical skills.
+  Every list is sorted (content types, authors by id, taxonomies and terms by name,
+  shortcodes, feature names), except fields, which keep their order in ``bartleby.yml``.
+  Nothing reads the clock, the environment, or the network, and nothing depends on the
+  order pages or authors were discovered in.
+  The only free text is what the site owner wrote: ``ai.agent_context`` and the style guide,
+  both included verbatim.
+* Fidelity. Every fact is read from the same derivations the build uses, never recomputed.
+  Content types, fields, choices, authors, and taxonomy terms come from
+  :mod:`bartleby.schema_introspection`, the source of ``schema.json``.
+  The active theme and its feature lists come from
+  :func:`bartleby.agent_surface.build_theme_block`, the ``theme`` object of ``schema.json``.
+  Published pages only: drafts contribute no terms and no example paths.
+* Commands are real. Each ``bartleby`` command in a skill parses against the CLI, with flags
+  that exist today, and uses values from the site (a real content type, a real page path)
+  instead of stand-ins.
+* No placeholders. Output carries no TODO or sample text and no em or en dashes.
+  A section with nothing to say says ``none``.
+* No content analysis (deferred): the skills describe the site's shape, not its prose.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from bartleby.agent_surface import build_theme_block
+from bartleby.content import STANDARD_FRONT_MATTER_FIELDS
 from bartleby.content_query import select_published
 from bartleby.schema_introspection import (
     derive_authors_schema,
@@ -17,6 +44,7 @@ if TYPE_CHECKING:
     from bartleby.authors import Author
     from bartleby.config import AgentContext, BartlebyConfig
     from bartleby.content import Page
+    from bartleby.theme_loader import ResolvedTheme
 
 
 @dataclass(slots=True)
@@ -36,20 +64,19 @@ def generate_skills(
     pages: list[Page],
     config: BartlebyConfig,
     authors: dict[str, Author],
+    theme: ResolvedTheme,
     *,
     shortcodes: list[str] | None = None,
     style_guide_text: str | None = None,
 ) -> list[GeneratedSkill]:
     """Generate the three agent skills from the site's shape, deterministically.
 
-    The same config/schema inputs always produce byte-identical content: the
-    skills are rendered from the derived schemas, sorted authors and taxonomy
-    terms, and the explicit ``ai.agent_context`` (included verbatim when set).
-    No content analysis is performed (deferred from v1).
+    See the module docstring for the determinism and fidelity contract.
 
-    :param pages: Discovered content pages (drafts are filtered for term counts).
+    :param pages: Discovered content pages (drafts are filtered out).
     :param config: The loaded site configuration.
     :param authors: The authors mapping.
+    :param theme: The resolved theme chain the build renders with.
     :param shortcodes: Available shortcode names to advertise (sorted on output).
     :param style_guide_text: Optional style-guide markdown, included verbatim.
     :returns: The write, review, and ops skills (in that order).
@@ -65,7 +92,7 @@ def generate_skills(
             name="bartleby-review",
             content=_review_skill(published, config, style_guide_text),
         ),
-        GeneratedSkill(name="bartleby-ops", content=_ops_skill(config)),
+        GeneratedSkill(name="bartleby-ops", content=_ops_skill(published, config, theme)),
     ]
 
 
@@ -87,7 +114,15 @@ def _write_skill(
         "",
         "## Content types",
         "",
+        "Every page also accepts one key per taxonomy, plus these built-in front matter fields.",
+        "",
+        "Built-in front matter fields:",
     ]
+    lines += [
+        f"- `{name}`: {STANDARD_FRONT_MATTER_FIELDS[name]}"
+        for name in sorted(STANDARD_FRONT_MATTER_FIELDS)
+    ]
+    lines.append("")
     lines += _content_type_section(config)
     lines += ["", "## Authors", ""]
     lines += _authors_section(authors)
@@ -98,14 +133,12 @@ def _write_skill(
         lines += [f"- `[% {name} %]`" for name in shortcodes]
     lines += _agent_context_section(config.ai.agent_context)
     lines += _style_guide_section(style_guide_text)
+    lines += ["", "## Creating a post", "", "```bash"]
     lines += [
-        "",
-        "## Creating a post",
-        "",
-        "```bash",
-        'bartleby new post "Title" --type <content-type> --output json',
-        "```",
+        f'bartleby new post "Title" --type {type_name} --output json'
+        for type_name in sorted(config.content_types)
     ]
+    lines += ["```"]
     return "\n".join(lines) + "\n"
 
 
@@ -137,12 +170,13 @@ def _review_skill(
         "",
         "```bash",
         "bartleby validate --output json",
+        "bartleby lint --output json",
         "```",
     ]
     return "\n".join(lines) + "\n"
 
 
-def _ops_skill(config: BartlebyConfig) -> str:
+def _ops_skill(pages: list[Page], config: BartlebyConfig, theme: ResolvedTheme) -> str:
     """Render the site-operations skill."""
     lines = [
         "---",
@@ -156,21 +190,28 @@ def _ops_skill(config: BartlebyConfig) -> str:
         "",
         "```bash",
         "bartleby build --output json",
+        "bartleby build --strict --output json",
         "bartleby validate --output json",
         "bartleby serve",
         "```",
+        "",
+        "`--strict` fails the build on cross-reference and validation errors.",
+        "`serve` runs until stopped, and `serve --events` prints one JSON event per line.",
+        "`--quiet` and `--verbose` work on every command.",
         "",
         "## Discover existing content",
         "",
         "```bash",
         "bartleby content list --output json",
-        "bartleby content get <path> --output json",
-        "```",
-        "",
-        "## Schema introspection",
-        "",
-        "```bash",
-        "bartleby schema <content-type> --output json",
+    ]
+    if pages:
+        first_path = min(page.source_path.as_posix() for page in pages)
+        lines.append(f"bartleby content get {first_path} --output json")
+    lines += ["```", "", "## Schema introspection", "", "```bash"]
+    lines += [
+        f"bartleby schema {type_name} --output json" for type_name in sorted(config.content_types)
+    ]
+    lines += [
         "bartleby schema taxonomies --output json",
         "bartleby schema authors --output json",
         "```",
@@ -181,7 +222,58 @@ def _ops_skill(config: BartlebyConfig) -> str:
         "bartleby export --format jsonl --include-content",
         "```",
     ]
+    lines += _theme_section(build_theme_block(config, theme))
+    lines += [
+        "",
+        "## Regenerating these skills",
+        "",
+        "```bash",
+        "bartleby generate-skill",
+        "```",
+        "",
+        "Set `ai.skills.regenerate_on_build: true` in `bartleby.yml` "
+        "to rewrite them on every build.",
+    ]
     return "\n".join(lines) + "\n"
+
+
+def _theme_section(theme_block: dict[str, object]) -> list[str]:
+    """Render the active theme, its feature split, and the theme commands."""
+    name = str(theme_block["name"])
+    chain = _strings(theme_block["chain"])
+    features = theme_block["features"]
+    assert isinstance(features, dict)
+    enabled = _strings(features["enabled"])
+    implemented = _strings(features["implemented"])
+    return [
+        "",
+        "## Theme",
+        "",
+        f"Active theme: `{name}` (chain, leaf first: {', '.join(chain)}).",
+        f"Active features: {_joined(_strings(features['active']))}.",
+        "Enabled but not implemented by this theme: "
+        f"{_joined(sorted(set(enabled) - set(implemented)))}.",
+        f"Implemented but not enabled: {_joined(sorted(set(implemented) - set(enabled)))}.",
+        "Features are listed under `theme.features` in `bartleby.yml`.",
+        "",
+        "- `bartleby theme inspect --output json` lists every theme file "
+        "with the layer that provides it.",
+        f"- `bartleby theme eject` copies the active theme, flattened, into `themes/{name}`; "
+        "`--to DIR` picks another destination and `--force` overwrites existing files.",
+        "- `bartleby theme compile` recompiles the theme CSS including project overrides; "
+        "`--refresh` forces a fresh download of the Tailwind binary.",
+    ]
+
+
+def _strings(value: object) -> list[str]:
+    """Narrow a JSON-shaped value to a list of strings."""
+    assert isinstance(value, list)
+    return [str(item) for item in value]
+
+
+def _joined(names: list[str]) -> str:
+    """Comma-join names, or ``none`` when there are none."""
+    return ", ".join(names) if names else "none"
 
 
 def _content_type_section(config: BartlebyConfig) -> list[str]:
@@ -190,6 +282,8 @@ def _content_type_section(config: BartlebyConfig) -> list[str]:
     for type_name in sorted(config.content_types):
         schema = derive_content_type_schema(type_name, config)
         lines.append(f"### {type_name}")
+        lines.append("")
+        lines.append(f"Source directory: `content/{schema.path}/`")
         lines.append("")
         lines.append("Required fields:")
         lines += _field_lines(schema.required_fields)
@@ -203,9 +297,9 @@ def _content_type_section(config: BartlebyConfig) -> list[str]:
 
 
 def _field_lines(fields: list[dict[str, object]]) -> list[str]:
-    """Render a field list as markdown bullets, or a ``(none)`` placeholder."""
+    """Render a field list as markdown bullets, or a ``none`` line."""
     if not fields:
-        return ["- (none)"]
+        return ["- none"]
     rendered: list[str] = []
     for field_schema in fields:
         choices = field_schema.get("choices")
@@ -222,9 +316,9 @@ def _authors_section(authors: dict[str, Author]) -> list[str]:
     entries = schema.to_dict()["authors"]
     assert isinstance(entries, list)
     if not entries:
-        return ["- (none)"]
+        return ["- none"]
     ordered = sorted(entries, key=lambda entry: str(entry["id"]))
-    return [f"- `{entry['id']}` — {entry['name']}" for entry in ordered]
+    return [f"- `{entry['id']}`: {entry['name']}" for entry in ordered]
 
 
 def _taxonomy_section(pages: list[Page], config: BartlebyConfig) -> list[str]:
@@ -237,9 +331,9 @@ def _taxonomy_section(pages: list[Page], config: BartlebyConfig) -> list[str]:
         terms = taxonomy["terms"]
         assert isinstance(terms, list)
         names = sorted(str(term["term"]) for term in terms)
-        joined = ", ".join(names) if names else "(none)"
+        joined = ", ".join(names) if names else "none"
         lines.append(f"- **{taxonomy['name']}**: {joined}")
-    return lines or ["- (none)"]
+    return lines or ["- none"]
 
 
 def _agent_context_section(context: AgentContext) -> list[str]:

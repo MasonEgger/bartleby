@@ -205,14 +205,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 8. Verify: coverage + `just check`
 
 ### Step 24: Generated skills reflect the real site shape (feature)
-- [ ] 1. RED: determinism; real content types/fields; taxonomies/authors; ops skill mentions theme + theme commands
-- [ ] 2. Document: contract in skills.py
-- [ ] 3. GREEN: fix nondeterminism/placeholders; add theme facts
-- [ ] 4. RED: integration vs schema.json
-- [ ] 5. GREEN: wire minimally
-- [ ] 6. REFACTOR: reuse schema_introspection
-- [ ] 7. Document: generated-skill contract
-- [ ] 8. Verify: coverage + `just check`
+- [x] 1. RED: determinism; real content types/fields; taxonomies/authors; ops skill mentions theme + theme commands
+- [x] 2. Document: contract in skills.py
+- [x] 3. GREEN: fix nondeterminism/placeholders; add theme facts
+- [x] 4. RED: integration vs schema.json
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: reuse schema_introspection
+- [x] 7. Document: generated-skill contract
+- [x] 8. Verify: coverage + `just check`
 
 ## Section 8: Public interface documentation and final gate
 

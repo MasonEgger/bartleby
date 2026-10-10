@@ -841,6 +841,7 @@ def _write_skills(config_path: Path, config: BartlebyConfig) -> GenerateSkillOut
         pages,
         config,
         authors,
+        select_theme(config.theme, project_dir),
         shortcodes=shortcodes,
         style_guide_text=style_guide_text,
     )

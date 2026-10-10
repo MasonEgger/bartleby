@@ -150,7 +150,7 @@ def build_schema_json(
         "content_types": content_types,
         "taxonomies": taxonomies,
         "authors": author_entries,
-        "theme": _theme_block(config, theme),
+        "theme": build_theme_block(config, theme),
         "resources": _resource_locations(config),
     }
 
@@ -199,8 +199,12 @@ def write_agent_surface(
     )
 
 
-def _theme_block(config: BartlebyConfig, theme: ResolvedTheme) -> dict[str, object]:
-    """Describe the active theme: its name, resolved chain, and feature lists."""
+def build_theme_block(config: BartlebyConfig, theme: ResolvedTheme) -> dict[str, object]:
+    """Describe the active theme: its name, resolved chain, and feature lists.
+
+    This is the ``theme`` object of schema.json; the generated skills reuse it so
+    the two never disagree about which features are active.
+    """
     enabled = set(config.theme.features)
     implemented = set(theme.implemented_features())
     return {

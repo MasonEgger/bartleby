@@ -117,22 +117,21 @@ class ColocatedAsset:
     associated_page_source: Path | None = None
 
 
-# Front matter fields handled by their own dataclass attributes — anything else
-# in the YAML block is treated as a taxonomy value (if it matches a configured
+# Front matter fields handled by their own dataclass attributes, each with a
+# one-line meaning (the generated write skill renders these). Anything else in
+# the YAML block is treated as a taxonomy value (if it matches a configured
 # taxonomy name) or custom metadata.
-_STANDARD_FRONT_MATTER_FIELDS = frozenset(
-    {
-        "title",
-        "description",
-        "date",
-        "draft",
-        "template",
-        "url",
-        "url_base",
-        "authors",
-        "slug",
-    }
-)
+STANDARD_FRONT_MATTER_FIELDS: dict[str, str] = {
+    "title": "page title; defaults to the filename without its extension",
+    "description": "meta description, Open Graph description, and Twitter card text",
+    "date": "publication date; drives feeds, taxonomy sort order, and JSON-LD datePublished",
+    "draft": "when true, builds skip the page unless --include-drafts is passed",
+    "template": "template to render this page with",
+    "url": "replaces the generated URL with a custom path",
+    "url_base": "replaces only the URL base prefix; url_format still applies",
+    "authors": "author ids from the authors list",
+    "slug": "overrides the slug that {slug} placeholders in url_format use",
+}
 
 
 def parse_front_matter(text: str) -> tuple[dict[str, Any], str]:
@@ -308,7 +307,7 @@ def _split_metadata(
     taxonomy_values: dict[str, list[str]] = {}
     custom: dict[str, PageMetadataValue] = {}
     for key, value in metadata.items():
-        if key in _STANDARD_FRONT_MATTER_FIELDS:
+        if key in STANDARD_FRONT_MATTER_FIELDS:
             continue
         if key in taxonomy_names:
             taxonomy_values[key] = _coerce_str_list(value)

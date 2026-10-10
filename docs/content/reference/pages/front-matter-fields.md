@@ -1,30 +1,34 @@
 ---
-title: "Front matter fields"
-description: "Standard fields, taxonomy values, and custom metadata schema."
+title: "Front Matter Fields"
+description: "Standard fields, taxonomy values, and the custom metadata schema."
 tags:
-  - front-matter
+  - front matter
   - configuration
 ---
 
-Every Markdown file may begin with a YAML front matter block. The fields below are recognised by name; anything else flows into `page.custom_metadata` and can be validated by a content type's `metadata` schema.
+Every Markdown file may begin with a YAML front matter block.
+Bartleby recognizes the fields below by name.
+Anything else goes to `page.custom_metadata`, where a content type's `metadata` schema can validate it.
+See [Front matter](../../concepts/front-matter.md) for how the three groups work together.
 
-## Standard fields
+## Standard Fields
 
 | Field | Type | Default | Purpose |
 |-------|------|---------|---------|
-| `title` | string | (filename stem) | Page title — required for build success on every page |
-| `description` | string \| null | `None` | Meta description, OG description, Twitter card |
-| `date` | date | `None` | Publication date — drives feeds, taxonomy sort, JSON-LD `datePublished` |
-| `draft` | bool | `false` | When `true`, excluded from `bartleby build` (set `--include-drafts` to override) |
-| `template` | string \| null | `None` | Override the template lookup for this page |
-| `url` | string \| null | `None` | Replace the generated URL with a custom path |
-| `url_base` | string \| null | `None` | Replace just the URL base prefix |
-| `slug` | string \| null | `None` | Override the slug used by `{slug}` placeholders |
-| `authors` | list[string] | `[]` | Author keys from `.authors.yml` |
+| `title` | string | filename without extension | Page title. An empty title fails validation. |
+| `description` | string or null | `None` | Meta description, Open Graph description, and Twitter card text |
+| `date` | date | `None` | Publication date. It drives feeds, taxonomy sort order, and JSON-LD `datePublished`. |
+| `draft` | bool | `false` | When `true`, `bartleby build` skips the page unless you pass `--include-drafts` |
+| `template` | string or null | `None` | Template to use for this page |
+| `url` | string or null | `None` | Replace the generated URL with a custom path |
+| `url_base` | string or null | `None` | Replace only the URL base prefix. `url_format` still applies. |
+| `slug` | string or null | `None` | Override the slug that `{slug}` placeholders use |
+| `authors` | list of strings | `[]` | Author keys from `.authors.yml` |
 
-## Taxonomy values
+## Taxonomy Values
 
-Any front-matter key matching a taxonomy declared in `bartleby.yml` becomes a taxonomy value list. Values are always coerced to strings.
+Any front matter key that matches a taxonomy declared in `bartleby.yml` becomes a list of taxonomy values.
+Bartleby coerces every value to a string.
 
 ```yaml
 tags:
@@ -34,9 +38,10 @@ categories:
   - devops
 ```
 
-## Custom metadata
+## Custom Metadata
 
-Anything not in the standard set and not matching a taxonomy name flows into `page.custom_metadata`. A content type's `metadata` schema can constrain these fields:
+Anything that is not a standard field or a taxonomy name goes to `page.custom_metadata`.
+A content type's `metadata` schema can constrain these fields:
 
 ```yaml
 content_types:
@@ -58,22 +63,17 @@ content_types:
         type: integer
 ```
 
-Supported `type` values:
+Each field takes `type` (required), `required` (default `false`), and `choices`.
+The supported `type` values are:
 
-- `string`
-- `integer` — rejects `bool` (which is an `int` subclass in Python)
-- `boolean`
-- `date` — accepts ISO date strings or YAML date objects
-- `list` — accepts any YAML list
+| Type | Accepts |
+|------|---------|
+| `string` | Any string |
+| `integer` | An integer. Booleans are rejected, even though Python treats `bool` as an `int`. |
+| `boolean` | `true` or `false` |
+| `date` | An ISO date string or a YAML date |
+| `list` | Any YAML list |
 
-Validation runs before rendering. Errors include the file path, field name, and a human-readable explanation.
-
-## Reading custom metadata in templates
-
-```jinja2
-{% if page.custom_metadata.difficulty %}
-<span class="difficulty difficulty-{{ page.custom_metadata.difficulty }}">
-  {{ page.custom_metadata.difficulty }}
-</span>
-{% endif %}
-```
+Validation runs before rendering.
+Each error names the file, the field, and the problem.
+The [validation guide](../../guides/posts/validate-metadata.md) shows real error output.

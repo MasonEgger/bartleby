@@ -1,6 +1,6 @@
 ---
-title: "Write a custom shortcode"
-description: "Build a reusable Jinja2 fragment invocable from Markdown with [% ... %] syntax."
+title: "Write a Custom Shortcode"
+description: "Build a reusable Jinja2 fragment that authors call from Markdown with the [% ... %] syntax."
 date: 2026-06-02
 audience: existing-user
 tags:
@@ -10,13 +10,14 @@ authors:
   - mason
 ---
 
-Shortcodes let authors call into reusable template fragments from inside Markdown. This guide builds a `youtube` shortcode that embeds a YouTube video given a video ID.
+Shortcodes let authors call reusable template fragments from inside Markdown.
+This guide builds a `youtube` shortcode that embeds a YouTube video from a video ID.
 
 <!-- more -->
 
-## Step 1: Create the shortcode template
+## Step 1: Create the Shortcode Template
 
-Drop a file at `shortcodes/youtube.html`:
+Create `shortcodes/youtube.html`:
 
 ```html
 <div class="youtube-embed">
@@ -24,17 +25,18 @@ Drop a file at `shortcodes/youtube.html`:
     src="https://www.youtube.com/embed/{{ id }}"
     title="{{ title or 'YouTube video' }}"
     frameborder="0"
-    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    allow="accelerometer; autoplay; clipboard-write;
+           encrypted-media; gyroscope; picture-in-picture"
     allowfullscreen>
   </iframe>
 </div>
 ```
 
-## Step 2: Use it in a post
+## Step 2: Use It in a Post
 
 ```markdown
 ---
-title: "Conference talk"
+title: "Conference Talk"
 date: 2026-06-02
 ---
 
@@ -51,11 +53,13 @@ The slides are also available below.
 bartleby build
 ```
 
-The shortcode renders before markdown processing, so the resulting HTML flows through Python-Markdown as raw HTML (the `md_in_html` extension handles it cleanly).
+The shortcode renders before Markdown processing.
+The resulting HTML then passes through Python-Markdown as raw HTML.
 
-## Block form vs. inline form
+## Step 4: Wrap Content with a Block Shortcode
 
-The `youtube` shortcode is inline (no closing tag). For shortcodes that wrap content, use the block form:
+The `youtube` shortcode is inline, with no closing tag.
+A shortcode that wraps content uses the block form:
 
 ```markdown
 [% note %]
@@ -64,6 +68,8 @@ It can span multiple lines and include **markdown**.
 [% /note %]
 ```
 
+Its template reads the body from the `content` variable:
+
 ```html
 <!-- shortcodes/note.html -->
 <div class="shortcode-note">
@@ -71,17 +77,7 @@ It can span multiple lines and include **markdown**.
 </div>
 ```
 
-The block body becomes the `content` variable in the template.
+## See Also
 
-## Available context
-
-Shortcode templates receive:
-
-- `content` — the body of a block shortcode (empty string for inline)
-- One variable per `key="value"` argument
-- The surrounding template context (`build`, `page`)
-
-## See also
-
-- [Shortcodes reference](../../reference/pages/shortcodes.md) — full syntax and lookup rules
-- [Customization seams](../../concepts/customization-seams.md) — where `shortcodes/` fits with other extension points
+- [Shortcodes reference](../../reference/pages/shortcodes.md): the full syntax and the variables a template receives
+- [Customization seams](../../concepts/customization-seams.md): where `shortcodes/` fits with the other extension points

@@ -3,9 +3,10 @@ title: "Guides"
 description: "Task-oriented walkthroughs for common Bartleby customizations."
 ---
 
-These guides assume you've already worked through the [Quickstart](../quickstart.md). Each one solves a specific problem.
+These guides assume you've already worked through the [Quickstart](../quickstart.md).
+Each one solves a specific problem.
 
-## Available guides
+## Available Guides
 
 - [Override a single theme template](posts/override-theme-template.md)
 - [Add a custom Jinja2 filter](posts/add-jinja-filter.md)

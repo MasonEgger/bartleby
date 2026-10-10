@@ -1,50 +1,61 @@
 ---
-title: "Templates and the lookup cascade"
+title: "Templates and the Lookup Cascade"
 description: "How Bartleby decides which Jinja2 template renders each page."
 ---
 
-Every page goes through a six-level template lookup. The first match wins. This lets users override individual theme templates without forking the whole theme.
+Every page goes through a six-level template lookup, and the first match wins.
+The cascade lets you override one template without forking the whole theme.
 
-## The six-level cascade
+## The Six-Level Cascade
 
-For a page of "template type" `<kind>` (typically `post`, `list`, `page`, `taxonomy`, or `taxonomy_index`):
+For a page with a template type `<kind>` (`post`, `list`, `page`, `taxonomy`, or `taxonomy_index`), Bartleby builds a list of candidate names and takes the first one that exists:
 
-1. **Front matter `template` field** — explicit per-page override
-2. **`overrides/<name>`** at the project root — for replacing theme templates
-3. **`templates/{content_type}/{kind}.html`** — content-type-specific layout
-4. **`templates/{content_type}/base.html`** — content-type base
-5. **`templates/defaults/{kind}.html`** — site-wide default
-6. **Built-in theme fallback** — the templates shipped with Bartleby
+1. The `template` field in the page's front matter, which returns at once
+2. `{content_type}/taxonomy/{name}.html` and `{content_type}/taxonomy.html`, for taxonomy term pages of a content type
+3. `{content_type}/{kind}.html`, a layout for one content type
+4. `{content_type}/base.html`, a base for one content type
+5. `defaults/{kind}.html`, a site-wide default
+6. `{kind}.html` from the theme, and `page.html` as a last resort for any kind except `page`
 
-The Jinja2 environment searches these roots in order: `overrides/` → `templates/` → the project directory itself → the bundled theme. Including the project directory in the search path is what makes `{% include "partials/banner.html" %}` resolve naturally.
+Bartleby checks each candidate name against three places in order: your `overrides/` directory, your `templates/` directory, and the templates of each theme layer.
+The first existing file wins.
 
-## Template context
+## The Theme Chain
 
-Every template receives the same context object:
+"The theme" is a chain, not one directory.
+A theme can `extends` another, so the default `scrivener` theme sits on top of `base`.
+Bartleby searches the leaf theme first and its parents after it, which lets a child replace any file it needs and inherit the rest.
+`bartleby theme inspect` prints the chain and shows which layer provides each file.
 
-| Key | Type | Notes |
-|-----|------|-------|
-| `site` | dict | `title`, `url`, `description`, `author`, `default_image`, `twitter` |
-| `page` | dict | Current page — `title`, `content`, `url`, `date`, `description`, `authors`, `readtime`, `toc`, `previous`, `next`, `taxonomies` |
-| `nav` | list | `NavItem` tree from the resolved navigation |
-| `pages` | list | All pages in the build |
-| `taxonomies` | dict | `{"global": ..., "by_content_type": ...}` |
-| `config` | BartlebyConfig | The full parsed config |
-| `build` | dict | `date`, `bartleby_version` |
-| `data` | dict | Contents of every YAML/TOML file under `data/`, keyed by stem |
-| `extra_css` | list | Paths from `config.extra_css` for rendering `<link>` tags |
-| `extra_js` | list | Paths from `config.extra_js` for rendering `<script>` tags |
-| `seo` | dict | `{"og": ..., "twitter": ..., "canonical": ...}` |
+## The Jinja2 Search Path
 
-## Per-page template override
+Templates also find each other by name, through `{% extends %}` and `{% include %}`.
+For those lookups, the Jinja2 environment searches these roots in order:
 
-In front matter:
+1. `overrides/`
+2. `templates/`
+3. The project directory itself
+4. The theme chain, leaf first
+
+Because the project directory is on the path, `{% include "partials/banner.html" %}` finds `partials/banner.html` at your project root.
+Put a file in `overrides/` and it also beats a theme file of the same name for every `include` and `extends`.
+
+## Template Context
+
+Every template receives the same context: `site`, `page`, `nav`, `pages`, `taxonomies`, `config`, `build`, `data`, and more.
+The [template context reference](../reference/pages/template-context.md) lists every key.
+
+## Per-Page Template Override
+
+Set `template` in the front matter:
 
 ```yaml
 ---
-title: "Special landing page"
+title: "Special Landing Page"
 template: campaigns/launch.html
 ---
 ```
 
-Bartleby will look for `templates/campaigns/launch.html`, then `overrides/campaigns/launch.html`, then the bundled theme. Use this for one-off page layouts that don't justify a new content type.
+Bartleby resolves the name like any other template.
+It checks `overrides/campaigns/launch.html`, then `templates/campaigns/launch.html`, then the project root, then the theme chain.
+Use this for one-off page layouts that do not justify a new content type.

@@ -1,15 +1,18 @@
 ---
-title: "bartleby.yml configuration"
+title: "bartleby.yml Configuration"
 description: "Every top-level config section and its fields."
 tags:
   - configuration
 ---
 
-The `bartleby.yml` at the project root is the single source of truth for site behaviour. Bartleby loads it once at the start of every build.
+The `bartleby.yml` file at the project root is the single source of truth for site behavior.
+Bartleby loads it once at the start of every build.
+The `site` section is the only required one.
 
-## site (required)
+## `site`
 
-Global metadata. `title` and `url` are required; everything else is optional.
+Global site metadata.
+The section requires `title` and `url`.
 
 ```yaml
 site:
@@ -19,11 +22,36 @@ site:
   author: "Mason Egger"
   default_image: "/img/og-default.png"
   twitter: "@masonegger"
+  feed:
+    enabled: true
+    formats: [rss, atom]
+    limit: 50
 ```
 
-## nav (optional)
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `title` | required | Site title |
+| `url` | required | Absolute base URL, used for canonical links, feeds, and the sitemap |
+| `description` | `""` | Site description and fallback page description |
+| `author` | `""` | Default author name |
+| `default_image` | none | Fallback Open Graph image |
+| `twitter` | none | Twitter handle for card metadata |
+| `feed` | see below | Site-wide aggregate feed |
 
-Explicit navigation. When omitted, Bartleby auto-generates a flat nav from top-level pages and directories.
+The `site.feed` block controls the aggregate feed that merges items across content types:
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `enabled` | `true` | Generate the aggregate feed |
+| `formats` | `[rss, atom]` | Formats to write at the site root |
+| `include` | `[]` | Content types to merge. Empty means every type that has its own `feeds`. A listed type must define `feeds`. |
+| `limit` | `50` | Maximum items in the merged feed |
+| `title` | `site.title` | Channel title |
+
+## `nav`
+
+Explicit navigation.
+When you omit it, Bartleby generates the navigation from the content tree.
 
 ```yaml
 nav:
@@ -35,9 +63,10 @@ nav:
       - Guide: docs/guide.md
 ```
 
-## content_types
+## `content_types`
 
-Named groups of pages with shared behaviour. `path` is the only required field per type.
+Named groups of pages that share behavior.
+`path` is the only required field.
 
 ```yaml
 content_types:
@@ -67,9 +96,27 @@ content_types:
           - advanced
 ```
 
-## taxonomies
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `path` | required | Directory under `content/` that holds the type's pages |
+| `url_base` | none | URL prefix for the type's pages |
+| `url_format` | none | URL template. Placeholders: `{slug}`, `{date:FORMAT}` (strftime), `{title}`, `{categories}` |
+| `readtime` | `false` | Compute `page.readtime` |
+| `excerpt_separator` | none | Marker that ends the excerpt |
+| `taxonomies` | `[]` | Site taxonomies this type uses. Each must be declared under `taxonomies`. |
+| `feeds` | `[]` | Per-type feed formats: `rss`, `atom` |
+| `pagination.enabled` | `false` | Paginate the listing page |
+| `pagination.per_page` | `10` | Pages per listing page |
+| `pagination.url_format` | `page/{page}` | URL template for pages after the first |
+| `metadata` | none | Schema for custom front matter fields |
 
-Site-level taxonomies. Content types opt in via their `taxonomies` list.
+Each `metadata` field takes a `type` (required), `required` (default `false`), and `choices`.
+The supported types are listed in [Front matter fields](front-matter-fields.md#custom-metadata).
+
+## `taxonomies`
+
+Site-level taxonomies.
+Content types opt in through their `taxonomies` list.
 
 ```yaml
 taxonomies:
@@ -79,22 +126,31 @@ taxonomies:
     slug_format: "{slug}"
 ```
 
-## theme
+`slug_format` defaults to `"{slug}"`.
 
-Theme appearance and feature toggles.
+## `theme`
+
+Theme selection, features, and appearance.
 
 ```yaml
 theme:
-  palette:
-    primary: "indigo"
-    accent: "pink"
-  color_mode:
-    toggle: true
-    default: "light"
+  name: scrivener
   features:
     - search
-    - navigation.tabs
-    - navigation.top
+    - search.highlight
+    - nav.tabs
+    - nav.sidebar
+    - nav.section-index
+    - nav.back-to-top
+    - content.code.copy
+    - color-mode.toggle
+  color_mode:
+    toggle: true
+    default: light
+  tokens:
+    color.primary: "#2a4b7c"
+    font.text: "Charter, Georgia, serif"
+    radius: "2px"
   icon_packs:
     material: true
     fontawesome: true
@@ -102,22 +158,84 @@ theme:
     simple: true
   logo: "img/logo.svg"
   favicon: "img/favicon.ico"
-  font:
-    text: "Inter"
-    code: "JetBrains Mono"
 ```
 
-## authors_file
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `name` | `scrivener` | A bundled theme: `base`, `material`, or `scrivener` |
+| `path` | none | A theme directory, relative to the project or absolute |
+| `package` | none | The name of an entry point in the `bartleby.themes` group |
+| `features` | `[]` | Features to switch on, from the list below |
+| `color_mode.toggle` | `false` | Show the light and dark toggle in the header |
+| `color_mode.default` | none | Starting mode: `light` or `dark`. Without it, the toggle follows the reader's system setting. |
+| `tokens` | `{}` | Design tokens, a flat map of dotted names to CSS values |
+| `icon_packs` | all `true` | Enable or disable a bundled icon pack: `material`, `fontawesome`, `octicons`, `simple` |
+| `logo`, `favicon` | none | Paths to the site logo and favicon. Templates can read them as `config.theme.logo` and `config.theme.favicon`. The bundled themes do not use them. |
 
-Path to the authors file. Defaults to `.authors.yml` at the project root.
+Set at most one of `name`, `path`, and `package`.
+Setting more than one is a config error.
+
+A theme extends another theme with `extends` in its own `theme.yml` manifest, not in `bartleby.yml`.
+For example, the manifest of `scrivener` contains `extends: base`.
+Bartleby resolves the chain leaf-first, so a theme's files override its parent's.
+
+### Features
+
+`features` accepts only these names.
+Any other name is a config error, and the error message lists the valid ones.
+A feature that the active theme chain does not declare in a manifest produces a build warning.
+
+| Feature | Effect |
+|---------|--------|
+| `search` | The search box and the client-side search index |
+| `search.highlight` | Highlight the search terms on the page a result opens |
+| `nav.tabs` | Top-level sections render as tabs in the header |
+| `nav.sidebar` | The section tree renders as a sidebar |
+| `nav.section-index` | A section's index page is the section's own nav entry |
+| `nav.back-to-top` | A back-to-top button appears after scrolling |
+| `content.code.copy` | Code blocks get a copy button |
+| `color-mode.toggle` | The header shows a light and dark toggle |
+
+The header renders the toggle only when `color_mode.toggle` is `true`.
+The `color-mode.toggle` feature name is valid but does not render the toggle by itself, so set both.
+
+### Tokens
+
+A token name becomes a CSS custom property: `color.primary` becomes `--bb-color-primary`.
+Tokens reach the page when you run `bartleby theme compile`, which writes them into the compiled stylesheet.
+The bundled themes read these tokens:
+
+| Token | Controls |
+|-------|----------|
+| `color.primary` | Primary color |
+| `color.accent` | Secondary accent color |
+| `color.bg`, `color.text` | Background and text colors in light mode |
+| `color.bg-dark`, `color.text-dark` | Background and text colors in dark mode |
+| `font.text`, `font.ui`, `font.code` | Body, interface, and code fonts |
+| `radius` | Corner radius |
+
+Token values must be strings.
+The old mkdocs-style `palette` and `font` keys are config errors, and the message points to `theme.tokens`.
+
+## `authors_file`
+
+Path to the authors file.
+Defaults to `.authors.yml` at the project root.
 
 ```yaml
 authors_file: ".authors.yml"
 ```
 
-## exclude_patterns
+## `output_dir`
 
-Gitignore-style patterns. Defaults: `_drafts/**`, `_*.md`, `.git/**`.
+Directory for the built site, relative to the project root.
+Defaults to `site`.
+
+## `exclude_patterns`
+
+Gitignore-style patterns to skip during content discovery.
+Defaults: `_drafts/**`, `_*.md`, `.git/**`.
+Setting the key replaces the defaults, so repeat any default you want to keep.
 
 ```yaml
 exclude_patterns:
@@ -127,9 +245,10 @@ exclude_patterns:
   - "internal/**"
 ```
 
-## markdown_extensions
+## `markdown_extensions`
 
-Per-extension config overrides. See [Markdown pipeline](../../concepts/markdown-pipeline.md) for the bundled default set.
+Per-extension config overrides.
+See [Markdown extensions](markdown-extensions.md) for the default set and [Markdown pipeline](../../concepts/markdown-pipeline.md) for how overrides merge.
 
 ```yaml
 markdown_extensions:
@@ -138,13 +257,22 @@ markdown_extensions:
       base_path: ["includes"]
 ```
 
-## plugins
+## `plugins`
 
-Reserved for future use. Currently ignored — hook discovery is file-based via `hooks/*.py`.
+Controls installed plugins.
+Hook discovery from `hooks/*.py` does not depend on this key.
+Map an installed plugin's entry point name to `false` to disable it without uninstalling it:
 
-## extra_css / extra_js
+```yaml
+plugins:
+  some-plugin: false
+```
 
-Asset paths injected into every page.
+A list form is accepted, and it has no effect on discovery.
+
+## `extra_css` and `extra_js`
+
+Asset paths that Bartleby injects into every page.
 
 ```yaml
 extra_css:
@@ -153,23 +281,50 @@ extra_js:
   - js/analytics.js
 ```
 
-## ai
+## `ai`
 
-Agent integration toggles.
+Agent integration settings.
 
 ```yaml
 ai:
   llms_txt: true
   llms_full_txt: true
   markdown_variants: true
+  agent_surface: true
   robots:
     allow:
       - GPTBot
     disallow:
       - BadBot
+  skills:
+    output_dir: .claude/skills
+    style_guide: docs/style-guide.md
+  agent_context:
+    voice: "Plain, direct, second person"
+    audience: "Developers who run static sites"
+    constraints:
+      - "Never use marketing language"
 ```
 
-## dev_server
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `llms_txt` | `true` | Write `llms.txt` |
+| `llms_full_txt` | `true` | Write `llms-full.txt` |
+| `markdown_variants` | `true` | Write an `index.md` next to each page's HTML |
+| `agent_surface` | `true` | Write `schema.json` and `content-index.json` |
+| `robots.allow` | `[]` | Crawler names that get an explicit `Allow: /` group |
+| `robots.disallow` | `[]` | Crawler names that get a `Disallow: /` group |
+| `skills.output_dir` | `.claude/skills` | Where `generate-skill` writes |
+| `skills.style_guide` | none | A Markdown file whose text goes into the generated skills. A missing file is a usage error. |
+| `skills.include_examples` | `3` | Parsed, with no effect yet |
+| `skills.regenerate_on_build` | `false` | Parsed, with no effect yet |
+| `agent_context.voice` | none | Voice description, copied into the write and review skills |
+| `agent_context.audience` | none | Audience description, copied the same way |
+| `agent_context.constraints` | `[]` | List of rules, copied the same way |
+
+See [Agent surface](agent-surface.md) for what each output contains.
+
+## `dev_server`
 
 Development server bind settings.
 

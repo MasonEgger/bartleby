@@ -1,16 +1,17 @@
 ---
 title: "Shortcodes"
-description: "[% ... %] syntax and template fragment lookup."
+description: "The [% ... %] syntax and how Bartleby finds shortcode templates."
 tags:
   - shortcodes
   - templates
 ---
 
-Shortcodes are Jinja2 fragments invoked from inside Markdown. They use `[% ... %]` delimiters instead of `{% %}` to avoid colliding with Jinja2 syntax in theme templates.
+Shortcodes are Jinja2 fragments that you invoke from inside Markdown.
+They use `[% ... %]` delimiters instead of `{% %}`, so they never collide with Jinja2 syntax in theme templates.
 
 ## Syntax
 
-**Block form** — opens with the name, closes with `/name`:
+**Block form** opens with the name and closes with `/name`:
 
 ```markdown
 [% note %]
@@ -18,13 +19,14 @@ This is important.
 [% /note %]
 ```
 
-**Inline form** — single tag, no closing:
+**Inline form** is a single tag with no closing tag:
 
 ```markdown
 Built with Bartleby [% version %].
 ```
 
-**Arguments** — `key="value"` pairs after the name:
+**Arguments** are `key="value"` pairs after the name.
+Values must use double quotes.
 
 ```markdown
 [% callout type="warning" title="Careful" %]
@@ -32,9 +34,22 @@ Mind the gap.
 [% /callout %]
 ```
 
-## Template lookup
+Bartleby reads a shortcode as block form when a matching closing tag follows it later in the page.
+Otherwise it reads the tag as inline.
+Shortcode syntax inside fenced code blocks and inline code spans stays literal.
 
-Each shortcode renders through `shortcodes/<name>.html`. The Jinja2 environment searches the project's `shortcodes/` directory first, then any path on its search list, so theme-bundled shortcodes can also be picked up.
+## Template Lookup
+
+Each shortcode renders through `shortcodes/<name>.html`.
+Bartleby looks for that name on the Jinja2 search path, in this order:
+
+1. `overrides/`
+2. `templates/`
+3. The project root
+4. The theme chain
+
+For most sites, the file lives at `shortcodes/<name>.html` in the project root.
+None of the bundled themes ships shortcodes.
 
 A typical template:
 
@@ -53,20 +68,23 @@ A typical template:
 </div>
 ```
 
-## Template context
+## Template Context
 
-The shortcode template receives:
+A shortcode template receives:
 
-- Everything from the shortcode invocation's surrounding context (typically `build` and `page`)
-- A `content` variable carrying the body of a block shortcode (empty string for inline forms)
+- `build` and `page`, from the page being rendered
+- `content`, the body of a block shortcode, with surrounding whitespace trimmed (an empty string for inline forms)
 - One variable per `key="value"` argument
 
 So `[% callout type="warning" title="Careful" %]body[% /callout %]` exposes `type`, `title`, and `content` to the template.
 
-## When shortcodes run
+## When Shortcodes Run
 
-Shortcode preprocessing runs before markdown rendering. The post-shortcode source flows through the `on_page_markdown` plugin hook and then into Python-Markdown. This means a shortcode can produce markdown that further extensions (admonitions, tables, etc.) will parse.
+Shortcodes run before Markdown rendering.
+The result then passes through the `on_page_markdown` hook and into Python-Markdown.
+A shortcode can therefore produce Markdown that later extensions, such as admonitions and tables, will parse.
 
-## Error behaviour
+## Errors
 
-A shortcode referencing a non-existent template raises `ShortcodeError` with the offending name. The build fails fast; there's no silent passthrough.
+A shortcode that names a template Bartleby cannot find raises `ShortcodeError` with the name, such as `unknown shortcode: 'note'`.
+The build fails, and there is no silent passthrough.

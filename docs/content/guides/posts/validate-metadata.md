@@ -1,5 +1,5 @@
 ---
-title: "Validate post metadata at build time"
+title: "Validate Post Metadata at Build Time"
 description: "Catch missing required fields, type mismatches, and invalid choices before deployment."
 date: 2026-06-02
 audience: existing-user
@@ -10,13 +10,14 @@ authors:
   - mason
 ---
 
-Bartleby validates per-content-type metadata against a schema you declare in `bartleby.yml`. Errors surface as part of `bartleby build` and `bartleby validate`, with the offending file and field named.
+Bartleby validates per-content-type metadata against a schema you declare in `bartleby.yml`.
+Both `bartleby build` and `bartleby validate` report errors and name the offending file and field.
 
 <!-- more -->
 
-## Step 1: Declare a schema
+## Step 1: Declare a Schema
 
-In your content type config:
+Add a `metadata` block to the content type:
 
 ```yaml
 content_types:
@@ -36,7 +37,9 @@ content_types:
         type: boolean
 ```
 
-## Step 2: Write content that exercises the schema
+The [front matter fields reference](../../reference/pages/front-matter-fields.md#custom-metadata) lists the supported types.
+
+## Step 2: Write Content That Uses the Schema
 
 ```yaml
 ---
@@ -54,33 +57,38 @@ featured: false
 bartleby validate
 ```
 
-If everything is in order, you get:
+When everything is in order, the command prints:
 
 ```
-validation passed
+validation passed (2 files checked)
 ```
 
-If a tutorial is missing `difficulty`, the build prints:
+When it finds problems, it prints `validation failed`, then one line per error.
+Each line has the file, an `E001` code, and the message.
+For example:
 
 ```
-tutorials/posts/no-difficulty.md: required field 'difficulty' is missing
+validation failed (5 files checked)
+tutorials/posts/bad-date.md:0 [E001] : unknown author key: 'nobody'
+tutorials/posts/bad-date.md:0 [E001] : expected date for 'last_verified', got unparseable string
+tutorials/posts/bad-date.md:0 [E001] : expected boolean for 'featured', got str
+tutorials/posts/no-difficulty.md:0 [E001] : required field 'difficulty' is missing
+tutorials/posts/wrong-choice.md:0 [E001] : 'expert' is not one of the allowed choices: 'beginner', 'intermediate', 'advanced'
 ```
 
-If you set `difficulty: expert`:
+Those lines come from four sample pages:
 
-```
-tutorials/posts/wrong-choice.md: 'expert' is not one of the allowed choices: 'beginner', 'intermediate', 'advanced'
-```
+- `no-difficulty.md` leaves out the required `difficulty` field.
+- `wrong-choice.md` sets `difficulty: expert`.
+- `bad-date.md` sets `last_verified: yesterday`, `featured: maybe`, and an author key that is not in `.authors.yml`.
 
-If `last_verified: yesterday`:
+`bartleby build` runs the same checks.
+It prints each failure as `error [build_error] <file>: <message>` on stderr and exits 1.
 
-```
-tutorials/posts/bad-date.md: expected date for 'last_verified', got unparseable string
-```
+## Step 4: Use Validate in CI
 
-## Use validate in CI
-
-`bartleby validate` exits 0 on success, 1 on any error. Wire it into your CI pipeline before the build step to catch problems fast:
+`bartleby validate` exits 0 on success and 1 on any error.
+Run it before the build step in your CI pipeline to catch problems early:
 
 ```yaml
 # .github/workflows/site.yml
@@ -88,8 +96,13 @@ tutorials/posts/bad-date.md: expected date for 'last_verified', got unparseable 
 - run: bartleby build
 ```
 
+Add `--output json` when a script needs to read the result.
+The JSON has `valid`, `files_checked`, `errors`, and `warnings` keys.
+
 ## Notes
 
-- Author keys in `authors:` front matter are also validated — unknown keys are reported the same way.
-- The standard `title` field is required for every page, regardless of content type or metadata schema.
-- Custom metadata that's not in the schema is allowed; the schema only constrains the fields it names.
+- Author keys in the `authors:` front matter are validated the same way.
+- An empty `title` fails validation for any page.
+  A missing `title` does not, because Bartleby falls back to the file name.
+- Fields that the schema does not name are allowed.
+  The schema only constrains the fields it lists.

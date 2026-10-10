@@ -1,11 +1,15 @@
 ---
-title: "Plugins and hooks"
-description: "File-based hook discovery and event dispatch — no entry points, no subclasses."
+title: "Plugins and Hooks"
+description: "How Bartleby finds hook functions and dispatches build events to them."
 ---
 
-Bartleby has no public plugin API and no entry-point discovery. User extensions live in `hooks/*.py` at the project root. Bartleby imports each file at build start and registers any module-level function whose name matches a known event.
+Bartleby has one extension model: functions named after build events.
+A function named `on_page_markdown` runs for every page, and a function named `on_env` runs once when the Jinja2 environment is ready.
+Bartleby finds these functions in two places.
+Your project's `hooks/*.py` files are the first.
+Installed packages that register an entry point in the `bartleby.plugins` group are the second.
 
-## The hooks directory
+## The Hooks Directory
 
 ```
 mysite/
@@ -14,7 +18,7 @@ mysite/
     └── jinja_extras.py
 ```
 
-A hook file is just a Python module:
+A hook file is a plain Python module:
 
 ```python
 # hooks/inject_banner.py
@@ -24,47 +28,36 @@ def on_page_markdown(markdown, page, config):
     return markdown
 ```
 
-Bartleby globs `hooks/*.py`, skips files starting with `_`, imports each, and registers every module-level function whose name matches a known event.
+At build start, Bartleby reads each `hooks/*.py` file in alphabetical order and skips files whose names start with `_`.
+It registers every module-level function whose name matches a known event.
+A hook file can import an underscore-prefixed sibling module at the top of the file, which is the way to share helper code between hooks.
 
-## Hook events
+## Installed Plugins
 
-| Event | Signature | Returns |
-|-------|-----------|---------|
-| `on_startup` | `(command: str)` | `None` |
-| `on_shutdown` | `()` | `None` |
-| `on_config` | `(config)` | modified config or `None` |
-| `on_pre_build` | `(config)` | `None` |
-| `on_files` | `(files, config)` | modified files or `None` |
-| `on_pages` | `(pages, config)` | modified pages list or `None` |
-| `on_nav` | `(nav, config)` | modified `Navigation` or `None` |
-| `on_env` | `(env, config)` | modified `jinja2.Environment` or `None` |
-| `on_pre_page` | `(page, config)` | modified page or `None` |
-| `on_page_read_source` | `(page, config)` | modified source or `None` |
-| `on_page_markdown` | `(markdown, page, config)` | modified markdown or `None` |
-| `on_page_content` | `(html, page, config)` | modified HTML or `None` |
-| `on_page_context` | `(context, page, config)` | modified context or `None` |
-| `on_post_page` | `(output, page, config)` | modified output or `None` |
-| `on_post_build` | `(config)` | `None` |
-| `on_build_error` | `(error)` | `None` |
-| `on_serve` | `(server, config)` | `None` |
+A package can ship hooks of its own.
+It declares an entry point in the `bartleby.plugins` group that names a module, and Bartleby registers that module's `on_<event>` functions the same way it registers a hook file.
+To turn an installed plugin off without uninstalling it, map its entry point name to `false` under `plugins` in `bartleby.yml`.
 
-A handler returning `None` leaves the threaded value unchanged; any non-`None` return replaces it for downstream handlers.
+At equal priority, installed plugins run first, in alphabetical order by entry point name, and your project's hooks run last.
 
-## Ordering with @event_priority
+## Events and Dispatch
 
-When multiple handlers register for the same event, they fire in priority order — highest first. Unprioritised handlers default to priority 0.
+Bartleby dispatches 16 events across the build, from `on_startup` to `on_shutdown`.
+The [plugin hook reference](../reference/pages/plugin-hooks.md) lists each event with its signature, its return value, and its place in the build.
+The [build pipeline reference](../reference/pages/build-pipeline.md) shows the same events in sequence.
 
-```python
-from bartleby.plugins import event_priority
+Most events pass a value through the handlers.
+A handler that returns `None` leaves the value unchanged.
+Any other return value replaces it for the handlers that run next.
+That rule makes a hook safe to write as "change this page if it matches, otherwise do nothing."
 
-@event_priority(50)
-def on_page_markdown(markdown, page, config):
-    # Runs before any unprioritised handler.
-    return markdown.replace("YEAR", "2026")
-```
+## Ordering
 
-The decorator works on both module-level functions in `hooks/*.py` and methods on the internal `BasePlugin` class.
+When several handlers register for the same event, the one with the highest priority runs first.
+A handler with no priority has priority 0.
+You set one with the `@event_priority` decorator from `bartleby.plugins`, as the [hook reference](../reference/pages/plugin-hooks.md#priority-ordering) shows.
 
-## Internal BasePlugin
+## The Internal BasePlugin
 
-`BasePlugin` is Bartleby's internal-only base class for grouping related handlers. It's not part of the public API — user extensions should always use module-level functions in `hooks/`.
+`BasePlugin` is an internal base class that Bartleby uses to group its own handlers.
+User extensions should always be module-level functions.

@@ -37,12 +37,15 @@ nav:
   - Reference: reference/
 
 theme:
-  name: material
+  name: scrivener
   features:
     - search
+    - search.highlight
     - nav.tabs
     - nav.sidebar
     - nav.section-index
+    - nav.back-to-top
+    - content.code.copy
     - color-mode.toggle
   color_mode:
     toggle: true

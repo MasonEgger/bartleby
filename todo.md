@@ -140,11 +140,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 5. Document: save inventory
 
 ### Step 17: Fix docs content and switch the docs to the Scrivener theme (task)
-- [ ] 1. Scope: docs/content/**, docs/bartleby.yml, docs/.authors.yml
-- [ ] 2. Tooling: diataxis, tutorial-writing, style-linting
-- [ ] 3. Do: work inventory; reconcile nav; switch config to scrivener + native features; writing hard rules
-- [ ] 4. Verify: build exits 0 no warnings AND lint clean
-- [ ] 5. Document: route engine bugs to later sections
+- [x] 1. Scope: docs/content/**, docs/bartleby.yml, docs/.authors.yml
+- [x] 2. Tooling: diataxis, tutorial-writing, style-linting
+- [x] 3. Do: work inventory; reconcile nav; switch config to scrivener + native features; writing hard rules
+- [x] 4. Verify: build exits 0 no warnings AND lint clean
+- [x] 5. Document: route engine bugs to later sections
 
 ### Step 18: Write the theme-system documentation (task)
 - [ ] 1. Scope: guides choose-and-customize-a-theme.md + write-a-theme.md; reference themes.md; update concepts customization-seams.md + templates.md

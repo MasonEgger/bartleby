@@ -1,6 +1,6 @@
 ---
-title: "Configure AI crawler directives"
-description: "Allow or block specific AI bots from indexing your site via robots.txt."
+title: "Configure AI Crawler Directives"
+description: "Allow or block specific AI bots from indexing your site through robots.txt."
 date: 2026-06-02
 audience: new-user
 tags:
@@ -10,13 +10,14 @@ authors:
   - mason
 ---
 
-Bartleby's `robots.txt` is auto-generated and includes per-bot Allow/Disallow directives sourced from `bartleby.yml`. This guide covers the common patterns: allow only specific bots, block specific bots, or opt out of AI training entirely.
+Bartleby generates `robots.txt` for you and adds per-bot Allow and Disallow directives from `bartleby.yml`.
+This guide covers the common patterns: block specific bots, allow specific bots, or take over the file entirely.
 
 <!-- more -->
 
-## The default
+## The Default
 
-Without any `ai.robots` config, Bartleby's `robots.txt` is permissive:
+Without any `ai.robots` config, the generated `robots.txt` is permissive:
 
 ```
 User-agent: *
@@ -25,9 +26,9 @@ Allow: /
 Sitemap: https://example.com/sitemap.xml
 ```
 
-## Block specific bots
+## Block Specific Bots
 
-To block one or more AI crawlers entirely:
+To block one or more AI crawlers entirely, list them under `ai.robots.disallow`:
 
 ```yaml
 # bartleby.yml
@@ -39,7 +40,7 @@ ai:
       - PerplexityBot
 ```
 
-This appends:
+Bartleby appends a block for each bot, just before the `Sitemap` line:
 
 ```
 User-agent: GPTBot
@@ -52,9 +53,10 @@ User-agent: PerplexityBot
 Disallow: /
 ```
 
-## Allow specific bots explicitly
+## Allow Specific Bots Explicitly
 
-The default `User-agent: *` already allows everyone. An explicit allow directive is only meaningful when you've blocked the bot globally elsewhere:
+The default `User-agent: *` group already allows everyone.
+An allow entry adds a named group with `Allow: /` for that bot, which records your intent in the file.
 
 ```yaml
 ai:
@@ -63,9 +65,9 @@ ai:
       - GPTBot
 ```
 
-## Use a static override
+## Use a Static Override
 
-If you need finer control than the config exposes — custom `Crawl-delay` directives, per-path Allow/Disallow rules — drop a hand-written `robots.txt` into `static/`:
+For finer control, such as `Crawl-delay` directives or per-path rules, put a hand-written `robots.txt` in `static/`:
 
 ```
 mysite/
@@ -73,13 +75,10 @@ mysite/
     └── robots.txt
 ```
 
-Bartleby detects the override and skips generating one. The static file copies through to `site/robots.txt` unmodified.
+Bartleby detects the file and skips generating one.
+The static file copies to `site/robots.txt` unmodified.
 
-## Why this matters
+## See Also
 
-The `ai.robots` config sits next to the `llms_txt`, `llms_full_txt`, and `markdown_variants` toggles. Whether you publish for AI consumption is one decision; whether you allow crawlers to index your site is another. Bartleby treats them independently so you can publish llms.txt for human-directed agent queries while still blocking opportunistic crawlers.
-
-## See also
-
-- [Agent integration](../../concepts/agents-and-llms.md) — the design pillar behind these features
-- [bartleby.yml configuration](../../reference/pages/configuration.md#ai) — full `ai` config block
+- [Agent integration](../../concepts/agents-and-llms.md): why publishing for agents and allowing crawlers are separate decisions
+- [bartleby.yml configuration](../../reference/pages/configuration.md#ai): every `ai` key

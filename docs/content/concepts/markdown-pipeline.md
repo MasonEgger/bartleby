@@ -1,50 +1,28 @@
 ---
-title: "Markdown pipeline"
-description: "The extensions Bartleby loads and the ordering that makes markwright and pymdownx coexist."
+title: "Markdown Pipeline"
+description: "The ordering that lets markwright and pymdownx coexist, and how you override extension config."
 ---
 
-Bartleby uses [Python-Markdown](https://python-markdown.github.io/) with every extension you'd normally need to enable yourself loaded by default. The user-facing surface area is just `markdown_extensions` in `bartleby.yml`, which lets you override individual extension configs.
+Bartleby uses [Python-Markdown](https://python-markdown.github.io/) and loads the extensions you would otherwise enable yourself.
+The setting you change is `markdown_extensions` in `bartleby.yml`, which overrides the config of individual extensions.
 
-## Extension load order
+## Extension Load Order
 
-Order matters when multiple extensions touch the same content. The key invariant Bartleby maintains:
+Order matters when several extensions work on the same content.
+Bartleby keeps one invariant:
 
-1. `markwright.fence` preprocessor (priority 40) extracts `[label script.py]`, `[secondary_label]`, and `[environment]` directives from code blocks
-2. `pymdownx.superfences` preprocessor (priority 25) converts fenced blocks to HTML
-3. `markwright.fence` postprocessor (priority 25) injects the extracted labels and environment classes back into the HTML
+1. The `markwright.fence` preprocessor (priority 40) extracts `[label script.py]`, `[secondary_label]`, and `[environment]` directives from code blocks.
+2. The `pymdownx.superfences` preprocessor (priority 25) converts fenced blocks to HTML.
+3. The `markwright.fence` postprocessor (priority 25) injects the extracted labels and environment classes back into the HTML.
 
-This is why directives like `[label]` survive the fence processing: markwright gets the first and last word.
+The directives survive because markwright runs before superfences on the way in and after it on the way out.
 
-## Bundled extensions
+## Bundled Extensions
 
-**markwright** (first-class):
+Bartleby loads extensions from three groups: markwright, pymdownx, and standard Python-Markdown.
+The [Markdown extensions reference](../reference/pages/markdown-extensions.md) lists every one.
 
-- `markwright.fence` — code block labels, secondary labels, environment tags, line numbers, command prefixes
-- `markwright.highlight` — inline `<^>text<^>` highlights
-- `markwright.youtube`, `markwright.codepen`, `markwright.twitter`, `markwright.instagram` — embed blocks
-- `markwright.slideshow` — image slideshows
-- `markwright.image_compare` — before/after image sliders
-
-**pymdownx**:
-
-- `pymdownx.superfences` — fenced code blocks
-- `pymdownx.highlight` + `pymdownx.inlinehilite` — syntax highlighting via Pygments
-- `pymdownx.tabbed` — content tabs
-- `pymdownx.details` — collapsible sections
-- `pymdownx.tasklist` — `- [x]` checkboxes
-- `pymdownx.arithmatex` — math
-- `pymdownx.keys` — keyboard key markup
-- `pymdownx.mark`, `pymdownx.caret`, `pymdownx.tilde` — inline annotations
-- `pymdownx.critic` — Critic Markup
-- `pymdownx.smartsymbols`, `pymdownx.emoji` — symbol expansion
-- `pymdownx.snippets` — `--8<--` file inclusion
-- `pymdownx.blocks.caption` — figure captions
-
-**Standard Python-Markdown**:
-
-- `tables`, `toc`, `attr_list`, `def_list`, `footnotes`, `admonition`, `abbr`, `md_in_html`
-
-## Overriding extension config
+## Overriding Extension Config
 
 Use `markdown_extensions` in `bartleby.yml` to add configuration:
 
@@ -60,4 +38,5 @@ markdown_extensions:
       pygments_style: monokai
 ```
 
-A string entry replaces an existing default with the same name (or adds a new one if not present). A `{name, config}` mapping passes the `config` dict through as `extension_configs` to Python-Markdown.
+A string entry replaces the default extension with the same name, or adds a new extension if none matches.
+A `{name, config}` mapping passes the `config` dict to Python-Markdown as `extension_configs`.

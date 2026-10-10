@@ -1,13 +1,15 @@
 ---
 title: "Taxonomies"
-description: "Collecting terms across pages and generating taxonomy listing pages."
+description: "How Bartleby collects terms across pages and generates taxonomy listing pages."
 ---
 
-A taxonomy is a named axis along which you categorise content — `tags`, `categories`, `authors`, anything you declare. Bartleby collects term-to-page mappings across the build and generates listing pages at both global and per-content-type scopes.
+A taxonomy is a named axis along which you categorize content.
+`tags` and `categories` are the usual ones, but you can declare any name.
+Bartleby collects term-to-page mappings across the build and generates listing pages at a global scope and at a per-content-type scope.
 
-## Declaring taxonomies
+## Declaring Taxonomies
 
-Define the axis at site level, then opt content types in:
+Define the axis at the site level, then opt content types in:
 
 ```yaml
 taxonomies:
@@ -28,9 +30,9 @@ content_types:
       - tags
 ```
 
-A content type that doesn't opt into `tags` won't contribute its `tags` front matter values to the global tag index.
+A content type that does not opt in to `tags` contributes no `tags` values to any tag index.
 
-## Tagging a page
+## Tagging a Page
 
 Use the taxonomy name as a front matter key:
 
@@ -45,35 +47,47 @@ categories:
 ---
 ```
 
-## Generated pages
+## Generated Pages
 
-At build time Bartleby generates two scopes of pages per taxonomy:
+For every taxonomy, Bartleby generates pages at two scopes.
 
 **Global**
-- `/tags/` — index page listing every tag across the site
-- `/tags/python/` — every page tagged `python`
+
+- `/tags/` lists every tag across the site.
+- `/tags/python/` lists every page tagged `python`.
 
 **Per content type**
-- `/blog/tags/` — index for blog tags
-- `/blog/tags/python/` — every blog post tagged `python`
 
-The same applies for any taxonomy a content type opts into.
+- `/blog/tags/` lists the tags used by blog pages.
+- `/blog/tags/python/` lists every blog page tagged `python`.
 
-## Slug formats
+The same applies to every taxonomy a content type opts in to.
+Both scopes come from the same opt-in, so a content type that uses `tags` always gets its own tag pages as well as a share of the global ones.
 
-Each taxonomy's `slug_format` is a template applied to the slugified term. The default `"{slug}"` just uses the slug as-is. A format like `"tag:{slug}"` produces URLs like `/tags/tag:temporal-workflows/` — useful for namespacing.
+## Slug Formats
+
+Each taxonomy's `slug_format` is a template applied to the slugified term.
+The default, `"{slug}"`, uses the slug as is.
+A format like `"tag:{slug}"` produces URLs such as `/tags/tag:temporal-workflows/`, which is useful for namespacing.
 
 ## Sorting
 
-Pages within a term are sorted newest-first by `page.date`. Pages without dates appear after dated pages.
+Pages within a term sort newest-first by `page.date`.
+Pages without dates come after dated pages.
 
 ## Templates
 
-Taxonomy pages use a dedicated template type. The lookup order is:
+Term pages and index pages use their own template types, `taxonomy` and `taxonomy_index`.
+For a term page that belongs to a content type, the lookup tries these names in order:
 
-1. `templates/{content_type}/taxonomy/{name}.html`
-2. `templates/{content_type}/taxonomy.html`
-3. `templates/defaults/taxonomy.html`
-4. The bundled theme's `taxonomy.html` / `taxonomy_index.html`
+1. `{content_type}/taxonomy/{name}.html`
+2. `{content_type}/taxonomy.html`
+3. `{content_type}/base.html`
+4. `defaults/taxonomy.html`
+5. `taxonomy.html`, then `page.html`
 
-Each page's context includes `page.custom_metadata.taxonomy_name`, `taxonomy_kind` (`"index"` or `"term"`), and (for term pages) `taxonomy_term`.
+An index page skips the first name, and uses `taxonomy_index` in place of `taxonomy` in the rest.
+Global pages have no content type, so they start at `defaults/`.
+Each name is looked up in your `overrides/` and `templates/` directories first, then in the theme chain.
+
+The page's `custom_metadata` carries `taxonomy_name`, `taxonomy_kind` (`"index"` or `"term"`), and, for term pages, `taxonomy_term`.

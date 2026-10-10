@@ -43,6 +43,40 @@ from bartleby.themes import BUNDLED_THEME_NAMES, bundled_theme_root
 THEME_ENTRY_POINT_GROUP = "bartleby.themes"
 MANIFEST_FILENAME = "theme.yml"
 
+THEME_FEATURES: frozenset[str] = frozenset(
+    {
+        "search",
+        "search.highlight",
+        "nav.tabs",
+        "nav.sidebar",
+        "nav.section-index",
+        "nav.back-to-top",
+        "content.code.copy",
+        "color-mode.toggle",
+    }
+)
+"""The native feature vocabulary, the single source of truth for feature names.
+
+Both ``theme.features`` in ``bartleby.yml`` and ``features`` in a theme manifest are
+checked against this set, and the ``feature()`` template helper reports membership in
+the enabled subset. Each name means:
+
+* ``search``: the search box and the client-side search index.
+* ``search.highlight``: highlight the search terms on the page a result opens.
+* ``nav.tabs``: top-level sections render as tabs in the header.
+* ``nav.sidebar``: the section tree renders as a sidebar.
+* ``nav.section-index``: a section's index page is the section's own nav entry.
+* ``nav.back-to-top``: a back-to-top button appears after scrolling.
+* ``content.code.copy``: code blocks get a copy button.
+* ``color-mode.toggle``: the header shows a light/dark toggle.
+
+A feature enabled in config but missing from the active theme's manifest is a build
+warning, not an error. Keep this set and :func:`_parse_features` together.
+"""
+
+DEFAULT_THEME_NAME = "scrivener"
+"""The bundled theme selected when ``theme:`` sets none of ``name``, ``path``, ``package``."""
+
 
 class ThemeError(Exception):
     """Raised when a theme manifest is invalid or a theme cannot be resolved."""
@@ -109,6 +143,12 @@ class ResolvedTheme:
         return [candidate for candidate in candidates if candidate.is_dir()]
 
 
+_DEFAULT_THEME_FEATURES: frozenset[str] = frozenset(
+    {"search", "nav.back-to-top", "content.code.copy", "color-mode.toggle"}
+)
+"""The features the templates in ``bartleby/theme/`` honor today."""
+
+
 def default_theme() -> ResolvedTheme:
     """The theme used when no theme is selected: the package in ``bartleby/theme/``.
 
@@ -119,7 +159,7 @@ def default_theme() -> ResolvedTheme:
         A one-layer chain named ``default``.
     """
     root = get_theme_templates_dir().parent
-    manifest = ThemeManifest(name="default")
+    manifest = ThemeManifest(name="default", features=sorted(_DEFAULT_THEME_FEATURES))
     return ResolvedTheme(chain=[ThemeLayer(name="default", root=root, manifest=manifest)])
 
 
@@ -219,6 +259,12 @@ def _parse_features(value: Any, root: Path) -> list[str]:
         return []
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise ThemeError(f"{root}: 'features' must be a list of strings")
+    unknown = [item for item in value if item not in THEME_FEATURES]
+    if unknown:
+        known = ", ".join(sorted(THEME_FEATURES))
+        raise ThemeError(
+            f"{root}: unknown feature {unknown[0]!r} in 'features' (native features: {known})"
+        )
     return list(value)
 
 

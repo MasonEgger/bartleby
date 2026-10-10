@@ -19,19 +19,21 @@ nav:
   - About: about.md
 
 theme:
-  palette:
-    primary: "#283618"
-    accent: "#BC6C25"
-    background: "#FEFAE0"
+  tokens:
+    color.primary: "#283618"
+    color.accent: "#BC6C25"
+    color.background: "#FEFAE0"
+    font.text: Roboto
+    font.code: Roboto Mono
   color_mode:
     default: system
     toggle: true
   features:
     - search
-    - navigation.tabs
-    - navigation.sections
+    - nav.tabs
+    - nav.sidebar
     - content.code.copy
-    - content.code.annotate
+    - search.highlight
   icon_packs:
     material: true
     fontawesome: true
@@ -39,9 +41,6 @@ theme:
     simple: false
   logo: static/logo.png
   favicon: static/favicon.ico
-  font:
-    text: Roboto
-    code: Roboto Mono
 
 authors_file: .authors.yml
 

@@ -35,14 +35,14 @@ def _render(page: Page, template_name: str) -> str:
     Returns the HTML so tests can grep the actual output rather than only checking
     the virtual :class:`Page` dataclass shape.
     """
-    from bartleby.config import KNOWN_FEATURES
     from bartleby.templates import make_feature_checker
+    from bartleby.theme_loader import THEME_FEATURES
 
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader([str(get_theme_templates_dir())]),
         autoescape=True,
     )
-    env.globals["feature"] = make_feature_checker(list(KNOWN_FEATURES))
+    env.globals["feature"] = make_feature_checker(list(THEME_FEATURES))
     context: dict[str, object] = {
         "site": {"title": "Site", "url": "https://example.com", "description": "Desc"},
         "page": page,

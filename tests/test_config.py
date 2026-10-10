@@ -139,6 +139,16 @@ def test_config_dir_is_set() -> None:
     assert config.config_dir == FIXTURES
 
 
+def _load_theme_config(tmp_path: Path, theme_body: str) -> BartlebyConfig:
+    """Write a minimal config whose ``theme:`` section is ``theme_body`` and load it."""
+    config_path = tmp_path / "theme-config.yml"
+    config_path.write_text(
+        "site:\n  title: Site\n  url: https://example.com\ntheme:\n" + theme_body,
+        encoding="utf-8",
+    )
+    return load_config(config_path)
+
+
 def test_unknown_theme_feature_is_validation_error(tmp_path: Path) -> None:
     """An unknown theme.features entry raises ConfigError naming the bad entry."""
     config_path = tmp_path / "bad-feature.yml"
@@ -158,16 +168,196 @@ def test_unknown_theme_feature_is_validation_error(tmp_path: Path) -> None:
 
 
 def test_known_theme_features_are_accepted(tmp_path: Path) -> None:
-    """Every documented feature name is accepted without error."""
-    from bartleby.config import KNOWN_FEATURES
+    """Every native feature name is accepted without error."""
+    from bartleby.theme_loader import THEME_FEATURES
 
-    feature_lines = "".join(f"    - {name}\n" for name in sorted(KNOWN_FEATURES))
-    config_path = tmp_path / "all-features.yml"
-    config_path.write_text(
-        "site:\n  title: Site\n  url: https://example.com\ntheme:\n  features:\n" + feature_lines
+    feature_lines = "".join(f"    - {name}\n" for name in sorted(THEME_FEATURES))
+    config = _load_theme_config(tmp_path, "  features:\n" + feature_lines)
+    assert set(config.theme.features) == THEME_FEATURES
+
+
+def test_theme_features_are_the_documented_native_set() -> None:
+    """The native feature vocabulary is exactly the documented eight names."""
+    from bartleby.theme_loader import THEME_FEATURES
+
+    assert {
+        "search",
+        "search.highlight",
+        "nav.tabs",
+        "nav.sidebar",
+        "nav.section-index",
+        "nav.back-to-top",
+        "content.code.copy",
+        "color-mode.toggle",
+    } == THEME_FEATURES
+
+
+@pytest.mark.parametrize(
+    ("old_name", "new_name"),
+    [
+        ("navigation.tabs", "nav.tabs"),
+        ("navigation.sections", "nav.sidebar"),
+        ("navigation.indexes", "nav.section-index"),
+        ("navigation.top", "nav.back-to-top"),
+    ],
+)
+def test_renamed_material_feature_points_to_native_name(
+    tmp_path: Path, old_name: str, new_name: str
+) -> None:
+    """A renamed mkdocs-material feature raises ConfigError naming the replacement."""
+    with pytest.raises(ConfigError) as excinfo:
+        _load_theme_config(tmp_path, f"  features:\n    - {old_name}\n")
+    assert excinfo.value.key_path == "theme.features"
+    assert old_name in str(excinfo.value)
+    assert new_name in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    "old_name",
+    [
+        "navigation.footer",
+        "navigation.tracking",
+        "content.code.annotate",
+        "content.code.select",
+        "content.tabs.link",
+        "content.tooltips",
+        "content.footnote.tooltips",
+        "content.action.edit",
+        "content.action.view",
+        "search.suggest",
+        "search.share",
+    ],
+)
+def test_unsupported_material_feature_lists_native_features(tmp_path: Path, old_name: str) -> None:
+    """A mkdocs-material feature with no native twin says so and lists the native names."""
+    with pytest.raises(ConfigError) as excinfo:
+        _load_theme_config(tmp_path, f"  features:\n    - {old_name}\n")
+    message = str(excinfo.value)
+    assert old_name in message
+    assert "not a Bartleby feature" in message
+    assert "nav.back-to-top" in message
+    assert "color-mode.toggle" in message
+
+
+def test_theme_palette_key_points_to_tokens(tmp_path: Path) -> None:
+    """The removed ``palette`` key raises ConfigError pointing at ``theme.tokens``."""
+    with pytest.raises(ConfigError) as excinfo:
+        _load_theme_config(tmp_path, "  palette:\n    primary: indigo\n")
+    assert excinfo.value.key_path == "theme.palette"
+    assert "theme.tokens" in str(excinfo.value)
+    assert "color.primary" in str(excinfo.value)
+
+
+def test_theme_font_key_points_to_tokens(tmp_path: Path) -> None:
+    """The removed ``font`` key raises ConfigError pointing at ``theme.tokens``."""
+    with pytest.raises(ConfigError) as excinfo:
+        _load_theme_config(tmp_path, "  font:\n    text: Inter\n")
+    assert excinfo.value.key_path == "theme.font"
+    assert "theme.tokens" in str(excinfo.value)
+    assert "font.text" in str(excinfo.value)
+
+
+def test_theme_source_defaults_to_bundled_default_name(tmp_path: Path) -> None:
+    """With no name, path, or package set, the theme is the bundled default name."""
+    config = _load_theme_config(tmp_path, "  logo: logo.svg\n")
+    assert config.theme.name == "scrivener"
+    assert config.theme.path is None
+    assert config.theme.package is None
+
+
+def test_theme_without_theme_section_uses_default_name(tmp_path: Path) -> None:
+    """A config with no ``theme:`` section selects the bundled default name."""
+    config = load_config(FIXTURES / "minimal.yml")
+    assert config.theme.name == "scrivener"
+
+
+@pytest.mark.parametrize(
+    ("body", "attribute", "expected"),
+    [
+        ("  name: material\n", "name", "material"),
+        ("  path: themes/mine\n", "path", "themes/mine"),
+        ("  package: acme-theme\n", "package", "acme-theme"),
+    ],
+)
+def test_theme_accepts_exactly_one_source(
+    tmp_path: Path, body: str, attribute: str, expected: str
+) -> None:
+    """Each of name, path, and package is accepted on its own."""
+    config = _load_theme_config(tmp_path, body)
+    assert getattr(config.theme, attribute) == expected
+
+
+@pytest.mark.parametrize(
+    ("body", "keys"),
+    [
+        ("  name: base\n  path: themes/mine\n", ("name", "path")),
+        ("  name: base\n  package: acme\n", ("name", "package")),
+        ("  path: themes/mine\n  package: acme\n", ("path", "package")),
+    ],
+)
+def test_theme_rejects_two_sources(tmp_path: Path, body: str, keys: tuple[str, str]) -> None:
+    """Setting two of name, path, and package raises ConfigError naming both keys."""
+    with pytest.raises(ConfigError) as excinfo:
+        _load_theme_config(tmp_path, body)
+    assert excinfo.value.key_path == "theme"
+    for key in keys:
+        assert key in str(excinfo.value)
+
+
+def test_theme_tokens_parse_as_flat_string_map(tmp_path: Path) -> None:
+    """``theme.tokens`` maps dotted token names to strings."""
+    body = (
+        "  tokens:\n"
+        '    color.primary: "#283618"\n'
+        '    color.accent: "#BC6C25"\n'
+        "    font.text: Inter\n"
+        "    font.code: JetBrains Mono\n"
+        "    radius: 4px\n"
     )
-    config = load_config(config_path)
-    assert set(config.theme.features) == KNOWN_FEATURES
+    config = _load_theme_config(tmp_path, body)
+    assert config.theme.tokens == {
+        "color.primary": "#283618",
+        "color.accent": "#BC6C25",
+        "font.text": "Inter",
+        "font.code": "JetBrains Mono",
+        "radius": "4px",
+    }
+
+
+def test_theme_tokens_reject_non_string_value(tmp_path: Path) -> None:
+    """A non-string token value raises ConfigError naming the token."""
+    with pytest.raises(ConfigError) as excinfo:
+        _load_theme_config(tmp_path, "  tokens:\n    radius: 4\n")
+    assert excinfo.value.key_path == "theme.tokens.radius"
+
+
+def test_theme_tokens_reject_nested_mapping(tmp_path: Path) -> None:
+    """A nested token map raises ConfigError; tokens are flat dotted names."""
+    with pytest.raises(ConfigError) as excinfo:
+        _load_theme_config(tmp_path, "  tokens:\n    color:\n      primary: red\n")
+    assert excinfo.value.key_path == "theme.tokens.color"
+
+
+def test_theme_tokens_must_be_a_mapping(tmp_path: Path) -> None:
+    """A non-mapping ``theme.tokens`` raises ConfigError."""
+    with pytest.raises(ConfigError) as excinfo:
+        _load_theme_config(tmp_path, "  tokens: red\n")
+    assert excinfo.value.key_path == "theme.tokens"
+
+
+def test_theme_logo_favicon_icon_packs_and_color_mode_still_parse(tmp_path: Path) -> None:
+    """The unchanged appearance keys keep parsing."""
+    body = (
+        "  logo: static/logo.png\n"
+        "  favicon: static/favicon.ico\n"
+        "  icon_packs:\n    material: true\n    simple: false\n"
+        "  color_mode:\n    default: dark\n    toggle: true\n"
+    )
+    config = _load_theme_config(tmp_path, body)
+    assert config.theme.logo == "static/logo.png"
+    assert config.theme.favicon == "static/favicon.ico"
+    assert config.theme.icon_packs == {"material": True, "simple": False}
+    assert config.theme.color_mode == {"default": "dark", "toggle": True}
 
 
 def test_plugins_list_form_enables_names(tmp_path: Path) -> None:

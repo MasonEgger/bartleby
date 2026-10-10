@@ -8,39 +8,19 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
+from bartleby.theme_loader import DEFAULT_THEME_NAME, THEME_FEATURES
+
 if TYPE_CHECKING:
     from pathlib import Path
 
 
-KNOWN_FEATURES: frozenset[str] = frozenset(
-    {
-        "search",
-        "navigation.tabs",
-        "navigation.sections",
-        "navigation.top",
-        "navigation.footer",
-        "navigation.indexes",
-        "navigation.tracking",
-        "content.code.copy",
-        "content.code.annotate",
-        "content.code.select",
-        "content.tabs.link",
-        "content.tooltips",
-        "content.footnote.tooltips",
-        "content.action.edit",
-        "content.action.view",
-        "search.highlight",
-        "search.suggest",
-        "search.share",
-        "toc.follow",
-    }
-)
-"""The complete set of recognized ``theme.features`` names (spec.md Theme System).
-
-This is the single source of truth for feature gating. The ``feature()`` template
-helper in :mod:`bartleby.templates` consults the same list so config validation and
-template rendering never drift apart.
-"""
+_RENAMED_FEATURES: dict[str, str] = {
+    "navigation.tabs": "nav.tabs",
+    "navigation.sections": "nav.sidebar",
+    "navigation.indexes": "nav.section-index",
+    "navigation.top": "nav.back-to-top",
+}
+"""mkdocs-material feature names that have a native Bartleby replacement."""
 
 
 class ConfigError(Exception):
@@ -138,15 +118,33 @@ class TaxonomyConfig:
 
 @dataclass(slots=True)
 class ThemeConfig:
-    """Theme appearance, features, and asset paths."""
+    """Theme selection, features, design tokens, and asset paths.
 
-    palette: dict[str, str] = field(default_factory=dict)
-    color_mode: dict[str, str | bool] = field(default_factory=dict)
+    At most one of ``name``, ``path``, and ``package`` is set in
+    ``bartleby.yml``; when none is, ``name`` is the bundled default theme.
+
+    :ivar name: A bundled theme name.
+    :ivar path: A theme directory, relative to the project or absolute.
+    :ivar package: A ``bartleby.themes`` entry-point name.
+    :ivar features: Enabled feature names, each a member of
+        :data:`bartleby.theme_loader.THEME_FEATURES`.
+    :ivar tokens: Design-token overrides, a flat map of dotted token names
+        (``color.primary``, ``font.text``, ``radius``) to CSS values.
+    :ivar color_mode: Light/dark settings (``default``, ``toggle``) read by the header.
+    :ivar icon_packs: Icon pack name to enabled flag.
+    :ivar logo: Path to the site logo.
+    :ivar favicon: Path to the site favicon.
+    """
+
+    name: str = DEFAULT_THEME_NAME
+    path: str | None = None
+    package: str | None = None
     features: list[str] = field(default_factory=list)
+    tokens: dict[str, str] = field(default_factory=dict)
+    color_mode: dict[str, str | bool] = field(default_factory=dict)
     icon_packs: dict[str, bool] = field(default_factory=dict)
     logo: str | None = None
     favicon: str | None = None
-    font: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -362,15 +360,74 @@ def _parse_theme(raw: Any) -> ThemeConfig:
         return ThemeConfig()
     if not isinstance(raw, dict):
         raise ConfigError("theme must be a mapping", key_path="theme")
+    _reject_removed_theme_keys(raw)
+    sources = [key for key in ("name", "path", "package") if raw.get(key) is not None]
+    if len(sources) > 1:
+        raise ConfigError(
+            f"set only one of name, path, or package (found {' and '.join(sources)})",
+            key_path="theme",
+        )
+    name = _optional_str(raw.get("name"))
     return ThemeConfig(
-        palette={str(key): str(value) for key, value in (raw.get("palette") or {}).items()},
+        name=DEFAULT_THEME_NAME if name is None else name,
+        path=_optional_str(raw.get("path")),
+        package=_optional_str(raw.get("package")),
+        features=_parse_theme_features(raw.get("features")),
+        tokens=_parse_theme_tokens(raw.get("tokens")),
         color_mode=dict(raw.get("color_mode") or {}),
-        features=[str(feature) for feature in (raw.get("features") or [])],
         icon_packs={str(key): bool(value) for key, value in (raw.get("icon_packs") or {}).items()},
         logo=_optional_str(raw.get("logo")),
         favicon=_optional_str(raw.get("favicon")),
-        font={str(key): str(value) for key, value in (raw.get("font") or {}).items()},
     )
+
+
+def _reject_removed_theme_keys(raw: dict[str, Any]) -> None:
+    """Raise a migration hint for the mkdocs-material ``palette`` and ``font`` keys."""
+    for key, example in (("palette", "color.primary"), ("font", "font.text")):
+        if key in raw:
+            raise ConfigError(
+                f"{key!r} is not a Bartleby theme key; set design tokens under "
+                f"theme.tokens instead (for example {example})",
+                key_path=f"theme.{key}",
+            )
+
+
+def _parse_theme_features(raw: Any) -> list[str]:
+    """Parse ``theme.features``, rejecting names outside the native vocabulary."""
+    features = [str(feature) for feature in (raw or [])]
+    for feature_name in features:
+        if feature_name in THEME_FEATURES:
+            continue
+        replacement = _RENAMED_FEATURES.get(feature_name)
+        if replacement is not None:
+            raise ConfigError(
+                f"unknown feature {feature_name!r}; the native name is {replacement!r}",
+                key_path="theme.features",
+            )
+        native = ", ".join(sorted(THEME_FEATURES))
+        raise ConfigError(
+            f"unknown feature {feature_name!r}: not a Bartleby feature "
+            f"(native features: {native})",
+            key_path="theme.features",
+        )
+    return features
+
+
+def _parse_theme_tokens(raw: Any) -> dict[str, str]:
+    """Parse ``theme.tokens`` as a flat map of dotted token names to strings."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ConfigError("tokens must be a mapping", key_path="theme.tokens")
+    tokens: dict[str, str] = {}
+    for token_name, value in raw.items():
+        if not isinstance(value, str):
+            raise ConfigError(
+                f"token value must be a string, got {type(value).__name__}",
+                key_path=f"theme.tokens.{token_name}",
+            )
+        tokens[str(token_name)] = value
+    return tokens
 
 
 def _parse_content_types(raw: Any) -> dict[str, ContentTypeConfig]:
@@ -541,16 +598,8 @@ def _validate_config(config: BartlebyConfig) -> None:
     """Verify cross-references and constraints on a parsed config.
 
     :param config: The parsed config to validate.
-    :raises ConfigError: If any content type references an undefined taxonomy,
-        or if ``theme.features`` contains an unknown feature name.
+    :raises ConfigError: If any content type references an undefined taxonomy.
     """
-    for feature_name in config.theme.features:
-        if feature_name not in KNOWN_FEATURES:
-            raise ConfigError(
-                f"unknown feature {feature_name!r}",
-                key_path="theme.features",
-            )
-
     defined_taxonomies = set(config.taxonomies.keys())
     for content_type_name, content_type in config.content_types.items():
         for taxonomy_name in content_type.taxonomies:

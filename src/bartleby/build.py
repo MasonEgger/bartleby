@@ -59,7 +59,7 @@ from bartleby.templates import (
     load_data_files,
     resolve_template_name,
 )
-from bartleby.theme_loader import default_theme
+from bartleby.theme_loader import DEFAULT_THEME_NAME, default_theme, resolve_theme
 from bartleby.urls import generate_all_urls
 
 if TYPE_CHECKING:
@@ -249,6 +249,8 @@ def _load_inputs(config_path: Path, theme: ResolvedTheme | None) -> _BuildState:
     config = plugins.run_event("on_config", config)
     plugins.run_event("on_pre_build", config)
     authors = load_authors(project_dir / config.authors_file)
+    active_theme = _select_theme(config, project_dir) if theme is None else theme
+    _warn_unimplemented_features(config, active_theme)
 
     content_dir = project_dir / "content"
     pages, assets = discover_content(config, content_dir)
@@ -261,8 +263,45 @@ def _load_inputs(config_path: Path, theme: ResolvedTheme | None) -> _BuildState:
         authors=authors,
         pages=pages,
         assets=assets,
-        theme=default_theme() if theme is None else theme,
+        theme=active_theme,
     )
+
+
+def _select_theme(config: BartlebyConfig, project_dir: Path) -> ResolvedTheme:
+    """Resolve the theme that ``config.theme`` selects.
+
+    Transitional: the bundled theme directories do not exist yet, so an unset
+    selection (the bundled default name with no ``path`` or ``package``) keeps
+    using :func:`default_theme`, the package in ``bartleby/theme/``. This branch
+    ends at plan Step 6, when ``scrivener`` ships and every build resolves through
+    :func:`resolve_theme`.
+    """
+    theme_config = config.theme
+    if (
+        theme_config.name == DEFAULT_THEME_NAME
+        and theme_config.path is None
+        and theme_config.package is None
+    ):
+        return default_theme()
+    uses_name = theme_config.path is None and theme_config.package is None
+    return resolve_theme(
+        project_dir=project_dir,
+        name=theme_config.name if uses_name else None,
+        path=theme_config.path,
+        package=theme_config.package,
+    )
+
+
+def _warn_unimplemented_features(config: BartlebyConfig, theme: ResolvedTheme) -> None:
+    """Warn once per enabled feature that no manifest in the theme chain declares."""
+    implemented = {feature for layer in theme.chain for feature in layer.manifest.features}
+    for feature_name in config.theme.features:
+        if feature_name not in implemented:
+            _LOGGER.warning(
+                "theme %r does not implement the enabled feature %r",
+                theme.chain[0].name,
+                feature_name,
+            )
 
 
 def _filter_and_validate(state: _BuildState, *, include_drafts: bool) -> None:

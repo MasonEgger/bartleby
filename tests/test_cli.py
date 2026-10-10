@@ -980,3 +980,61 @@ def test_discover_shortcode_names_deduplicates_across_locations(
     )
 
     assert _discover_shortcode_names(project_dir) == ["note", "warning"]
+
+
+def _append_to_config(extra: str) -> None:
+    """Append ``extra`` YAML to ``./bartleby.yml`` in the current directory."""
+    from pathlib import Path as RuntimePath
+
+    config_path = RuntimePath("bartleby.yml")
+    config_path.write_text(config_path.read_text(encoding="utf-8") + extra, encoding="utf-8")
+
+
+def test_build_with_old_material_feature_name_exits_one_with_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A mkdocs-material feature name fails the build with a message naming the native name."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    _append_to_config("\ntheme:\n  features:\n    - navigation.tabs\n")
+
+    with pytest.raises(SystemExit) as exc:
+        main(["build"])
+    assert exc.value.code == 1
+
+    captured = capsys.readouterr()
+    assert "Traceback" not in captured.err
+    assert "config_error" in captured.err
+    assert "theme.features" in captured.err
+    assert "navigation.tabs" in captured.err
+    assert "nav.tabs" in captured.err
+
+
+def test_build_with_palette_key_exits_one_pointing_to_tokens(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The removed ``palette`` key fails the build with a pointer to ``theme.tokens``."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    _append_to_config("\ntheme:\n  palette:\n    primary: indigo\n")
+
+    with pytest.raises(SystemExit) as exc:
+        main(["build"])
+    assert exc.value.code == 1
+
+    captured = capsys.readouterr()
+    assert "config_error" in captured.err
+    assert "theme.tokens" in captured.err
+
+
+def test_build_warns_when_theme_lacks_enabled_feature_and_still_succeeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """An enabled feature the theme lacks prints a warning but the build completes."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    _append_to_config("\ntheme:\n  features:\n    - nav.tabs\n")
+
+    with caplog.at_level("WARNING", logger="bartleby"):
+        main(["build"])
+
+    assert (tmp_path / "mysite" / "site" / "index.html").exists()
+    messages = [record.getMessage() for record in caplog.records if record.levelname == "WARNING"]
+    assert any("nav.tabs" in message and "does not implement" in message for message in messages)

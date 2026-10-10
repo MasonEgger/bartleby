@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (Breaking)
+
+The `theme:` section of `bartleby.yml` now uses Bartleby-native names.
+Old mkdocs-material names are a `ConfigError` that names the replacement.
+
+| Old | New |
+| --- | --- |
+| `theme.features: navigation.tabs` | `nav.tabs` |
+| `theme.features: navigation.sections` | `nav.sidebar` |
+| `theme.features: navigation.indexes` | `nav.section-index` |
+| `theme.features: navigation.top` | `nav.back-to-top` |
+| `theme.palette` (for example `primary`, `accent`) | `theme.tokens` (for example `color.primary`, `color.accent`) |
+| `theme.font` (for example `text`, `code`) | `theme.tokens` (for example `font.text`, `font.code`) |
+
+The native feature names are `search`, `search.highlight`, `nav.tabs`, `nav.sidebar`, `nav.section-index`, `nav.back-to-top`, `content.code.copy`, and `color-mode.toggle`.
+Any other mkdocs-material feature (`navigation.footer`, `navigation.tracking`, `content.code.annotate`, `content.code.select`, `content.tabs.link`, `content.tooltips`, `content.footnote.tooltips`, `content.action.edit`, `content.action.view`, `search.suggest`, `search.share`, `toc.follow`) is not a Bartleby feature and is rejected.
+
+### Added
+
+- `theme.name`, `theme.path`, and `theme.package` select a theme; set at most one.
+- `theme.tokens` is a flat map of dotted design-token names to CSS values.
+- A feature enabled in `theme.features` that the active theme does not implement logs a build warning. The build still succeeds.
+
 ## [0.1.0] - 2026-10-05
 
 ### Fixed

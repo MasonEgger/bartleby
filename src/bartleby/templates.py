@@ -42,7 +42,7 @@ def make_feature_checker(features: list[str]) -> Callable[[str], bool]:
 
     Templates call the returned callable to gate markup on whether a theme
     feature is enabled. The set of valid names is owned by
-    :data:`bartleby.config.KNOWN_FEATURES`; this helper only reports membership
+    :data:`bartleby.theme_loader.THEME_FEATURES`; this helper only reports membership
     in the *enabled* subset, so a name's validity is enforced earlier, during
     config validation.
 

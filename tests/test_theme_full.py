@@ -56,14 +56,14 @@ def _stylesheet_defines(selector: str) -> bool:
 
 
 def _env() -> jinja2.Environment:
-    from bartleby.config import KNOWN_FEATURES
     from bartleby.templates import make_feature_checker
+    from bartleby.theme_loader import THEME_FEATURES
 
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader([str(get_theme_templates_dir())]),
         autoescape=True,
     )
-    env.globals["feature"] = make_feature_checker(list(KNOWN_FEATURES))
+    env.globals["feature"] = make_feature_checker(list(THEME_FEATURES))
     return env
 
 

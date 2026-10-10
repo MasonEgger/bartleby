@@ -87,6 +87,27 @@ def test_manifest_features_must_be_a_list_of_strings(tmp_path: Path) -> None:
         load_manifest(tmp_path)
 
 
+def test_manifest_rejects_feature_outside_native_vocabulary(tmp_path: Path) -> None:
+    (tmp_path / "theme.yml").write_text(
+        "name: x\nfeatures:\n  - navigation.tabs\n", encoding="utf-8"
+    )
+
+    with pytest.raises(ThemeError, match=r"navigation\.tabs"):
+        load_manifest(tmp_path)
+
+
+def test_default_theme_declares_the_features_its_templates_honor() -> None:
+    manifest = theme_loader.default_theme().chain[0].manifest
+
+    assert set(manifest.features) == {
+        "search",
+        "nav.back-to-top",
+        "content.code.copy",
+        "color-mode.toggle",
+    }
+    assert set(manifest.features) <= theme_loader.THEME_FEATURES
+
+
 def test_manifest_scalar_fields_must_be_strings(tmp_path: Path) -> None:
     (tmp_path / "theme.yml").write_text("name: x\nextends: [a, b]\n", encoding="utf-8")
 

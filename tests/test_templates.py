@@ -488,9 +488,9 @@ def test_jsonld_partial_escapes_script_close_tag() -> None:
 
 def test_feature_checker_reports_enabled_and_disabled() -> None:
     """``make_feature_checker`` returns True only for enabled feature names."""
-    feature = make_feature_checker(["search", "navigation.top"])
+    feature = make_feature_checker(["search", "nav.back-to-top"])
     assert feature("search") is True
-    assert feature("navigation.top") is True
+    assert feature("nav.back-to-top") is True
     assert feature("content.code.copy") is False
 
 

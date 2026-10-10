@@ -25,14 +25,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 8. Verify: coverage + `just check`
 
 ### Step 3: Native theme config vocabulary and the feature contract (feature)
-- [ ] 1. RED: one-of name/path/package; native feature names only; tokens map; logo/favicon/icon_packs; old mkdocs names -> ConfigError with hint; unimplemented-feature warning tests
-- [ ] 2. Document: ThemeConfig docstrings + THEME_FEATURES constant docstring
-- [ ] 3. GREEN: config.py new fields + validation + migration-hint error; build.py warning; templates.py fed native list
-- [ ] 4. RED: CLI integration for breaking-change error + warning text
-- [ ] 5. GREEN: wire CLI output
-- [ ] 6. REFACTOR: THEME_FEATURES and manifest validation adjacent
-- [ ] 7. Document: CHANGELOG breaking-change table
-- [ ] 8. Verify: coverage + `just check`
+- [x] 1. RED: one-of name/path/package; native feature names only; tokens map; logo/favicon/icon_packs; old mkdocs names -> ConfigError with hint; unimplemented-feature warning tests
+- [x] 2. Document: ThemeConfig docstrings + THEME_FEATURES constant docstring
+- [x] 3. GREEN: config.py new fields + validation + migration-hint error; build.py warning; templates.py fed native list
+- [x] 4. RED: CLI integration for breaking-change error + warning text
+- [x] 5. GREEN: wire CLI output
+- [x] 6. REFACTOR: THEME_FEATURES and manifest validation adjacent
+- [x] 7. Document: CHANGELOG breaking-change table
+- [x] 8. Verify: coverage + `just check`
 
 ### Step 4: Per-theme Tailwind compile and token emission (feature)
 - [ ] 1. RED: leaf-first --config/--input with parent fallback; --content over all layers + project dirs; tokens -> .bartleby/tokens.css with --bb-* vars; empty tokens file present

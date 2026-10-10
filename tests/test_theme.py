@@ -20,10 +20,10 @@ VENDORED_BUNDLES = {
 
 
 def _env(features: list[str] | None = None) -> jinja2.Environment:
-    from bartleby.config import KNOWN_FEATURES
     from bartleby.templates import make_feature_checker
+    from bartleby.theme_loader import THEME_FEATURES
 
-    enabled = list(KNOWN_FEATURES) if features is None else features
+    enabled = list(THEME_FEATURES) if features is None else features
     loader = jinja2.FileSystemLoader([str(get_theme_templates_dir())])
     env = jinja2.Environment(loader=loader, autoescape=True)
     env.globals["feature"] = make_feature_checker(enabled)
@@ -154,16 +154,16 @@ def test_code_copy_feature_disabled_removes_markup() -> None:
     assert "data-code-copy" not in rendered
 
 
-def test_navigation_top_feature_enabled_includes_markup() -> None:
-    """Enabling ``navigation.top`` puts the back-to-top button in the HTML."""
+def test_back_to_top_feature_enabled_includes_markup() -> None:
+    """Enabling ``nav.back-to-top`` puts the back-to-top button in the HTML."""
     rendered = (
-        _env(features=["navigation.top"]).get_template("base.html").render(**_base_context())
+        _env(features=["nav.back-to-top"]).get_template("base.html").render(**_base_context())
     )
     assert "back-to-top" in rendered
 
 
-def test_navigation_top_feature_disabled_removes_markup() -> None:
-    """Disabling ``navigation.top`` removes the back-to-top button entirely."""
+def test_back_to_top_feature_disabled_removes_markup() -> None:
+    """Disabling ``nav.back-to-top`` removes the back-to-top button entirely."""
     rendered = _env(features=[]).get_template("base.html").render(**_base_context())
     assert "back-to-top" not in rendered
 

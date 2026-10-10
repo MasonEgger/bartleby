@@ -39,7 +39,7 @@ nav:
 theme:
   features:
     - search
-    - navigation.tabs
+    - nav.tabs
   color_mode:
     toggle: true
 

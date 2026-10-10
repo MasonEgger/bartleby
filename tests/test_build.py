@@ -797,3 +797,70 @@ def test_build_renders_with_path_theme_chain(tmp_path: Path) -> None:
     assert "Parent 404" in (site_dir / "404.html").read_text(encoding="utf-8")
     assert (site_dir / "parent.txt").exists()
     assert (site_dir / "shared.txt").read_text(encoding="utf-8") == "child version\n"
+
+
+def _write_themed_project(tmp_path: Path, theme_body: str) -> Path:
+    """Create a one-page project whose ``theme:`` section is ``theme_body``."""
+    (tmp_path / "content").mkdir()
+    (tmp_path / "content" / "index.md").write_text("---\ntitle: Home\n---\n\nHello.\n")
+    config_path = tmp_path / "bartleby.yml"
+    config_path.write_text(
+        'site:\n  title: "Themed"\n  url: "https://themed.example.com"\ntheme:\n' + theme_body,
+        encoding="utf-8",
+    )
+    return config_path
+
+
+def _unimplemented_warnings(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelname == "WARNING" and "does not implement" in record.getMessage()
+    ]
+
+
+def test_unimplemented_feature_warns_once_and_build_succeeds(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """An enabled feature the active theme lacks warns once, naming feature and theme."""
+    config_path = _write_themed_project(tmp_path, "  features:\n    - search\n    - nav.tabs\n")
+
+    with caplog.at_level("WARNING", logger="bartleby"):
+        result = build(config_path)
+
+    assert isinstance(result, BuildResult)
+    assert (tmp_path / "site" / "index.html").exists()
+    warnings = _unimplemented_warnings(caplog)
+    assert len(warnings) == 1
+    assert "nav.tabs" in warnings[0]
+    assert "default" in warnings[0]
+
+
+def test_implemented_features_emit_no_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Features the default theme implements produce no warning."""
+    features = "  features:\n    - search\n    - nav.back-to-top\n    - content.code.copy\n"
+    config_path = _write_themed_project(tmp_path, features + "    - color-mode.toggle\n")
+
+    with caplog.at_level("WARNING", logger="bartleby"):
+        build(config_path)
+
+    assert _unimplemented_warnings(caplog) == []
+
+
+def test_configured_path_theme_is_resolved_and_checked(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """``theme.path`` selects the theme, and its chain's manifests define what is implemented."""
+    themes = Path(__file__).parent / "fixtures" / "themes"
+    body = f"  path: {themes / 'child'}\n  features:\n    - search\n    - nav.tabs\n"
+    config_path = _write_themed_project(tmp_path, body)
+
+    with caplog.at_level("WARNING", logger="bartleby"):
+        build(config_path)
+
+    warnings = _unimplemented_warnings(caplog)
+    assert len(warnings) == 1
+    assert "nav.tabs" in warnings[0]
+    assert "child" in warnings[0]

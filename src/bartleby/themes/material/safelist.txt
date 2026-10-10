@@ -9,6 +9,8 @@
 # Layout regions
 layout-docs
 layout-prose
+layout-docs--no-sidebar
+layout-docs--no-toc
 docs-content
 sidebar-nav
 nav-tabs

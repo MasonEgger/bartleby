@@ -373,6 +373,7 @@ def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
                 "on_page_content", rendered.html, page=page, config=config
             )
             page.rendered_content = html_content
+            page.toc = rendered.toc_tokens
         except (ShortcodeError, ValueError) as exc:
             page_errors.append(PageError(file_path=str(page.source_path), message=str(exc)))
             continue

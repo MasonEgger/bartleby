@@ -8,6 +8,7 @@ from pathlib import Path
 from bartleby.config import (
     AIConfig,
     BartlebyConfig,
+    ContentTypeConfig,
     DevServerConfig,
     SiteConfig,
     ThemeConfig,
@@ -31,13 +32,20 @@ def _page(source: str, title: str, output_url: str) -> Page:
     return page
 
 
-def _config(*, nav: list[dict[str, object]] | None = None) -> BartlebyConfig:
+def _config(
+    *,
+    nav: list[dict[str, object]] | None = None,
+    content_type_paths: tuple[str, ...] = (),
+) -> BartlebyConfig:
     return BartlebyConfig(
         site=SiteConfig(title="t", url="u"),
         nav=nav,
         theme=ThemeConfig(),
         authors_file=".authors.yml",
-        content_types={},
+        content_types={
+            f"type{position}": ContentTypeConfig(name=f"type{position}", path=path)
+            for position, path in enumerate(content_type_paths)
+        },
         taxonomies={},
         exclude_patterns=[],
         markdown_extensions=[],
@@ -179,3 +187,128 @@ def test_pages_not_in_nav_no_prev_next() -> None:
     link_pages(nav)
     assert outside.previous is None
     assert outside.next is None
+
+
+def test_section_index_url_points_at_the_sections_index_page() -> None:
+    """A section whose children include an ``index.md`` exposes that page's URL."""
+    pages = [
+        _page("concepts/index.md", "Overview", "/concepts/"),
+        _page("concepts/urls.md", "URLs", "/concepts/urls/"),
+    ]
+    nav_config = [
+        {"Concepts": [{"Overview": "concepts/index.md"}, {"URLs": "concepts/urls.md"}]},
+    ]
+    nav = build_navigation(_config(nav=nav_config), pages)
+    assert nav.items[0].index_url == "/concepts/"
+
+
+def test_section_index_url_is_none_without_an_index_page() -> None:
+    """A section with no ``index.md`` child has no index URL, and a plain page has none."""
+    pages = [
+        _page("docs/intro.md", "Intro", "/docs/intro/"),
+        _page("about.md", "About", "/about/"),
+    ]
+    nav_config = [{"Docs": [{"Intro": "docs/intro.md"}]}, {"About": "about.md"}]
+    nav = build_navigation(_config(nav=nav_config), pages)
+    assert [item.index_url for item in nav.items] == [None, None]
+
+
+def _concepts_pages() -> list[Page]:
+    return [
+        _page("concepts/index.md", "Overview", "/concepts/"),
+        _page("concepts/urls.md", "URLs", "/concepts/urls/"),
+        _page("concepts/front-matter.md", "front matter", "/concepts/front-matter/"),
+        _page("concepts/advanced/tuning.md", "Tuning", "/concepts/advanced/tuning/"),
+        _page("concepts/advanced/index.md", "Advanced", "/concepts/advanced/"),
+        _page("about.md", "About", "/about/"),
+    ]
+
+
+def test_directory_target_expands_into_a_section_with_children() -> None:
+    """A ``dir/`` nav target becomes a section holding the pages in that directory."""
+    nav = build_navigation(_config(nav=[{"Concepts": "concepts/"}]), _concepts_pages())
+    concepts = nav.items[0]
+    assert concepts.is_section
+    assert concepts.index_url == "/concepts/"
+    assert concepts.url == "/concepts/"
+    assert [child.title for child in concepts.children] == [
+        "Overview",
+        "Advanced",
+        "front matter",
+        "URLs",
+    ]
+
+
+def test_directory_target_nests_subdirectories_as_sections() -> None:
+    """A subdirectory becomes a nested section with its own index_url and children."""
+    nav = build_navigation(_config(nav=[{"Concepts": "concepts/"}]), _concepts_pages())
+    advanced = next(child for child in nav.items[0].children if child.title == "Advanced")
+    assert advanced.is_section
+    assert advanced.index_url == "/concepts/advanced/"
+    assert [child.title for child in advanced.children] == ["Advanced", "Tuning"]
+
+
+def test_directory_target_children_order_is_deterministic() -> None:
+    """Input page order does not change the expanded children order."""
+    pages = _concepts_pages()
+    forward = build_navigation(_config(nav=[{"Concepts": "concepts/"}]), pages)
+    backward = build_navigation(_config(nav=[{"Concepts": "concepts/"}]), pages[::-1])
+    assert [c.title for c in forward.items[0].children] == [
+        c.title for c in backward.items[0].children
+    ]
+    assert [p.title for p in forward.pages_flat] == [p.title for p in backward.pages_flat]
+
+
+def test_directory_target_flattens_index_first_then_children() -> None:
+    """Prev/next order walks the section index, then its children."""
+    nav = build_navigation(_config(nav=[{"Concepts": "concepts/"}]), _concepts_pages())
+    assert [page.title for page in nav.pages_flat] == [
+        "Overview",
+        "Advanced",
+        "Tuning",
+        "front matter",
+        "URLs",
+    ]
+
+
+def test_directory_without_index_has_no_index_url() -> None:
+    """A directory with no index.md expands but carries no index_url or url."""
+    pages = [_page("docs/a.md", "A", "/docs/a/")]
+    nav = build_navigation(_config(nav=[{"Docs": "docs/"}]), pages)
+    assert nav.items[0].index_url is None
+    assert nav.items[0].url is None
+    assert [child.title for child in nav.items[0].children] == ["A"]
+
+
+def test_content_type_directory_target_stays_a_listing_link() -> None:
+    """A content-type directory is a link to its generated listing, not a tree."""
+    pages = [
+        _page("guides/index.md", "Guides", "/guides/"),
+        _page("guides/posts/one.md", "One", "/guides/posts/one/"),
+    ]
+    config = _config(nav=[{"Posts": "guides/posts/"}], content_type_paths=("guides/posts",))
+    item = build_navigation(config, pages).items[0]
+    assert item.children == []
+    assert item.url == "/guides/posts/"
+
+
+def test_directory_containing_a_content_type_stays_a_listing_link() -> None:
+    """A parent of a content-type directory is not expanded either."""
+    pages = [
+        _page("guides/index.md", "Guides", "/guides/"),
+        _page("guides/posts/one.md", "One", "/guides/posts/one/"),
+    ]
+    config = _config(nav=[{"Guides": "guides/"}], content_type_paths=("guides/posts",))
+    item = build_navigation(config, pages).items[0]
+    assert item.children == []
+    assert item.url == "/guides/"
+
+
+def test_auto_nav_sections_carry_children() -> None:
+    """Auto-generated top-level sections expand their directory like explicit nav."""
+    nav = build_navigation(_config(), _concepts_pages())
+    concepts = next(item for item in nav.items if item.title == "Concepts")
+    assert concepts.is_section
+    assert concepts.index_url == "/concepts/"
+    assert [child.title for child in concepts.children][0] == "Overview"
+    assert "Advanced" in [child.title for child in concepts.children]

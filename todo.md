@@ -78,11 +78,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 5. Document: none
 
 ### Step 9: Material docs layout: sidebar, TOC, tabs (task)
-- [ ] 1. Scope: nav.html, sidebar.html, toc.html, page.html; navigation.py index pointer if needed
-- [ ] 2. Tooling: frontend-design, python (navigation.py only); build docs with nav.sidebar on
-- [ ] 3. Do: implement partials + blocks; update material theme.yml features
-- [ ] 4. Verify: tabs + sidebar + TOC on concept page; no sidebar on listing; no warnings
-- [ ] 5. Document: none
+- [x] 1. Scope: nav.html, sidebar.html, toc.html, page.html; navigation.py index pointer if needed
+- [x] 2. Tooling: frontend-design, python (navigation.py only); build docs with nav.sidebar on
+- [x] 3. Do: implement partials + blocks; update material theme.yml features
+- [x] 4. Verify: tabs + sidebar + TOC on concept page; no sidebar on listing; no warnings
+- [x] 5. Document: none
 
 ### Step 10: Material taxonomy, 404, search, and interactive partials (task)
 - [ ] 1. Scope: taxonomy, taxonomy_index, 404, search, back_to_top, code_copy

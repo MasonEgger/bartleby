@@ -1030,7 +1030,12 @@ def test_build_warns_when_theme_lacks_enabled_feature_and_still_succeeds(
 ) -> None:
     """An enabled feature the theme lacks prints a warning but the build completes."""
     _scaffold_and_enter(tmp_path, monkeypatch)
-    _append_to_config("\ntheme:\n  features:\n    - nav.tabs\n")
+    bare_theme = tmp_path / "bare-theme"
+    bare_theme.mkdir()
+    (bare_theme / "theme.yml").write_text(
+        "name: bare\nextends: base\nfeatures: []\n", encoding="utf-8"
+    )
+    _append_to_config(f"\ntheme:\n  path: {bare_theme}\n  features:\n    - nav.tabs\n")
 
     with caplog.at_level("WARNING", logger="bartleby"):
         main(["build"])

@@ -1,4 +1,22 @@
-{# Top-level navigation links. Step 9 turns this into tabs when nav.tabs is on. #}
+{# Top-level navigation. With nav.tabs each top-level entry is a tab; otherwise a plain inline list. #}
+{% from "partials/nav_macros.html" import holds, first_url %}
+{% set tabs = feature is defined and feature('nav.tabs') %}
+{% set section_index = feature is defined and feature('nav.section-index') %}
+{% if tabs %}
+<nav class="nav-tabs" aria-label="Sections">
+  <ul>
+    {% for item in nav %}
+    {% set href = ((item.index_url if section_index else none) or first_url(item) | trim) %}
+    {# A tab is active on its own pages and, for directory links, on anything under them. #}
+    {% set active = (holds(item, page.url) | trim) or (item.url and item.url != "/" and page.url and page.url.startswith(item.url)) %}
+    <li>
+      {% if href %}<a href="{{ href }}" class="nav-link{% if active %} active{% endif %}"{% if active %} aria-current="true"{% endif %}>{{ item.title }}</a>
+      {% else %}<span class="nav-link">{{ item.title }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</nav>
+{% else %}
 <nav class="site-nav" aria-label="Main">
   <ul>
     {% for item in nav %}
@@ -9,3 +27,4 @@
     {% endfor %}
   </ul>
 </nav>
+{% endif %}

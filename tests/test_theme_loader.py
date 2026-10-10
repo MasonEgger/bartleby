@@ -103,6 +103,9 @@ def test_default_theme_declares_the_features_its_templates_honor() -> None:
 
     assert set(manifest.features) == {
         "search",
+        "nav.tabs",
+        "nav.sidebar",
+        "nav.section-index",
         "nav.back-to-top",
         "content.code.copy",
         "color-mode.toggle",

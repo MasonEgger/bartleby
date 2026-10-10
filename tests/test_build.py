@@ -815,6 +815,15 @@ def _write_themed_project(tmp_path: Path, theme_body: str) -> Path:
     return config_path
 
 
+def _write_bare_theme(directory: Path) -> Path:
+    """Create a path theme that extends base and declares no features."""
+    directory.mkdir()
+    (directory / "theme.yml").write_text(
+        "name: bare\nextends: base\nfeatures: []\n", encoding="utf-8"
+    )
+    return directory
+
+
 def _unimplemented_warnings(caplog: pytest.LogCaptureFixture) -> list[str]:
     return [
         record.getMessage()
@@ -827,7 +836,10 @@ def test_unimplemented_feature_warns_once_and_build_succeeds(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     """An enabled feature the active theme lacks warns once, naming feature and theme."""
-    config_path = _write_themed_project(tmp_path, "  features:\n    - search\n    - nav.tabs\n")
+    bare_theme = _write_bare_theme(tmp_path / "bare-theme")
+    config_path = _write_themed_project(
+        tmp_path, f"  path: {bare_theme}\n  features:\n    - nav.tabs\n"
+    )
 
     with caplog.at_level("WARNING", logger="bartleby"):
         result = build(config_path)
@@ -837,7 +849,7 @@ def test_unimplemented_feature_warns_once_and_build_succeeds(
     warnings = _unimplemented_warnings(caplog)
     assert len(warnings) == 1
     assert "nav.tabs" in warnings[0]
-    assert "material" in warnings[0]
+    assert "bare" in warnings[0]
 
 
 def test_implemented_features_emit_no_warning(
@@ -868,3 +880,26 @@ def test_configured_path_theme_is_resolved_and_checked(
     assert len(warnings) == 1
     assert "nav.tabs" in warnings[0]
     assert "child" in warnings[0]
+
+
+def test_build_docs_page_renders_toc_and_sidebar(project: Path) -> None:
+    """A material docs page carries a TOC of its headings, a tab bar, and a marked sidebar."""
+    config_path = project / "bartleby.yml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8")
+        + "\nnav:\n  - Home: index.md\n  - About:\n      - Overview: about.md\n"
+        + "\ntheme:\n  name: material\n  features:\n    - nav.tabs\n    - nav.sidebar\n",
+        encoding="utf-8",
+    )
+    (project / "content" / "about.md").write_text(
+        "---\ntitle: About\n---\n\n## First Heading\n\nText.\n\n### Nested Heading\n\nMore.\n",
+        encoding="utf-8",
+    )
+    build(config_path)
+    rendered = (project / "site" / "about" / "index.html").read_text(encoding="utf-8")
+    assert 'class="toc-nav"' in rendered
+    assert 'href="#first-heading"' in rendered
+    assert 'href="#nested-heading"' in rendered
+    assert 'class="nav-tabs"' in rendered
+    assert 'class="sidebar-nav"' in rendered
+    assert 'aria-current="page"' in rendered

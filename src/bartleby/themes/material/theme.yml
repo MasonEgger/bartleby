@@ -3,6 +3,9 @@ description: Material-style theme with header, navigation, footer, search, and c
 extends: base
 features:
   - search
+  - nav.tabs
+  - nav.sidebar
+  - nav.section-index
   - nav.back-to-top
   - content.code.copy
   - color-mode.toggle

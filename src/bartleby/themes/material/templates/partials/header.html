@@ -2,7 +2,8 @@
 <header class="site-header" x-data="{ menuOpen: false }">
   <div class="header-inner">
     <a href="/" class="site-title">{{ site.title }}</a>
-    {% include "partials/nav.html" %}
+    {% set tabs = feature is defined and feature('nav.tabs') %}
+    {% if not tabs %}{% include "partials/nav.html" %}{% endif %}
     {% set color_mode = (config.theme.color_mode if config is defined and config and config.theme else None) %}
     {% if color_mode and color_mode.toggle %}
     <button
@@ -14,3 +15,4 @@
     {% endif %}
   </div>
 </header>
+{% if tabs %}{% include "partials/nav.html" %}{% endif %}

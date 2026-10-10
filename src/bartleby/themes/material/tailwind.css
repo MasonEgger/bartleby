@@ -177,21 +177,35 @@
     margin: 0 auto;
     padding: 1.5rem 1rem 4rem;
   }
-  .layout-docs > .sidebar-nav { grid-column: 1; }
-  .layout-docs > .docs-content { grid-column: 2; min-width: 0; }
-  .layout-docs > .toc-sidebar { grid-column: 3; }
+  /* Missing columns collapse: the grid tracks follow what the page renders. */
+  .layout-docs--no-sidebar {
+    grid-template-columns: minmax(0, 1fr) var(--bm-toc-width);
+  }
+  .layout-docs--no-toc {
+    grid-template-columns: var(--bm-sidebar-width) minmax(0, 1fr);
+  }
+  .layout-docs--no-sidebar.layout-docs--no-toc {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .layout-docs > .docs-content { min-width: 0; }
   @media (max-width: 76rem) {
-    .layout-docs {
+    .layout-docs,
+    .layout-docs--no-toc {
       grid-template-columns: var(--bm-sidebar-width) minmax(0, 1fr);
+    }
+    .layout-docs--no-sidebar,
+    .layout-docs--no-sidebar.layout-docs--no-toc {
+      grid-template-columns: minmax(0, 1fr);
     }
     .layout-docs > .toc-sidebar { display: none; }
   }
   @media (max-width: 60rem) {
-    .layout-docs {
+    .layout-docs,
+    .layout-docs--no-toc,
+    .layout-docs--no-sidebar {
       grid-template-columns: minmax(0, 1fr);
     }
     .layout-docs > .sidebar-nav { display: none; }
-    .layout-docs > .docs-content { grid-column: 1; }
   }
 
   /* Left section sidebar. */
@@ -236,6 +250,28 @@
     margin-top: 0.75rem;
     color: var(--bm-heading);
     font-weight: 500;
+  }
+  /* A collapsible group is a <details>; the browser draws the open state with JS off. */
+  .sidebar-nav details > summary {
+    cursor: pointer;
+    list-style: none;
+  }
+  .sidebar-nav details > summary::-webkit-details-marker {
+    display: none;
+  }
+  .sidebar-nav details > summary::after {
+    content: "";
+    float: right;
+    width: 0.4rem;
+    height: 0.4rem;
+    margin-top: 0.45rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform 125ms;
+  }
+  .sidebar-nav details[open] > summary::after {
+    transform: rotate(45deg);
   }
 
   /* Right table of contents. */

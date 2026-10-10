@@ -41,6 +41,8 @@ theme:
   features:
     - search
     - nav.tabs
+    - nav.sidebar
+    - nav.section-index
     - color-mode.toggle
   color_mode:
     toggle: true

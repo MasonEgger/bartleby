@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from typing import TYPE_CHECKING
 
 import pytest
@@ -904,6 +905,46 @@ def test_export_include_html_failure_fires_build_error_then_shutdown_once(
         first_page.read_text(encoding="utf-8") + "\n[% totally_unknown_shortcode %]\n",
         encoding="utf-8",
     )
+    capsys.readouterr()
+
+    with pytest.raises(SystemExit):
+        main(["export", "--include-html"])
+
+    fired = (site / "fired.log").read_text(encoding="utf-8").splitlines()
+    assert fired[-2:] == ["on_build_error", "on_shutdown"]
+    assert fired.count("on_build_error") == 1
+    assert fired.count("on_shutdown") == 1
+
+
+def test_export_include_html_metadata_failure_fires_build_error_then_shutdown_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Invalid metadata fires ``on_build_error`` then ``on_shutdown``, once each."""
+    site = _site_with_event_recorder(tmp_path, monkeypatch)
+    welcome = site / "content" / "blog" / "posts" / "welcome.md"
+    welcome.write_text(
+        welcome.read_text(encoding="utf-8").replace(
+            "authors: [default]", "authors: [nobody-such-author]"
+        ),
+        encoding="utf-8",
+    )
+    capsys.readouterr()
+
+    with pytest.raises(SystemExit):
+        main(["export", "--include-html"])
+
+    fired = (site / "fired.log").read_text(encoding="utf-8").splitlines()
+    assert fired[-2:] == ["on_build_error", "on_shutdown"]
+    assert fired.count("on_build_error") == 1
+    assert fired.count("on_shutdown") == 1
+
+
+def test_export_include_html_missing_content_dir_fires_build_error_then_shutdown_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A missing ``content/`` fires ``on_build_error`` then ``on_shutdown``, once each."""
+    site = _site_with_event_recorder(tmp_path, monkeypatch)
+    shutil.rmtree(site / "content")
     capsys.readouterr()
 
     with pytest.raises(SystemExit):

@@ -27,6 +27,10 @@ Old mkdocs-material names are a `ConfigError` that names the replacement.
 The native feature names are `search`, `search.highlight`, `nav.tabs`, `nav.sidebar`, `nav.section-index`, `nav.back-to-top`, `content.code.copy`, and `color-mode.toggle`.
 Any other mkdocs-material feature (`navigation.footer`, `navigation.tracking`, `content.code.annotate`, `content.code.select`, `content.tabs.link`, `content.tooltips`, `content.footnote.tooltips`, `content.action.edit`, `content.action.view`, `search.suggest`, `search.share`, `toc.follow`) is not a Bartleby feature and is rejected.
 
+`page.excerpt` is now plain text, and the rendered excerpt moved to `page.excerpt_html`.
+Listings render the HTML; feeds and `llms.txt` use the plain text.
+A theme template that printed `post.excerpt | safe` must print `post.excerpt_html | safe`.
+
 ### Changed
 
 Errors name the file, the key path or id, and a concrete fix, in one shape: `<file>: <key path>: <message> (fix: <hint>)`.
@@ -41,6 +45,28 @@ A page that would overwrite `schema.json` or `content-index.json` is an `agent_s
 `ai.skills.regenerate_on_build` rewrites the skills after `bartleby build`.
 `theme.logo` and `theme.favicon` render in all three bundled themes.
 They are paths relative to `static/`, or full URLs.
+
+`bartleby new site` writes a site that builds with no warnings on the default theme.
+The scaffold sets `theme.name: scrivener` with seven native features and a Home and Blog nav.
+It includes a published sample post with an author, a tag, and a description, and a Welcome home page that links to it.
+`validate` and `lint` are clean on a fresh scaffold, and the quickstart and installation pages match what it prints.
+
+`llms.txt` and `llms-full.txt` use absolute URLs, and each page summary is one line.
+`urls.absolute_url` is the one place that builds an absolute URL, so the sitemap, feeds, SEO tags, `llms.txt`, and `content-index.json` agree.
+`schema.json` has a `theme` block with the theme name, its `extends` chain, and three feature lists: `enabled`, `implemented`, and `active`.
+`active` is the intersection and is the list an agent should rely on.
+The four agent files are byte-identical across builds of the same content.
+
+Generated skills (`bartleby-write`, `bartleby-review`, `bartleby-ops`) are built from the same introspection as `schema.json`.
+They list real source directories, fields, authors, taxonomy terms, the active theme and its feature split, and commands with their real flags.
+Generated skills contain no placeholders.
+
+`export --include-html` returns real rendered HTML from the build's own render path.
+During that export `on_startup` receives `"export"`, and the page hooks fire.
+
+The public reference docs (hooks, config schema, template context, CLI, theme manifest, agent output formats) were corrected against the code.
+`tests/test_docs_reference.py` compares 26 surfaces in both directions, so a change to code or docs that drifts apart fails the suite.
+The docs site builds on the Scrivener theme, with a corrected listing, excerpt, and tag display, and a new `errors.md` reference page.
 
 ### Removed (Breaking)
 
@@ -69,11 +95,17 @@ Incremental rebuilds are a non-goal, and the flag always ran a full rebuild.
 
 ### Fixed
 
+- Every published page has a Markdown variant, including pages with an empty body.
+  The `text/markdown` alternate link renders only when the variant exists, so `ai.markdown_variants: false` no longer leaves a link that returns 404.
+- JSON-LD is `Article` for posts, `CollectionPage` for generated listing and taxonomy pages, and `WebPage` otherwise.
+  Each carries `name` alongside `headline`.
+- Any build or `export --include-html` `BuildError` after `on_startup` now fires `on_build_error` and then `on_shutdown`, once each.
+  That includes a missing `content/` directory, metadata validation, a strict-mode cross-reference failure, and an asset collision.
+  Before, some of these skipped both, so a plugin that opened a resource in `on_startup` never got to release it.
+- A successful `export --include-html` fires `on_shutdown` exactly once, as a build does.
 - Relative `.md` links in a listing intro (`content/{type}/index.md`) now resolve to the target page's URL.
   Before, they were left as `.md` links that returned 404.
-- Excerpts no longer show literal backticks and other Markdown syntax.
-  Listings render the excerpt as HTML (`page.excerpt_html`), and `page.excerpt` is plain text, which feeds and `llms.txt` use.
-  A theme template that printed `post.excerpt | safe` should print `post.excerpt_html | safe`.
+- Excerpts no longer show literal backticks and other Markdown syntax (see the breaking change for `page.excerpt` above).
 - Taxonomy pages scoped to a content type are titled by their scope ("Tags in Guides"), so they no longer look like duplicates of the global tag pages.
 - A listing row for a page without a date drops the date column in `scrivener`.
 - Posts with no date, author, or reading time no longer render an empty meta paragraph under the title.

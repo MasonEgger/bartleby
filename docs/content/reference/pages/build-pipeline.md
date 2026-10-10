@@ -124,7 +124,7 @@ The sixteenth, `on_serve`, fires when the dev server starts.
 | `on_post_page` | 20 (per page) |
 | `on_post_build` | 36 |
 | `on_shutdown` | 36 |
-| `on_build_error` | 18 or 20, when a page fails |
+| `on_build_error` | 18 or 20, when a build or export raises a `BuildError` after `on_startup` |
 
 `bartleby export --include-html` runs steps 1 through 19 only, so the events through `on_page_content` fire, followed by `on_shutdown`.
 The template and output events, and `on_post_build`, do not fire.

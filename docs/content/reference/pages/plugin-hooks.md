@@ -20,7 +20,7 @@ These eleven fire, in the same order as in a build: `on_startup`, `on_config`, `
 `on_startup` receives `"export"` instead of `"build"`.
 A handler with side effects, such as writing a file or calling a service, runs during that export.
 `on_shutdown` fires exactly once at the end of every export, so a handler that opens a resource in `on_startup` can release it there.
-If a page fails to render, `on_build_error` fires first, then `on_shutdown`, each once.
+If the export raises a `BuildError` after `on_startup` (a missing `content/` directory, invalid metadata, or a page render), `on_build_error` fires first, then `on_shutdown`, each once.
 
 `on_page_context`, `on_post_page`, `on_post_build`, and `on_serve` never fire during an export.
 `bartleby export` without `--include-html` only reads content and fires no hooks.
@@ -50,7 +50,7 @@ def on_startup(command: str) -> None: ...
 ### `on_shutdown`
 
 Fires at the end of every build, after `on_post_build`, and at the end of every `export --include-html`, where no `on_post_build` precedes it.
-When a build or an export fails, it fires after `on_build_error`.
+When a build or an export raises a `BuildError`, it fires after `on_build_error`.
 Step 36, notification event.
 The event takes no arguments.
 
@@ -201,9 +201,10 @@ def on_post_build(config: BartlebyConfig) -> None: ...
 
 ### `on_build_error`
 
-Fires when Markdown rendering or template rendering fails for one or more pages.
+Fires when a build or an export raises a `BuildError` after `on_startup` fired.
+That covers a missing `content/` directory, metadata validation, Markdown rendering, template rendering, a strict-mode cross-reference failure, and a co-located asset collision.
 The argument is the `BuildError`, which holds every collected page error.
-Metadata validation errors and strict-mode cross-reference errors raise before this point and do not fire the event.
+It fires once per failed build or export, and `on_shutdown` follows it.
 Step 18 or 20, notification event.
 
 ```python

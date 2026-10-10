@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from bartleby.assets import AssetCollisionError
 from bartleby.build import (
     BuildError,
     BuildResult,
@@ -537,6 +538,107 @@ def test_build_fails_on_metadata_validation_errors(project: Path) -> None:
     assert "first-post.md" in collected[0].file_path
 
 
+def _install_lifecycle_recorder(project: Path) -> Path:
+    """Add a project hook that logs on_startup, on_build_error, and on_shutdown calls.
+
+    :returns: The log file the hook appends one event name per line to.
+    """
+    hooks_dir = project / "hooks"
+    hooks_dir.mkdir()
+    record_path = project / "fired.log"
+    (hooks_dir / "recorder.py").write_text(
+        "# ABOUTME: Test hook that records lifecycle events.\n"
+        "# Appends one line per on_startup, on_build_error, and on_shutdown call.\n"
+        "from pathlib import Path\n"
+        "\n"
+        "LOG = Path(__file__).parent.parent / 'fired.log'\n"
+        "\n"
+        "def _record(name):\n"
+        "    with LOG.open('a', encoding='utf-8') as handle:\n"
+        "        handle.write(name + '\\n')\n"
+        "\n"
+        "def on_startup(*args, **kwargs):\n"
+        "    _record('on_startup')\n"
+        "\n"
+        "def on_build_error(*args, **kwargs):\n"
+        "    _record('on_build_error')\n"
+        "\n"
+        "def on_shutdown(*args, **kwargs):\n"
+        "    _record('on_shutdown')\n",
+        encoding="utf-8",
+    )
+    return record_path
+
+
+def test_metadata_failure_fires_build_error_then_shutdown_once(project: Path) -> None:
+    """A metadata BuildError fires ``on_build_error`` then ``on_shutdown``, once each.
+
+    ``on_startup`` already fired while loading, so ``on_shutdown`` must pair it
+    even when the build dies in the validation phase.
+    """
+    record_path = _install_lifecycle_recorder(project)
+    post_path = project / "content" / "blog" / "posts" / "first-post.md"
+    post_path.write_text(
+        post_path.read_text(encoding="utf-8").replace(
+            "authors:\n  - mason", "authors:\n  - nobody-such-author"
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(BuildError):
+        build(project / "bartleby.yml")
+
+    fired = record_path.read_text(encoding="utf-8").splitlines()
+    assert fired == ["on_startup", "on_build_error", "on_shutdown"]
+
+
+def test_missing_content_dir_fires_build_error_then_shutdown_once(project: Path) -> None:
+    """A missing ``content/`` fires ``on_build_error`` then ``on_shutdown``, once each."""
+    record_path = _install_lifecycle_recorder(project)
+    shutil.rmtree(project / "content")
+
+    with pytest.raises(BuildError):
+        build(project / "bartleby.yml")
+
+    fired = record_path.read_text(encoding="utf-8").splitlines()
+    assert fired == ["on_startup", "on_build_error", "on_shutdown"]
+
+
+def test_strict_crossref_failure_fires_build_error_then_shutdown_once(project: Path) -> None:
+    """A strict-mode crossref failure fires ``on_build_error`` then ``on_shutdown``, once each."""
+    record_path = _install_lifecycle_recorder(project)
+    post_path = project / "content" / "blog" / "posts" / "first-post.md"
+    post_path.write_text(
+        post_path.read_text(encoding="utf-8") + "\nSee [missing page](missing-target.md).\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(BuildError):
+        build(project / "bartleby.yml", strict=True)
+
+    fired = record_path.read_text(encoding="utf-8").splitlines()
+    assert fired == ["on_startup", "on_build_error", "on_shutdown"]
+
+
+def test_asset_collision_fires_build_error_then_shutdown_once(project: Path) -> None:
+    """An asset collision fires ``on_build_error`` then ``on_shutdown``, once each."""
+    record_path = _install_lifecycle_recorder(project)
+    shared_dir = project / "content" / "blog" / "posts" / "shared-bundle"
+    shared_dir.mkdir()
+    for name in ("page-a", "page-b"):
+        (shared_dir / f"{name}.md").write_text(
+            f'---\ntitle: "{name}"\ndraft: false\n---\n\nBody.\n', encoding="utf-8"
+        )
+    (shared_dir / "diagram.png").write_bytes(b"stub-png")
+
+    with pytest.raises(BuildError) as excinfo:
+        build(project / "bartleby.yml")
+
+    assert isinstance(excinfo.value.__cause__, AssetCollisionError)
+    fired = record_path.read_text(encoding="utf-8").splitlines()
+    assert fired == ["on_startup", "on_build_error", "on_shutdown"]
+
+
 def test_build_non_strict_warns_on_broken_crossref(
     project: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -633,7 +735,7 @@ def test_strict_mode_failure_leaves_no_temp_dir(
     """A strict-mode crossref failure (BuildError) leaves no ``.bartleby-build-*`` dir behind.
 
     Strict-crossref failures raise directly from ``_render_all_pages`` without
-    routing through ``_fail_build``, so this exercises the failure path a
+    routing through ``_pair_failure_hooks``, so this exercises the failure path a
     per-helper cleanup would miss.
     """
     post_path = project / "content" / "blog" / "posts" / "first-post.md"

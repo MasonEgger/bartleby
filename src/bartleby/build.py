@@ -10,9 +10,10 @@ import re
 import shutil
 import tempfile
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NoReturn
+from typing import TYPE_CHECKING, Any
 
 from jinja2 import TemplateError
 
@@ -68,6 +69,8 @@ from bartleby.theme_loader import select_theme
 from bartleby.urls import generate_all_urls
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from jinja2 import Environment
 
     from bartleby.authors import Author
@@ -235,9 +238,10 @@ def build(
     state = _load_inputs(config_path, theme)
     _LOGGER.debug("loaded %s with theme %r", config_path, state.theme.chain[0].name)
     try:
-        _filter_and_validate(state, include_drafts=include_drafts)
-        rendered_html = _render_all_pages(state, strict=strict)
-        _emit_outputs(state, rendered_html)
+        with _pair_failure_hooks(state.plugins):
+            _filter_and_validate(state, include_drafts=include_drafts)
+            rendered_html = _render_all_pages(state, strict=strict)
+            _emit_outputs(state, rendered_html)
 
         return _finish_build(state, started=started, dry_run=dry_run)
     finally:
@@ -279,12 +283,13 @@ def render_content(config_path: Path) -> RenderedContent:
     """
     state = _load_inputs(config_path, None, command="export")
     try:
-        _filter_and_validate(state, include_drafts=False)
-        _render_page_bodies(state, strict=False)
+        with _pair_failure_hooks(state.plugins):
+            _filter_and_validate(state, include_drafts=False)
+            _render_page_bodies(state, strict=False)
     finally:
         if state.output_dir is not None:
             shutil.rmtree(state.output_dir, ignore_errors=True)
-    # A failed render already fired on_build_error and on_shutdown in _fail_build.
+    # A failed render already fired on_build_error and on_shutdown in _pair_failure_hooks.
     state.plugins.run_lifecycle("on_shutdown")
     return RenderedContent(config=state.config, pages=state.published)
 
@@ -306,47 +311,48 @@ def _load_inputs(
     plugins.merge(discover_plugins(config.disabled_plugins))
     plugins.merge(discover_hooks(project_dir))
     plugins.run_event("on_startup", command)
-    config = plugins.run_event("on_config", config)
-    plugins.run_event("on_pre_build", config)
-    authors = load_authors(project_dir / config.authors_file)
-    active_theme = select_theme(config.theme, project_dir) if theme is None else theme
-    _warn_unimplemented_features(config, active_theme)
+    with _pair_failure_hooks(plugins):
+        config = plugins.run_event("on_config", config)
+        plugins.run_event("on_pre_build", config)
+        authors = load_authors(project_dir / config.authors_file)
+        active_theme = select_theme(config.theme, project_dir) if theme is None else theme
+        _warn_unimplemented_features(config, active_theme)
 
-    content_dir = project_dir / "content"
-    if not content_dir.is_dir():
-        raise BuildError(
-            [
-                PageError(
-                    file_path=str(content_dir),
-                    message=format_error(
-                        "content directory does not exist",
-                        hint=(
-                            "create it and add Markdown files, or run `bartleby new site <name>` "
-                            "to scaffold a project (builds run from the directory holding "
-                            "bartleby.yml, or pass --config)"
+        content_dir = project_dir / "content"
+        if not content_dir.is_dir():
+            raise BuildError(
+                [
+                    PageError(
+                        file_path=str(content_dir),
+                        message=format_error(
+                            "content directory does not exist",
+                            hint=(
+                                "create it and add Markdown files, or run "
+                                "`bartleby new site <name>` to scaffold a project (builds run "
+                                "from the directory holding bartleby.yml, or pass --config)"
+                            ),
                         ),
-                    ),
-                )
-            ]
+                    )
+                ]
+            )
+        pages, assets = discover_content(config, content_dir)
+        _LOGGER.debug(
+            "discovered %d content pages and %d co-located assets in %s",
+            len(pages),
+            len(assets),
+            content_dir,
         )
-    pages, assets = discover_content(config, content_dir)
-    _LOGGER.debug(
-        "discovered %d content pages and %d co-located assets in %s",
-        len(pages),
-        len(assets),
-        content_dir,
-    )
 
-    return _BuildState(
-        plugins=plugins,
-        config=config,
-        project_dir=project_dir,
-        content_dir=content_dir,
-        authors=authors,
-        pages=pages,
-        assets=assets,
-        theme=active_theme,
-    )
+        return _BuildState(
+            plugins=plugins,
+            config=config,
+            project_dir=project_dir,
+            content_dir=content_dir,
+            authors=authors,
+            pages=pages,
+            assets=assets,
+            theme=active_theme,
+        )
 
 
 def _warn_unimplemented_features(config: BartlebyConfig, theme: ResolvedTheme) -> None:
@@ -470,7 +476,7 @@ def _render_page_bodies(state: _BuildState, *, strict: bool) -> None:
             page.excerpt = html_to_plain_text(page.excerpt_html)
 
     if page_errors:
-        _fail_build(page_errors, plugins)
+        raise BuildError(page_errors)
 
     # Cross-reference resolution needs every page rendered before any rewriting,
     # so it lives between the markdown loop above and the template loop below.
@@ -553,7 +559,7 @@ def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
             page_errors.append(PageError(file_path=str(page.source_path), message=str(exc)))
 
     if page_errors:
-        _fail_build(page_errors, plugins)
+        raise BuildError(page_errors)
 
     not_found_html = _render_404(
         env=env,
@@ -697,23 +703,28 @@ def _apply_compiled_theme_css(project_dir: Path, output_dir: Path, theme: Resolv
     shutil.copy2(compiled, destination)
 
 
-def _fail_build(page_errors: list[PageError], plugins: PluginCollection) -> NoReturn:
-    """Fire ``on_build_error`` once and raise, discarding the partial build.
+@contextmanager
+def _pair_failure_hooks(plugins: PluginCollection) -> Iterator[None]:
+    """Fire ``on_build_error`` then ``on_shutdown`` when a :class:`BuildError` leaves the block.
 
-    The hook receives the assembled :class:`BuildError` so a plugin can inspect
-    every collected :class:`PageError` in a single call. This function does not
-    remove the temp build directory itself; :func:`build`'s ``finally`` block
-    is the single removal site and cleans it up once this raise propagates out
-    of it, so a failed build never leaves output behind.
+    Wrap every phase that runs after ``on_startup``. Phases raise a plain
+    :class:`BuildError`, and this is the single place that turns it into the
+    ``on_build_error`` hook (which receives the assembled error, so a plugin can
+    inspect every collected :class:`PageError` in one call) and the
+    ``on_shutdown`` that pairs ``on_startup``. A future raise cannot skip the hooks.
+    The block's own cleanup removes the temp build directory: :func:`build`'s
+    ``finally`` block is the single removal site, so a failed build never leaves
+    output behind.
 
-    :param page_errors: Every page-level failure collected during the pass.
-    :param plugins: The active plugin collection to dispatch the hook through.
-    :raises BuildError: Always, carrying ``page_errors``.
+    :param plugins: The active plugin collection to dispatch the hooks through.
+    :raises BuildError: Re-raised unchanged after the hooks fire.
     """
-    error = BuildError(page_errors)
-    plugins.run_event("on_build_error", error)
-    plugins.run_lifecycle("on_shutdown")
-    raise error
+    try:
+        yield
+    except BuildError as error:
+        plugins.run_event("on_build_error", error)
+        plugins.run_lifecycle("on_shutdown")
+        raise
 
 
 def _template_type_for(page: Page, content_type: object) -> str:

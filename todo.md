@@ -224,8 +224,8 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 5. Document: stability statement in spec.md/README
 
 ### Step 26: Final stabilization gate (task)
-- [ ] 1. Scope: CHANGELOG, README, version (Mason: 0.1.x vs 0.2.0)
-- [ ] 2. Tooling: python; just check; clean-venv wheel install; browser
-- [ ] 3. Do: `just check`; clean install; scaffold/build/serve on scrivener then material; wheel contains three themes; walk Success criteria
-- [ ] 4. Verify: just check green AND clean-env serves good-looking site on both themes; checklist with evidence for Mason
-- [ ] 5. Document: finalize CHANGELOG/README
+- [x] 1. Scope: CHANGELOG, README, version (Mason: 0.1.x vs 0.2.0) (version: pending Mason)
+- [x] 2. Tooling: python; just check; clean-venv wheel install; browser
+- [x] 3. Do: `just check`; clean install; scaffold/build/serve on scrivener then material; wheel contains three themes; walk Success criteria
+- [x] 4. Verify: just check green AND clean-env serves good-looking site on both themes; checklist with evidence for Mason
+- [x] 5. Document: finalize CHANGELOG/README

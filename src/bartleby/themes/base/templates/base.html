@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+{% set color_mode = (config.theme.color_mode if config is defined and config and config.theme else None) %}
+{% set default_mode = (color_mode.default if color_mode and color_mode.default in ("light", "dark") else None) %}
+<html lang="en" data-theme="{{ default_mode or 'light' }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -19,6 +21,23 @@
   <script defer src="/js/alpine.min.js"></script>
   <script defer src="/js/htmx.min.js"></script>
   <script defer src="/js/lunr.min.js"></script>
+  {% if color_mode and color_mode.toggle %}
+  <script>
+    (function () {
+      try {
+        var configured = {{ default_mode | tojson }};
+        var mode = localStorage.getItem("bartleby-color-mode");
+        if (mode !== "light" && mode !== "dark") {
+          mode = configured;
+        }
+        if (mode !== "light" && mode !== "dark") {
+          mode = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        document.documentElement.dataset.theme = mode;
+      } catch (e) {}
+    })();
+  </script>
+  {% endif %}
   {% block head_extra %}{% endblock %}
 </head>
 <body>

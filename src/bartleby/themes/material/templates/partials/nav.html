@@ -1,9 +1,10 @@
-<nav class="site-nav">
+{# Top-level navigation links. Step 9 turns this into tabs when nav.tabs is on. #}
+<nav class="site-nav" aria-label="Main">
   <ul>
     {% for item in nav %}
     <li>
-      {% if item.url %}<a href="{{ item.url }}">{{ item.title }}</a>
-      {% else %}<span>{{ item.title }}</span>{% endif %}
+      {% if item.url %}<a href="{{ item.url }}" class="nav-link"{% if page.url and item.url == page.url %} aria-current="page"{% endif %}>{{ item.title }}</a>
+      {% else %}<span class="nav-link">{{ item.title }}</span>{% endif %}
     </li>
     {% endfor %}
   </ul>

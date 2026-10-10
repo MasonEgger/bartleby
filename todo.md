@@ -71,11 +71,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 5. Document: config comment block
 
 ### Step 8: Material shell and content templates (task)
-- [ ] 1. Scope: header, nav, footer, page, post, list under themes/material
-- [ ] 2. Tooling: frontend-design; build docs
-- [ ] 3. Do: classes, base blocks, prose wrappers, layout-prose/layout-docs; preserve variables + toggle
-- [ ] 4. Verify: prose wrapper + header classes + excerpts present; exit 0; no UndefinedError
-- [ ] 5. Document: none
+- [x] 1. Scope: header, nav, footer, page, post, list under themes/material
+- [x] 2. Tooling: frontend-design; build docs
+- [x] 3. Do: classes, base blocks, prose wrappers, layout-prose/layout-docs; preserve variables + toggle
+- [x] 4. Verify: prose wrapper + header classes + excerpts present; exit 0; no UndefinedError
+- [x] 5. Document: none
 
 ### Step 9: Material docs layout: sidebar, TOC, tabs (task)
 - [ ] 1. Scope: nav.html, sidebar.html, toc.html, page.html; navigation.py index pointer if needed

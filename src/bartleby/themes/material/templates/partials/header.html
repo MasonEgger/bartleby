@@ -1,4 +1,5 @@
-<header x-data="{ menuOpen: false }">
+{# Material header: primary-color bar with the title, top-level links, and the color-mode toggle. #}
+<header class="site-header" x-data="{ menuOpen: false }">
   <div class="header-inner">
     <a href="/" class="site-title">{{ site.title }}</a>
     {% include "partials/nav.html" %}
@@ -6,8 +7,8 @@
     {% if color_mode and color_mode.toggle %}
     <button
       type="button"
-      x-data="{ dark: false }"
-      x-on:click="dark = !dark; document.documentElement.dataset.theme = dark ? 'dark' : 'light'"
+      x-data="{ dark: document.documentElement.dataset.theme === 'dark' }"
+      x-on:click="dark = !dark; document.documentElement.dataset.theme = dark ? 'dark' : 'light'; try { localStorage.setItem('bartleby-color-mode', dark ? 'dark' : 'light') } catch (e) {}"
       x-text="dark ? 'Light mode' : 'Dark mode'"
       class="theme-toggle">Toggle theme</button>
     {% endif %}

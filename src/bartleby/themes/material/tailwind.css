@@ -290,6 +290,9 @@
     color: var(--bm-text-muted);
     font-size: 0.8rem;
   }
+  .post-list-item {
+    border-bottom: 1px solid var(--bm-border);
+  }
   .tag-list {
     display: flex;
     flex-wrap: wrap;

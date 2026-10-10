@@ -167,3 +167,35 @@ def test_rendered_md_button_html_uses_styled_class() -> None:
     html = _render_markdown("[Get started](/start/){ .md-button }\n")
     assert 'class="md-button"' in html
     assert _stylesheet_defines(".md-button")
+
+
+def _color_mode_ctx(color_mode: dict[str, object]) -> dict[str, object]:
+    return _ctx(config={"theme": {"color_mode": color_mode}})
+
+
+def test_configured_dark_default_sets_static_data_theme_without_toggle() -> None:
+    """With the toggle off, color_mode.default still picks the static data-theme."""
+    rendered = _env().get_template("base.html").render(**_color_mode_ctx({"default": "dark"}))
+    assert '<html lang="en" data-theme="dark">' in rendered
+    assert "bartleby-color-mode" not in rendered
+
+
+def test_configured_dark_default_reaches_pre_paint_script_with_toggle() -> None:
+    """With the toggle on, the script falls back to the configured default before the OS."""
+    rendered = (
+        _env()
+        .get_template("base.html")
+        .render(**_color_mode_ctx({"default": "dark", "toggle": True}))
+    )
+    assert '<html lang="en" data-theme="dark">' in rendered
+    assert 'var configured = "dark";' in rendered
+    assert rendered.index("mode = configured;") < rendered.index("prefers-color-scheme")
+
+
+def test_missing_or_unknown_default_keeps_light_and_script_falls_through() -> None:
+    """No default, or an unrecognised one, leaves data-theme light and configured null."""
+    template = _env().get_template("base.html")
+    for color_mode in ({"toggle": True}, {"default": "sepia", "toggle": True}):
+        rendered = template.render(**_color_mode_ctx(color_mode))
+        assert '<html lang="en" data-theme="light">' in rendered
+        assert "var configured = null;" in rendered

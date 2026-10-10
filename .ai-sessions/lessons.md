@@ -3,6 +3,7 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- Interactive UI state a theme owns (color-mode toggle) needs an owner in the plan: Step 8's toggle held state in memory only and no later step covered persistence, so the validator caught it. For any toggle, ask where its state is stored and who reads it before first paint; put the pre-paint script in `base`, not in one theme, so every theme reuses it (2026-10-10)
 - Tailwind's `--content` CLI flag overrides the config file's `content`, and `@layer components` classes are purged when no scanned file uses them. A theme's `safelist.txt` therefore does nothing until `tailwind.config.js` reads it (via `__dirname`) and passes it as the config `safelist`. Compile a scratch project and grep the output CSS to prove a class survives (2026-10-10)
 - Plan Verify lines can name a CLI form that does not exist (`bartleby build docs/` exits 2; the real form is `cd docs && bartleby build` or `--config docs/bartleby.yml`). Run `--help` on any command a plan quotes before trusting it (2026-10-10)
 - Tests for a command that writes files (eject, init, scaffold) must run against a `tmp_path` copy of any fixture directory from the first RED test; a destructive command pointed at `tests/fixtures/` before its overwrite or containment guard exists litters the repo with files. Guard destination overlap in both directions (inside a source dir, or containing one) (2026-10-10)

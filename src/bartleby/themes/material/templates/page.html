@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{# Material page: layout-docs grid. Step 9 fills the sidebar and toc blocks around it. #}
+{% block content %}
+<div class="layout-docs">
+  <article class="docs-content">
+    <h1 class="mb-6 text-3xl font-light">{{ page.title }}</h1>
+    <div class="prose dark:prose-invert max-w-none">
+      {{ page.content | safe if page.content else "" }}
+    </div>
+  </article>
+</div>
+{% endblock %}

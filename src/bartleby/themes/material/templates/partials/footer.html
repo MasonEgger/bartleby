@@ -1,5 +1,6 @@
-<footer>
-  <nav class="prev-next">
+{# Material footer: previous and next page links, then build metadata. #}
+<footer class="site-footer">
+  <nav class="prev-next" aria-label="Page">
     {% if page.previous %}<a href="{{ page.previous.url }}" rel="prev">&larr; {{ page.previous.title }}</a>{% endif %}
     {% if page.next %}<a href="{{ page.next.url }}" rel="next">{{ page.next.title }} &rarr;</a>{% endif %}
   </nav>

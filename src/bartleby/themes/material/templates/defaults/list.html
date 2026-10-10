@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{# Material listing: one row per post with date, excerpt, and Previous/Next pagination. #}
+{% block content %}
+{% set intro_content = page.custom_metadata.intro_content %}
+{% set paginator = page.custom_metadata.paginator %}
+{% set listed = paginator.items if paginator else page.custom_metadata.posts %}
+<section class="layout-prose">
+  <h1 class="mb-4 text-3xl font-light">{{ page.title }}</h1>
+  {% if intro_content %}<div class="prose dark:prose-invert max-w-none mb-6">{{ intro_content | safe }}</div>{% endif %}
+  <ul class="m-0 list-none p-0">
+    {% for post in listed %}
+    <li class="post-list-item py-5">
+      <h2 class="m-0 text-xl font-medium"><a href="{{ post.output_url }}">{{ post.title }}</a></h2>
+      {% if post.date %}<p class="post-meta mt-1"><time datetime="{{ post.date }}">{{ post.date }}</time></p>{% endif %}
+      {% if post.excerpt %}<div class="prose dark:prose-invert mt-2 max-w-none">{{ post.excerpt | safe }}</div>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% if paginator and (paginator.has_prev or paginator.has_next) %}
+  <nav class="prev-next" aria-label="Pagination">
+    {% if paginator.has_prev %}<a href="{{ paginator.prev_url }}" rel="prev">&larr; Previous</a>{% endif %}
+    {% if paginator.has_next %}<a href="{{ paginator.next_url }}" rel="next">Next &rarr;</a>{% endif %}
+  </nav>
+  {% endif %}
+</section>
+{% endblock %}

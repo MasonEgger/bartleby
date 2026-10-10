@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{# Material post: single prose column with a meta line and tag chips. #}
+{% block content %}
+<article class="layout-prose">
+  <header class="mb-6">
+    <h1 class="mb-3 text-3xl font-light">{{ page.title }}</h1>
+    <p class="post-meta">
+      {% if page.date %}<time datetime="{{ page.date }}">{{ page.date }}</time>{% endif %}
+      {% if page.authors %}<span>By {% for author in page.authors %}{{ author.name }}{% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}
+      {% if page.readtime %}<span>{{ page.readtime }} min read</span>{% endif %}
+    </p>
+  </header>
+  <div class="prose dark:prose-invert max-w-none">
+    {{ page.content | safe if page.content else "" }}
+  </div>
+  {% if page.taxonomies and page.taxonomies.tags %}
+  <footer class="mt-8">
+    <ul class="tag-list">
+      {% for tag in page.taxonomies.tags %}<li class="tag">{{ tag }}</li>{% endfor %}
+    </ul>
+  </footer>
+  {% endif %}
+</article>
+{% endblock %}

@@ -1,31 +1,9 @@
 {# Table of contents from page.toc (Markdown heading tokens: id, name, nested children). #}
 {# Plain anchor links work with JS off; Alpine marks the heading currently in view. #}
-{% macro entries(items) %}
-<ul>
-  {% for entry in items %}
-  <li>
-    <a href="#{{ entry.id }}"
-       x-bind:class="{ active: active === '{{ entry.id }}' }"
-       x-bind:aria-current="active === '{{ entry.id }}' ? 'location' : null">{{ entry.name }}</a>
-    {% if entry.get("children") %}{{ entries(entry.children) }}{% endif %}
-  </li>
-  {% endfor %}
-</ul>
-{% endmacro %}
+{% from "partials/toc_macros.html" import entries, tracker %}
 {% if page.toc %}
 <aside class="toc-sidebar"
-       x-data="{ active: '' }"
-       x-init="
-         const seen = new Map();
-         const observer = new IntersectionObserver((records) => {
-           for (const record of records) { seen.set(record.target.id, record.isIntersecting); }
-           const visible = [...seen].filter(([, inView]) => inView).map(([id]) => id);
-           if (visible.length) { active = visible[0]; }
-         }, { rootMargin: '0px 0px -70% 0px' });
-         $el.querySelectorAll('a[href^=&quot;#&quot;]').forEach((link) => {
-           const heading = document.getElementById(link.getAttribute('href').slice(1));
-           if (heading) { observer.observe(heading); }
-         });">
+       {{ tracker() }}>
   <nav class="toc-nav" aria-label="Table of contents">
     {{ entries(page.toc) }}
   </nav>

@@ -1,6 +1,39 @@
 {% extends "base.html" %}
-{# Scrivener page: a single reading column with the margin rule. Step 13 adds the docs grid around it. #}
+{# Scrivener page. Docs pages get the layout-docs grid: section index, reading column, table of contents. #}
+{# Columns with nothing to show are dropped by modifier classes. A page with neither sidebar nor TOC is the plain reading column. #}
+{% from "partials/nav_macros.html" import holds %}
 {% block content %}
+{% set tabs = feature is defined and feature('nav.tabs') %}
+{% set ns = namespace(items=[], title=none, index_url=none) %}
+{% if feature is defined and feature('nav.sidebar') %}
+  {% if tabs %}
+    {# With tabs the sidebar shows the tree of the section the page belongs to. #}
+    {% for item in nav %}
+      {% if item.children and (holds(item, page.url) | trim) %}
+        {% set ns.items = item.children %}
+        {% set ns.title = item.title %}
+        {% set ns.index_url = item.index_url %}
+      {% endif %}
+    {% endfor %}
+  {% else %}
+    {% set ns.items = nav %}
+  {% endif %}
+{% endif %}
+{% set sidebar_items = ns.items %}
+{% set sidebar_title = ns.title %}
+{% set sidebar_index_url = ns.index_url %}
+{% if sidebar_items or page.toc %}
+<div class="layout-docs{% if not sidebar_items %} layout-docs--no-sidebar{% endif %}{% if not page.toc %} layout-docs--no-toc{% endif %}">
+  {% if sidebar_items %}{% include "partials/sidebar.html" %}{% endif %}
+  <article class="docs-content">
+    <div class="prose dark:prose-invert max-w-none">
+      <h1>{{ page.title }}</h1>
+      {{ page.content | safe if page.content else "" }}
+    </div>
+  </article>
+  {% include "partials/toc.html" %}
+</div>
+{% else %}
 <div class="layout-prose">
   <article class="prose-column">
     <div class="prose dark:prose-invert max-w-none">
@@ -9,4 +42,5 @@
     </div>
   </article>
 </div>
+{% endif %}
 {% endblock %}

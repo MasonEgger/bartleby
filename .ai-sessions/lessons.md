@@ -3,6 +3,7 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- Validators must compare before and after with `git show <rev>:<path>` or a `git worktree`, never `git stash`: in Step 13 iteration 1 a validator ran `git stash` and altered the index, which the finalize step then had to untangle. State this in the validator dispatch prompt (2026-10-10)
 - A theme that `extends` a base but shares no partials with a sibling theme still needs the sibling's small helper macros (nav `holds`, `first_url`). Duplicating them once is cheaper than a premature shared file, but log it as an info finding and move them to `base` at the next step that touches them, as search moved in Step 11 (2026-10-10)
 - Flipping a default (here `DEFAULT_THEME_NAME`) breaks every test that relied on the old default implicitly: sixteen did. Grep tests for the default accessor and for fixtures that build with no explicit setting, and add one named helper (`tests/theme_helpers.py::material_theme()`) so the dependency is stated, not inherited (2026-10-10)
 - A plan that says "on top of the existing wiring" can describe wiring that does not exist. The material search modal called `window.__bartlebySearch`, which nothing defined, so search silently returned no results. Grep for the definition of every global a template calls before scoping a step as polish (2026-10-10)

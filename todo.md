@@ -108,11 +108,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 5. Document: none
 
 ### Step 13: Scrivener docs layout: sidebar, TOC, tabs (task)
-- [ ] 1. Scope: nav.html, sidebar.html, toc.html, page.html under themes/scrivener
-- [ ] 2. Tooling: frontend-design; build docs on scrivener
-- [ ] 3. Do: implement; no shared files with material
-- [ ] 4. Verify: tabs + sidebar + TOC; no sidebar on listing; no warnings
-- [ ] 5. Document: none
+- [x] 1. Scope: nav.html, sidebar.html, toc.html, page.html under themes/scrivener
+- [x] 2. Tooling: frontend-design; build docs on scrivener
+- [x] 3. Do: implement; no shared files with material
+- [x] 4. Verify: tabs + sidebar + TOC; no sidebar on listing; no warnings
+- [x] 5. Document: none
 
 ### Step 14: Scrivener taxonomy, 404, search, and interactive partials (task)
 - [ ] 1. Scope: taxonomy, taxonomy_index, 404, search, back_to_top, code_copy

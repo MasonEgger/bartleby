@@ -1,0 +1,11 @@
+{# Scrivener table of contents: "On this page", from page.toc. Plain anchor links work with JS off. #}
+{# The base tracker marks the heading in view with .active and aria-current=location. #}
+{% from "partials/toc_macros.html" import entries, tracker %}
+{% if page.toc %}
+<aside class="toc-sidebar"
+       {{ tracker() }}>
+  <nav class="toc-nav" aria-label="On this page">
+    {{ entries(page.toc) }}
+  </nav>
+</aside>
+{% endif %}

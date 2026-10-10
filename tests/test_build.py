@@ -910,3 +910,54 @@ def test_build_docs_page_renders_toc_and_sidebar(project: Path) -> None:
     assert 'class="nav-tabs"' in rendered
     assert 'class="sidebar-nav"' in rendered
     assert 'aria-current="page"' in rendered
+
+
+@pytest.mark.parametrize("theme_name", ["material", "scrivener"])
+def test_build_docs_layout_opens_current_group_and_marks_current_link(
+    project: Path, theme_name: str
+) -> None:
+    """The sidebar opens only the group holding the current page; listings stay single-column."""
+    config_path = project / "bartleby.yml"
+    config_text = config_path.read_text(encoding="utf-8").replace("theme:\n  name: material\n", "")
+    config_path.write_text(
+        config_text
+        + "\nnav:\n"
+        + "  - Home: index.md\n"
+        + "  - Guide:\n"
+        + "      - Overview: guide/index.md\n"
+        + "      - Setup:\n"
+        + "          - Install: guide/setup/install.md\n"
+        + "          - Configure: guide/setup/configure.md\n"
+        + "      - Advanced:\n"
+        + "          - Tuning: guide/advanced/tuning.md\n"
+        + "  - Blog: blog/\n"
+        + f"\ntheme:\n  name: {theme_name}\n  features:\n"
+        + "    - nav.tabs\n    - nav.sidebar\n    - nav.section-index\n",
+        encoding="utf-8",
+    )
+    guide = project / "content" / "guide"
+    for relative in ("index.md", "setup/install.md", "setup/configure.md", "advanced/tuning.md"):
+        page_path = guide / relative
+        page_path.parent.mkdir(parents=True, exist_ok=True)
+        page_path.write_text(
+            f"---\ntitle: {page_path.stem.title()}\n---\n\n"
+            f"## Heading In {page_path.stem}\n\nText.\n",
+            encoding="utf-8",
+        )
+    build(config_path)
+
+    rendered = (project / "site" / "guide" / "setup" / "install" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert "<details open" in rendered
+    assert rendered.count("<details open") == 1
+    assert "<details>" in rendered
+    assert 'aria-current="page"' in rendered
+    assert 'href="/guide/setup/install/" class="active" aria-current="page"' in rendered
+    assert 'class="toc-nav"' in rendered
+    assert 'href="#heading-in-install"' in rendered
+
+    listing = (project / "site" / "blog" / "index.html").read_text(encoding="utf-8")
+    assert "layout-prose" in listing
+    assert "sidebar-nav" not in listing
+    assert "layout-docs" not in listing

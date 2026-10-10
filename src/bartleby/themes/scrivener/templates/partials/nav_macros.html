@@ -1,9 +1,0 @@
-{# Scrivener navigation helpers. Macros return text, so callers trim and test it. #}
-{# holds: "1" when the item, or any descendant, links to the exact url. #}
-{% macro holds(item, url) -%}
-{%- if item.url and item.url == url %}1{% else %}{% for child in item.children %}{{ holds(child, url) }}{% endfor %}{% endif -%}
-{%- endmacro %}
-{# first_url: the item's own url, or the first url found walking down its first children. #}
-{% macro first_url(item) -%}
-{%- if item.url %}{{ item.url }}{% else %}{% for child in item.children %}{% if loop.first %}{{ first_url(child) }}{% endif %}{% endfor %}{% endif -%}
-{%- endmacro %}

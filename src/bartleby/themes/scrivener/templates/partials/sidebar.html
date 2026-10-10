@@ -1,0 +1,33 @@
+{# Scrivener section index: the tree of the section the page belongs to. Expects sidebar_items (NavItems) and optional sidebar_title from the including template. #}
+{# Groups are native <details> elements, so the tree opens and closes with JS off. The current page carries aria-current and the stylesheet draws the rule from it. #}
+{% from "partials/nav_macros.html" import holds %}
+{% set section_index = feature is defined and feature('nav.section-index') %}
+{% macro tree(items, current, parent_index) %}
+<ul>
+  {% for item in items %}
+  {# With section-index on, a group's own index page is the group heading link, so it is not repeated as a child. #}
+  {% if not (section_index and parent_index and item.url == parent_index) %}
+  {% if item.children %}
+  <li class="nav-section">
+    <details{% if (holds(item, current) | trim) or (item.index_url and item.index_url == current) %} open{% endif %}>
+      <summary class="nav-section-title">
+        {% if section_index and item.index_url %}<a href="{{ item.index_url }}"{% if item.index_url == current %} class="active" aria-current="page"{% endif %}>{{ item.title }}</a>{% else %}{{ item.title }}{% endif %}
+      </summary>
+      {{ tree(item.children, current, item.index_url) }}
+    </details>
+  </li>
+  {% elif item.url %}
+  <li class="nav-item">
+    <a href="{{ item.url }}"{% if item.url == current %} class="active" aria-current="page"{% endif %}>{{ item.title }}</a>
+  </li>
+  {% else %}
+  <li class="nav-item"><span class="nav-section-title">{{ item.title }}</span></li>
+  {% endif %}
+  {% endif %}
+  {% endfor %}
+</ul>
+{% endmacro %}
+<nav class="sidebar-nav" aria-label="Section">
+  {% if sidebar_title %}<p class="nav-section-title">{{ sidebar_title }}</p>{% endif %}
+  {{ tree(sidebar_items, page.url, sidebar_index_url) }}
+</nav>

@@ -38,7 +38,6 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from bartleby.theme import get_theme_templates_dir
 from bartleby.themes import BUNDLED_THEME_NAMES, bundled_theme_root
 
 if TYPE_CHECKING:
@@ -80,7 +79,7 @@ A feature enabled in config but missing from the active theme's manifest is a bu
 warning, not an error. Keep this set and :func:`_parse_features` together.
 """
 
-DEFAULT_THEME_NAME = "scrivener"
+DEFAULT_THEME_NAME = "material"
 """The bundled theme selected when ``theme:`` sets none of ``name``, ``path``, ``package``."""
 
 
@@ -207,34 +206,19 @@ class ResolvedTheme:
         return [candidate for candidate in candidates if candidate.is_dir()]
 
 
-_DEFAULT_THEME_FEATURES: frozenset[str] = frozenset(
-    {"search", "nav.back-to-top", "content.code.copy", "color-mode.toggle"}
-)
-"""The features the templates in ``bartleby/theme/`` honor today."""
-
-
 def default_theme() -> ResolvedTheme:
-    """The theme used when no theme is selected: the package in ``bartleby/theme/``.
-
-    It has no manifest on disk; it is wrapped here as a single-layer chain so the
-    build treats it like any other resolved theme.
+    """The theme used when no theme is selected: the bundled default theme chain.
 
     Returns:
-        A one-layer chain named ``default``.
+        The resolved chain for :data:`DEFAULT_THEME_NAME`.
     """
-    root = get_theme_templates_dir().parent
-    manifest = ThemeManifest(name="default", features=sorted(_DEFAULT_THEME_FEATURES))
-    return ResolvedTheme(chain=[ThemeLayer(name="default", root=root, manifest=manifest)])
+    return resolve_theme(
+        project_dir=bundled_theme_root(DEFAULT_THEME_NAME).parent, name=DEFAULT_THEME_NAME
+    )
 
 
 def select_theme(theme_config: ThemeConfig, project_dir: Path) -> ResolvedTheme:
     """Resolve the theme that a ``theme:`` config section selects.
-
-    Transitional: the bundled theme directories do not exist yet, so an unset
-    selection (the bundled default name with no ``path`` or ``package``) keeps
-    using :func:`default_theme`, the package in ``bartleby/theme/``. This branch
-    ends at plan Step 6, when ``scrivener`` ships and every build resolves through
-    :func:`resolve_theme`.
 
     Args:
         theme_config: The parsed ``theme:`` section.
@@ -246,12 +230,6 @@ def select_theme(theme_config: ThemeConfig, project_dir: Path) -> ResolvedTheme:
     Raises:
         ThemeError: If the selected theme cannot be resolved.
     """
-    if (
-        theme_config.name == DEFAULT_THEME_NAME
-        and theme_config.path is None
-        and theme_config.package is None
-    ):
-        return default_theme()
     uses_name = theme_config.path is None and theme_config.package is None
     return resolve_theme(
         project_dir=project_dir,

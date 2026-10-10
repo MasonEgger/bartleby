@@ -8,8 +8,9 @@ from pathlib import Path
 import jinja2
 import pytest
 
-from bartleby.assets import copy_static_files
-from bartleby.theme import get_theme_static_dir, get_theme_templates_dir
+from bartleby.assets import copy_theme_static
+from bartleby.theme_loader import default_theme
+from bartleby.themes import bundled_theme_root
 
 # Pinned vendored bundle versions. Keep these in sync with THIRD-PARTY-NOTICES.
 VENDORED_BUNDLES = {
@@ -24,7 +25,7 @@ def _env(features: list[str] | None = None) -> jinja2.Environment:
     from bartleby.theme_loader import THEME_FEATURES
 
     enabled = list(THEME_FEATURES) if features is None else features
-    loader = jinja2.FileSystemLoader([str(get_theme_templates_dir())])
+    loader = jinja2.FileSystemLoader([str(path) for path in default_theme().templates_dirs()])
     env = jinja2.Environment(loader=loader, autoescape=True)
     env.globals["feature"] = make_feature_checker(enabled)
     return env
@@ -240,7 +241,7 @@ def test_vendored_bundle_is_real(filename: str) -> None:
     string from the library; the old placeholder stubs were ~200 bytes.
     """
     expected = VENDORED_BUNDLES[filename]
-    bundle = get_theme_static_dir() / "js" / filename
+    bundle = bundled_theme_root("base") / "static" / "js" / filename
     assert bundle.exists(), f"missing vendored bundle: {filename}"
     text = bundle.read_text(encoding="utf-8")
     assert len(text.encode("utf-8")) >= expected["min_size"], (
@@ -259,7 +260,9 @@ def test_vendored_bundles_have_no_stub_comment() -> None:
     """
     stub_markers = ("ABOUTME: Vendored", "console.debug && console.debug")
     for filename in VENDORED_BUNDLES:
-        text = (get_theme_static_dir() / "js" / filename).read_text(encoding="utf-8")
+        text = (bundled_theme_root("base") / "static" / "js" / filename).read_text(
+            encoding="utf-8"
+        )
         for marker in stub_markers:
             assert marker not in text, f"{filename} still contains a stub comment ({marker!r})"
 
@@ -282,9 +285,9 @@ def test_third_party_notices_lists_vendored_libraries() -> None:
 
 
 def test_build_copies_real_bundles_into_site_js(tmp_path: Path) -> None:
-    """copy_static_files places the real bundles under site/js/."""
+    """copy_theme_static places the real bundles under site/js/."""
     output_dir = tmp_path / "site"
-    copy_static_files(get_theme_static_dir(), output_dir)
+    copy_theme_static(default_theme().static_dirs(), output_dir)
     for filename in VENDORED_BUNDLES:
         copied = output_dir / "js" / filename
         assert copied.exists(), f"{filename} was not copied into site/js/"

@@ -97,18 +97,19 @@ class TestEject:
         assert payload["target"] == "custom/place"
         assert payload["config"] == "theme:\n  path: custom/place"
 
-    def test_ejects_transitional_default_theme(
+    def test_ejects_default_theme_flattened(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         project = _project(tmp_path, monkeypatch, None)
         main(["theme", "eject"])
 
-        target = project / "themes" / "default"
+        target = project / "themes" / "material"
         manifest = yaml.safe_load((target / "theme.yml").read_text(encoding="utf-8"))
-        assert manifest["name"] == "default"
+        assert manifest["name"] == "material"
         assert "extends" not in manifest
         assert "search" in manifest["features"]
         assert (target / "templates" / "base.html").is_file()
+        assert (target / "templates" / "partials" / "header.html").is_file()
 
     @pytest.fixture
     def themes_copy(self, tmp_path: Path) -> Path:
@@ -223,10 +224,10 @@ class TestInspect:
             (tmp_path / directory / "base.html").write_text("x", encoding="utf-8")
         assert self._shadow_of(tmp_path, "templates/base.html") == "overrides/base.html"
 
-    def test_inspect_default_theme_has_single_layer(self, tmp_path: Path) -> None:
+    def test_inspect_default_theme_reports_material_over_base(self, tmp_path: Path) -> None:
         result = inspect_chain(default_theme(), tmp_path)
-        assert result.chain == ["default"]
-        assert {item.layer for item in result.files} == {"default"}
+        assert result.chain == ["material", "base"]
+        assert {item.layer for item in result.files} == {"material", "base"}
 
     def test_theme_error_is_a_clean_cli_error(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
@@ -270,7 +271,6 @@ class TestEjectEditBuild:
         html = self._eject_edit_build(tmp_path, monkeypatch, THEMES / "child")
         assert "EJECTED-EDIT-MARKER CHILD-PAGE-TEMPLATE" in html
 
-    @pytest.mark.xfail(reason="bundled material theme arrives in plan Step 6", strict=True)
     def test_edit_to_ejected_material_shows_in_build(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

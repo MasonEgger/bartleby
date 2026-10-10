@@ -7,7 +7,8 @@ import re
 
 import jinja2
 
-from bartleby.theme import get_theme_templates_dir
+from bartleby.theme_loader import default_theme
+from bartleby.themes import bundled_theme_root
 
 
 def _render_markdown(source: str) -> str:
@@ -49,7 +50,7 @@ def _stylesheet_defines(selector: str) -> bool:
     opening brace, so a bare substring inside an unrelated rule does not count as
     a definition.
     """
-    css_path = get_theme_templates_dir().parent / "static" / "css" / "main.css"
+    css_path = bundled_theme_root("material") / "static" / "css" / "main.css"
     text = css_path.read_text()
     pattern = re.escape(selector) + r"[^{}]*\{"
     return re.search(pattern, text) is not None
@@ -60,7 +61,7 @@ def _env() -> jinja2.Environment:
     from bartleby.theme_loader import THEME_FEATURES
 
     env = jinja2.Environment(
-        loader=jinja2.FileSystemLoader([str(get_theme_templates_dir())]),
+        loader=jinja2.FileSystemLoader([str(path) for path in default_theme().templates_dirs()]),
         autoescape=True,
     )
     env.globals["feature"] = make_feature_checker(list(THEME_FEATURES))
@@ -143,7 +144,7 @@ def test_rendered_admonition_html_carries_styled_classes() -> None:
 
 def test_stylesheet_has_responsive_media_query() -> None:
     """The base stylesheet has at least one media query for responsive layout."""
-    css_path = get_theme_templates_dir().parent / "static" / "css" / "main.css"
+    css_path = bundled_theme_root("material") / "static" / "css" / "main.css"
     assert "@media" in css_path.read_text()
 
 
@@ -157,7 +158,7 @@ def test_rendered_grid_cards_html_uses_styled_class() -> None:
     html = _render_markdown(source)
     assert 'class="grid cards"' in html
     assert _stylesheet_defines(".grid.cards")
-    css_text = (get_theme_templates_dir().parent / "static" / "css" / "main.css").read_text()
+    css_text = (bundled_theme_root("material") / "static" / "css" / "main.css").read_text()
     assert "grid-template-columns" in css_text
 
 

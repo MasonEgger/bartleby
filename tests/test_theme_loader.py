@@ -97,7 +97,9 @@ def test_manifest_rejects_feature_outside_native_vocabulary(tmp_path: Path) -> N
 
 
 def test_default_theme_declares_the_features_its_templates_honor() -> None:
-    manifest = theme_loader.default_theme().chain[0].manifest
+    resolved = theme_loader.default_theme()
+    assert [layer.name for layer in resolved.chain] == ["material", "base"]
+    manifest = resolved.chain[0].manifest
 
     assert set(manifest.features) == {
         "search",
@@ -242,14 +244,12 @@ def test_selecting_no_source_is_rejected() -> None:
         resolve_theme(project_dir=THEMES)
 
 
-@pytest.mark.xfail(reason="bundled base theme lands in Step 6", strict=True)
 def test_bundled_base_resolves() -> None:
     resolved = resolve_theme(name="base", project_dir=THEMES)
 
     assert [layer.name for layer in resolved.chain] == ["base"]
 
 
-@pytest.mark.xfail(reason="bundled material theme lands in Step 6", strict=True)
 def test_bundled_material_resolves_with_base_parent() -> None:
     resolved = resolve_theme(name="material", project_dir=THEMES)
 

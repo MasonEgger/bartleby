@@ -26,7 +26,7 @@ from bartleby.taxonomies import (
     build_taxonomies,
     generate_taxonomy_pages,
 )
-from bartleby.theme import get_theme_templates_dir
+from bartleby.theme_loader import default_theme
 
 
 def _render(page: Page, template_name: str) -> str:
@@ -39,7 +39,7 @@ def _render(page: Page, template_name: str) -> str:
     from bartleby.theme_loader import THEME_FEATURES
 
     env = jinja2.Environment(
-        loader=jinja2.FileSystemLoader([str(get_theme_templates_dir())]),
+        loader=jinja2.FileSystemLoader([str(path) for path in default_theme().templates_dirs()]),
         autoescape=True,
     )
     env.globals["feature"] = make_feature_checker(list(THEME_FEATURES))

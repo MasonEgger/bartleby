@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from bartleby.config import BartlebyConfig, ConfigError, load_config
+from bartleby.theme_loader import DEFAULT_THEME_NAME
 
 FIXTURES = Path(__file__).parent / "fixtures" / "configs"
 
@@ -260,7 +261,7 @@ def test_theme_font_key_points_to_tokens(tmp_path: Path) -> None:
 def test_theme_source_defaults_to_bundled_default_name(tmp_path: Path) -> None:
     """With no name, path, or package set, the theme is the bundled default name."""
     config = _load_theme_config(tmp_path, "  logo: logo.svg\n")
-    assert config.theme.name == "scrivener"
+    assert config.theme.name == DEFAULT_THEME_NAME
     assert config.theme.path is None
     assert config.theme.package is None
 
@@ -268,7 +269,7 @@ def test_theme_source_defaults_to_bundled_default_name(tmp_path: Path) -> None:
 def test_theme_without_theme_section_uses_default_name(tmp_path: Path) -> None:
     """A config with no ``theme:`` section selects the bundled default name."""
     config = load_config(FIXTURES / "minimal.yml")
-    assert config.theme.name == "scrivener"
+    assert config.theme.name == DEFAULT_THEME_NAME
 
 
 @pytest.mark.parametrize(

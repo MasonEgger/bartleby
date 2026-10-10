@@ -37,9 +37,11 @@ nav:
   - Reference: reference/
 
 theme:
+  name: material
   features:
     - search
     - nav.tabs
+    - color-mode.toggle
   color_mode:
     toggle: true
 

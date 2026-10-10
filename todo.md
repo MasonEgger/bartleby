@@ -55,11 +55,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 8. Verify: coverage + `just check`
 
 ### Step 6: Split the existing theme into bundled `base` and `material` (task)
-- [ ] 1. Scope: themes/base + themes/material layout; delete theme/; update imports
-- [ ] 2. Tooling: python; pytest, just check
-- [ ] 3. Do: git mv into layout; write both theme.yml; replace Material-named feature() calls with native; un-xfail base/material tests; docs/bartleby.yml -> material temporarily
-- [ ] 4. Verify: `just check` green; `bartleby build docs/` exits 0
-- [ ] 5. Document: spec.md Component boundaries theme block
+- [x] 1. Scope: themes/base + themes/material layout; delete theme/; update imports
+- [x] 2. Tooling: python; pytest, just check
+- [x] 3. Do: git mv into layout; write both theme.yml; replace Material-named feature() calls with native; un-xfail base/material tests; docs/bartleby.yml -> material temporarily
+- [x] 4. Verify: `just check` green; `bartleby build docs/` exits 0
+- [x] 5. Document: spec.md Component boundaries theme block
 
 ## Section 2: The `material` theme
 

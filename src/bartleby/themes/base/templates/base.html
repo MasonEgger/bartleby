@@ -19,18 +19,26 @@
   <script defer src="/js/alpine.min.js"></script>
   <script defer src="/js/htmx.min.js"></script>
   <script defer src="/js/lunr.min.js"></script>
+  {% block head_extra %}{% endblock %}
 </head>
 <body>
+  {% block header %}
   {% include "partials/header.html" %}
-  {% if feature is defined and feature('search') %}{% include "partials/search.html" %}{% endif %}
+  {% if feature is defined and feature('search') %}{% include "partials/search.html" ignore missing %}{% endif %}
+  {% endblock %}
+  {% block nav %}{% endblock %}
+  {% block sidebar %}{% endblock %}
   <main>
     {% block content %}{{ page.content | safe if page.content else "" }}{% endblock %}
   </main>
-  {% if feature is defined and feature('nav.back-to-top') %}{% include "partials/back_to_top.html" %}{% endif %}
-  {% if feature is defined and feature('content.code.copy') %}{% include "partials/code_copy.html" %}{% endif %}
-  {% include "partials/footer.html" %}
+  {% block toc %}{% endblock %}
+  {% if feature is defined and feature('nav.back-to-top') %}{% include "partials/back_to_top.html" ignore missing %}{% endif %}
+  {% if feature is defined and feature('content.code.copy') %}{% include "partials/code_copy.html" ignore missing %}{% endif %}
+  {% block footer %}{% include "partials/footer.html" %}{% endblock %}
+  {% block scripts %}
   {% for js in extra_js %}
   <script src="/{{ js.lstrip('/') }}"></script>
   {% endfor %}
+  {% endblock %}
 </body>
 </html>

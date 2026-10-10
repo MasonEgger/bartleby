@@ -15,7 +15,7 @@ Bartleby is 32 single-responsibility modules under `src/bartleby/`, grouped by b
 - **Frontend stack**: Tailwind CSS + Alpine.js + HTMX + lunr.js (reimplemented, NOT ported from mkdocs-material)
 - **Synchronous build**: `build()` in `build.py` runs the whole pipeline in-process. `async_build()` is only an `asyncio.to_thread` wrapper used by the dev server. Parallel and incremental builds are explicit non-goals (spec.md).
 - **Co-located assets**: Non-markdown files in `content/` follow the page's output URL, not the source path (Hugo-style page bundles)
-- **Theme system (in progress, plan.md Section 1)**: the single hardwired `theme/` package is being replaced by `theme_loader.py` plus bundled themes under `themes/` (`base`, `material`, `scrivener`). A theme is a directory with a `theme.yml` manifest, selected by `theme.name`, `theme.path`, or `theme.package`, composable with `extends`, and exposed whole by `bartleby theme eject` and `theme inspect`. Until that lands, `templates.py`, `icons.py`, and the CLI compile handler all point at `theme/`. The theme vocabulary is Bartleby-native; do not add mkdocs-material alias keys.
+- **Theme system (plan.md Section 1 landed; scrivener arrives in Step 11)**: the old hardwired `theme/` package is gone. Resolution goes through `theme_loader.py` plus bundled themes under `themes/` (`base`, `material`; `scrivener` is not written yet). The default theme is `material` until Step 11 flips it. A theme is a directory with a `theme.yml` manifest, selected by `theme.name`, `theme.path`, or `theme.package`, composable with `extends`, and exposed whole by `bartleby theme eject` and `theme inspect`. The theme vocabulary is Bartleby-native; do not add mkdocs-material alias keys.
 - **Extension ordering**: markwright.fence preprocessor (priority 40) runs BEFORE pymdownx.superfences (priority 25). The fence postprocessor then injects results AFTER superfences generates HTML.
 
 ## Tech Stack
@@ -35,7 +35,7 @@ just lint | typecheck | test | smoke | format   # Individual targets
 just theme-css             # Recompile the shipped theme CSS (needs tailwindcss on PATH; package-build only)
 uv run pytest tests/test_config.py  # Run single test file
 uv run pytest -k "test_name"        # Run single test by name
-uv run bartleby build docs/         # Build the docs site (itself a Bartleby site; output in docs/site/, gitignored)
+(cd docs && uv run bartleby build)  # Build the docs site (itself a Bartleby site; output in docs/site/, gitignored)
 ```
 
 Hold every diff to `just check`; `uv run pytest` alone skips ruff, mypy, and the smoke test.

@@ -18,8 +18,7 @@ from bartleby.build import (
     extract_excerpt,
 )
 from bartleby.config import ConfigError
-from bartleby.theme import get_theme_static_dir
-from bartleby.theme_loader import resolve_theme
+from bartleby.theme_loader import default_theme, resolve_theme
 
 
 @pytest.fixture
@@ -375,7 +374,12 @@ def test_static_file_count_excludes_generated_artifacts(project: Path) -> None:
     assert (site_dir / "schema.json").exists()
     assert (site_dir / "content-index.json").exists()
 
-    theme_static_count = sum(1 for path in get_theme_static_dir().rglob("*") if path.is_file())
+    theme_static_count = sum(
+        1
+        for static_dir in default_theme().static_dirs()
+        for path in static_dir.rglob("*")
+        if path.is_file()
+    )
     project_static_count = sum(1 for path in (project / "static").rglob("*") if path.is_file())
     colocated_asset_count = 2  # published-with-asset/photo.png + orphaned media/diagram.png
     expected_count = theme_static_count + project_static_count + colocated_asset_count
@@ -833,7 +837,7 @@ def test_unimplemented_feature_warns_once_and_build_succeeds(
     warnings = _unimplemented_warnings(caplog)
     assert len(warnings) == 1
     assert "nav.tabs" in warnings[0]
-    assert "default" in warnings[0]
+    assert "material" in warnings[0]
 
 
 def test_implemented_features_emit_no_warning(

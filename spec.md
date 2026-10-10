@@ -153,8 +153,8 @@ Agent surface:
 
 Theme:
 - `theme_compile.py`: resolve the Tailwind standalone binary and compile the resolved theme's CSS, emitting `theme.tokens` as CSS custom properties.
-- `theme_loader.py` (planned this cycle): manifest parsing, name/path/package resolution, the `extends` chain, and the eject and inspect operations.
-- The `themes/` package (planned this cycle, replacing `theme/`): the bundled `base`, `material`, and `scrivener` themes, each a complete theme directory.
+- `theme_loader.py`: manifest parsing, name/path/package resolution, the `extends` chain, and the eject and inspect operations.
+- The `themes/` package (replacing the former `theme/` package): the bundled `base` and `material` themes, with `scrivener` still to come, each a complete theme directory.
 
 Quality and plugins:
 - `linting.py`: content quality checks (broken links, missing descriptions, orphans).

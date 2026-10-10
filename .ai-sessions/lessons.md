@@ -3,6 +3,7 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- Plan Verify lines can name a CLI form that does not exist (`bartleby build docs/` exits 2; the real form is `cd docs && bartleby build` or `--config docs/bartleby.yml`). Run `--help` on any command a plan quotes before trusting it (2026-10-10)
 - Tests for a command that writes files (eject, init, scaffold) must run against a `tmp_path` copy of any fixture directory from the first RED test; a destructive command pointed at `tests/fixtures/` before its overwrite or containment guard exists litters the repo with files. Guard destination overlap in both directions (inside a source dir, or containing one) (2026-10-10)
 - Tailwind 3 standalone's postcss-import resolves `@import` relative to the input file, so generated files (theme tokens) must be pulled in through a generated wrapper input that sits beside them, not from a theme's own tailwind.css. Absolute paths inside a CSS `@import` must use forward slashes (`Path.as_posix()`); backslashes parse as CSS escapes (2026-10-10)
 - `git diff HEAD` and `git diff --staged` omit untracked files, so a validator reviewing a step that is mostly new files sees an empty or tiny diff. Tell it the new paths explicitly (or `git add -N` them) and have it read them directly (2026-10-10)

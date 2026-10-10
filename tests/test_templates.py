@@ -373,7 +373,8 @@ def test_jinja_env_has_correct_search_paths(tmp_path: Path) -> None:
     assert paths[0].endswith("overrides")
     assert paths[1].endswith("templates")
     assert paths[2] == str(tmp_path)
-    assert paths[3].endswith("theme/templates")
+    assert paths[3].endswith("themes/material/templates")
+    assert paths[4].endswith("themes/base/templates")
 
 
 def test_extra_css_paths_in_context(tmp_path: Path) -> None:

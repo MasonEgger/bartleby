@@ -133,11 +133,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 ## Section 5: Theme docs and the docs showcase
 
 ### Step 16: Catalog every docs rendering defect (task)
-- [ ] 1. Scope: inventory in scratchpad
-- [ ] 2. Tooling: diataxis, style-linting; build/lint/serve
-- [ ] 3. Do: build + lint; walk pages; classify by Diataxis; flag old-config content
-- [ ] 4. Verify: every entry has path + specific defect
-- [ ] 5. Document: save inventory
+- [x] 1. Scope: inventory in scratchpad
+- [x] 2. Tooling: diataxis, style-linting; build/lint/serve
+- [x] 3. Do: build + lint; walk pages; classify by Diataxis; flag old-config content
+- [x] 4. Verify: every entry has path + specific defect
+- [x] 5. Document: save inventory
 
 ### Step 17: Fix docs content and switch the docs to the Scrivener theme (task)
 - [ ] 1. Scope: docs/content/**, docs/bartleby.yml, docs/.authors.yml

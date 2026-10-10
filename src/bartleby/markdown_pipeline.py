@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from typing import TYPE_CHECKING, Any
 
 import markdown
@@ -105,6 +106,30 @@ def render_markdown(source: str, renderer: markdown.Markdown) -> RenderedContent
         [dict(token) for token in toc_tokens_raw] if isinstance(toc_tokens_raw, list) else []
     )
     return RenderedContent(html=html, toc_tokens=toc_tokens)
+
+
+class _TextCollector(HTMLParser):
+    """Collect the text nodes of an HTML fragment."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.chunks: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        self.chunks.append(data)
+
+
+def html_to_plain_text(html: str) -> str:
+    """Return the text of ``html`` with tags removed and whitespace collapsed.
+
+    :param html: An HTML fragment, such as a rendered excerpt.
+    :returns: Plain text on a single line, with entities decoded.
+    """
+    collector = _TextCollector()
+    collector.feed(html)
+    collector.close()
+    # str.split() treats the non-breaking space from &nbsp; as whitespace too.
+    return " ".join("".join(collector.chunks).split())
 
 
 def _index_overrides(

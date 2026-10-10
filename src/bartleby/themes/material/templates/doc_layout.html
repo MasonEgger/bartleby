@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{# Material article layout shared by pages, posts, and listings: the layout-docs grid holds the section sidebar, the article, and the TOC. #}
+{# Columns the page has no content for are dropped by modifier classes, not left empty. #}
+{# Posts and listings set reading_column, so without a sidebar or TOC they stay a single prose column. #}
+{# Children fill the article_head (under the title), article_body (inside the prose), and article_foot (below the prose) blocks. #}
+{% import "partials/section_nav.html" as section with context %}
+{% block content %}
+{% set sidebar_items = section.sidebar_items %}
+{% set sidebar_title = section.sidebar_title %}
+{% set sidebar_index_url = section.sidebar_index_url %}
+{% set has_columns = sidebar_items or page.toc or not reading_column %}
+{% if has_columns %}
+<div class="layout-docs{% if not sidebar_items %} layout-docs--no-sidebar{% endif %}{% if not page.toc %} layout-docs--no-toc{% endif %}">
+  {% if sidebar_items %}{% include "partials/sidebar.html" %}{% endif %}
+  <article class="docs-content" data-search-highlight-root>
+{% else %}
+<div>
+  <article class="layout-prose" data-search-highlight-root>
+{% endif %}
+    <h1 class="mb-3 text-3xl font-light">{{ page.title }}</h1>
+    {% block article_head %}{% endblock %}
+    <div class="prose dark:prose-invert max-w-none">
+      {% block article_body %}{{ page.content | safe if page.content else "" }}{% endblock %}
+    </div>
+    {% block article_foot %}{% endblock %}
+  </article>
+{% if has_columns %}
+  {% include "partials/toc.html" %}
+{% endif %}
+</div>
+{% endblock %}

@@ -34,11 +34,19 @@ class ContentError(Exception):
 
 
 @dataclass(slots=True)
+class TermLink:
+    """One taxonomy value on a page, with the URL of its term page when one exists."""
+
+    term: str
+    url: str | None
+
+
+@dataclass(slots=True)
 class Page:
     """A single content page discovered under ``content/``.
 
     Fields set during discovery describe the source; fields set later in the
-    pipeline (``output_url``, ``rendered_content``, ``excerpt``, ``readtime``)
+    pipeline (``output_url``, ``rendered_content``, ``excerpt``, ``excerpt_html``, ``readtime``)
     default to empty values and are populated by subsequent build steps.
     """
 
@@ -59,7 +67,10 @@ class Page:
     content_type_name: str | None = None
     output_url: str = ""
     rendered_content: str = ""
+    #: The excerpt as plain text, for feeds, ``llms.txt``, and other machine readers.
     excerpt: str = ""
+    #: The excerpt rendered to HTML, for listing pages.
+    excerpt_html: str = ""
     readtime: int | None = None
     previous: Page | None = None
     next: Page | None = None
@@ -68,6 +79,8 @@ class Page:
     # contents extracted during markdown rendering.
     authors: list[Author | str] = field(default_factory=list)
     toc: list[Any] = field(default_factory=list)
+    #: Taxonomy name to the page's terms as links, filled at template-context build time.
+    taxonomy_links: dict[str, list[TermLink]] = field(default_factory=dict)
 
     @property
     def content(self) -> str:

@@ -1,24 +1,21 @@
-{% extends "base.html" %}
-{# Material post: single prose column with a meta line and tag chips. #}
-{% block content %}
-<article class="layout-prose" data-search-highlight-root>
-  <header class="mb-6">
-    <h1 class="mb-3 text-3xl font-light">{{ page.title }}</h1>
-    <p class="post-meta">
+{% extends "doc_layout.html" %}
+{# Material post: a meta line under the title and tag chips at the foot. #}
+{% set reading_column = true %}
+{% block article_head %}
+{% if page.date or page.authors or page.readtime %}
+    <p class="post-meta mb-6">
       {% if page.date %}<time datetime="{{ page.date }}">{{ page.date }}</time>{% endif %}
       {% if page.authors %}<span>By {% for author in page.authors %}{{ author.name }}{% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}
       {% if page.readtime %}<span>{{ page.readtime }} min read</span>{% endif %}
     </p>
-  </header>
-  <div class="prose dark:prose-invert max-w-none">
-    {{ page.content | safe if page.content else "" }}
-  </div>
-  {% if page.taxonomies and page.taxonomies.tags %}
+{% endif %}
+{% endblock %}
+{% block article_foot %}
+  {% if page.taxonomy_links and page.taxonomy_links.tags %}
   <footer class="mt-8">
     <ul class="tag-list">
-      {% for tag in page.taxonomies.tags %}<li class="tag">{{ tag }}</li>{% endfor %}
+      {% for link in page.taxonomy_links.tags %}<li>{% if link.url %}<a href="{{ link.url }}">{{ link.term }}</a>{% else %}<span class="tag">{{ link.term }}</span>{% endif %}</li>{% endfor %}
     </ul>
   </footer>
   {% endif %}
-</article>
 {% endblock %}

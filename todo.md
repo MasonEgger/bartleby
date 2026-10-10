@@ -154,11 +154,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 5. Document: add pages to docs nav
 
 ### Step 19: Visual polish pass on the docs showcase (task)
-- [ ] 1. Scope: docs/content/** copy/structure; docs/bartleby.yml features
-- [ ] 2. Tooling: frontend-design, diataxis; build/serve/browser
-- [ ] 3. Do: review all page types incl. theme pages, both modes, both widths; tune (theme CSS frozen unless defect)
-- [ ] 4. Verify: screenshots show polished showcase; surface to Mason
-- [ ] 5. Document: CHANGELOG if structure changed
+- [x] 1. Scope: docs/content/** copy/structure; docs/bartleby.yml features
+- [x] 2. Tooling: frontend-design, diataxis; build/serve/browser
+- [x] 3. Do: review all page types incl. theme pages, both modes, both widths; tune (theme CSS frozen unless defect)
+- [x] 4. Verify: screenshots show polished showcase; surface to Mason (screenshots done; surfacing to Mason is pending, shots in the step19 scratchpad)
+- [x] 5. Document: CHANGELOG if structure changed
 
 ## Section 6: Developer experience
 

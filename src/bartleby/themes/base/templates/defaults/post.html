@@ -12,10 +12,10 @@
     {% if page.readtime %}<p>{{ page.readtime }} min read</p>{% endif %}
   </header>
   {{ page.content | safe if page.content else "" }}
-  {% if page.taxonomies and page.taxonomies.tags %}
+  {% if page.taxonomy_links and page.taxonomy_links.tags %}
   <footer>
     <ul>
-      {% for tag in page.taxonomies.tags %}<li>{{ tag }}</li>{% endfor %}
+      {% for link in page.taxonomy_links.tags %}<li>{% if link.url %}<a href="{{ link.url }}">{{ link.term }}</a>{% else %}<span class="tag">{{ link.term }}</span>{% endif %}</li>{% endfor %}
     </ul>
   </footer>
   {% endif %}

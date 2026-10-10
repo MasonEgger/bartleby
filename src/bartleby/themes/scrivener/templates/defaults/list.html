@@ -1,22 +1,19 @@
-{% extends "base.html" %}
-{# Scrivener listing: ledger lines with the date in the margin column and Previous/Next below. #}
-{% block content %}
+{% extends "doc_layout.html" %}
+{# Scrivener listing: ledger lines with the date in the margin column (rows without a date drop the column) and Previous/Next below. #}
+{% block article_body %}
 {% set intro_content = page.custom_metadata.intro_content %}
+      {% if intro_content %}{{ intro_content | safe }}{% endif %}
+{% endblock %}
+{% block article_foot %}
 {% set paginator = page.custom_metadata.paginator %}
 {% set listed = paginator.items if paginator else page.custom_metadata.posts %}
-<div class="layout-prose">
-  <section class="prose-column">
-    <div class="prose dark:prose-invert max-w-none">
-      <h1>{{ page.title }}</h1>
-      {% if intro_content %}{{ intro_content | safe }}{% endif %}
-    </div>
     <ul class="post-list">
       {% for post in listed %}
-      <li class="post-list-item">
-        {% if post.date %}<time datetime="{{ post.date }}">{{ post.date }}</time>{% else %}<span></span>{% endif %}
+      <li class="post-list-item{% if not post.date %} post-list-item--undated{% endif %}">
+        {% if post.date %}<time datetime="{{ post.date }}">{{ post.date }}</time>{% endif %}
         <div>
           <h2><a href="{{ post.output_url }}">{{ post.title }}</a></h2>
-          {% if post.excerpt %}<div class="prose dark:prose-invert max-w-none">{{ post.excerpt | safe }}</div>{% endif %}
+          {% if post.excerpt_html %}<div class="prose dark:prose-invert max-w-none">{{ post.excerpt_html | safe }}</div>{% endif %}
         </div>
       </li>
       {% endfor %}
@@ -27,6 +24,4 @@
       {% if paginator.has_next %}<a href="{{ paginator.next_url }}" rel="next">Next &rarr;</a>{% endif %}
     </nav>
     {% endif %}
-  </section>
-</div>
 {% endblock %}

@@ -99,6 +99,10 @@ Your page templates extend it and fill these blocks:
 The build looks for these template names, each of which you can override: `page.html`, `defaults/post.html`, `defaults/list.html`, `404.html`, `taxonomy.html`, and `taxonomy_index.html`.
 The [lookup cascade](../../concepts/templates.md) explains how a page picks one.
 
+To show a post's tags as links, loop over `page.taxonomy_links.tags` and use each entry's `url`.
+Do not build the URL from the tag text, because the slug format and the content type scope both change it.
+The [template context reference](../../reference/pages/template-context.md) lists the fields.
+
 A minimal `templates/page.html`:
 
 ```html

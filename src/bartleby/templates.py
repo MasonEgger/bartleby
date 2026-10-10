@@ -14,6 +14,7 @@ import yaml
 from bartleby.feeds import feed_links_for_page
 from bartleby.llm import generate_jsonld
 from bartleby.seo import generate_all_meta_tags
+from bartleby.taxonomies import taxonomy_links_for
 from bartleby.theme_loader import default_theme
 
 if TYPE_CHECKING:
@@ -236,7 +237,9 @@ def build_page_context(
     :param authors: Optional mapping of author key to :class:`Author` object,
         used to resolve ``page.author_keys`` into rich objects with ``name``,
         ``url``, ``avatar``, etc. for templates. Keys with no matching entry
-        are exposed as the raw key string.
+        are exposed as the raw key string. Also fills ``page.taxonomy_links``
+        (taxonomy name to ``TermLink`` objects with ``term`` and ``url``) from
+        ``taxonomy_data``, so themes link terms without building URLs by hand.
     :returns: Mapping with the standard Bartleby context keys: ``site``,
         ``page``, ``nav``, ``pages``, ``taxonomies``, ``config``, ``build``,
         ``data``, ``extra_css``, ``extra_js``, ``seo``, ``feed_links``,
@@ -247,6 +250,9 @@ def build_page_context(
         Python paths cannot diverge.
     """
     page.authors = _resolve_author_objects(page.author_keys, authors or {})
+    page.taxonomy_links = taxonomy_links_for(
+        page, taxonomy_data.get("global", {}), taxonomy_data.get("by_content_type", {})
+    )
     return {
         "site": _site_namespace(site_config),
         "page": page,

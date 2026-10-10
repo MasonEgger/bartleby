@@ -5,18 +5,18 @@
 {% set index_url = ("/" ~ page.content_type_name ~ "/" if page.content_type_name else "/") ~ page.custom_metadata.taxonomy_name ~ "/" %}
 <div class="layout-prose">
   <section class="prose-column taxonomy-term">
-    <p class="taxonomy-crumb"><a href="{{ index_url }}">All {{ page.custom_metadata.taxonomy_name }}</a></p>
+    <p class="taxonomy-crumb"><a href="{{ index_url }}">All {{ page.custom_metadata.taxonomy_name }}{% if page.content_type_name %} in {{ page.content_type_name }}{% endif %}</a></p>
     <div class="prose dark:prose-invert max-w-none">
       <h1>{{ page.title }}</h1>
     </div>
     <p class="taxonomy-count">{{ posts | length }} {{ "page" if posts | length == 1 else "pages" }} with this term</p>
     <ul class="post-list">
       {% for post in posts %}
-      <li class="post-list-item">
-        {% if post.date %}<time datetime="{{ post.date }}">{{ post.date }}</time>{% else %}<span></span>{% endif %}
+      <li class="post-list-item{% if not post.date %} post-list-item--undated{% endif %}">
+        {% if post.date %}<time datetime="{{ post.date }}">{{ post.date }}</time>{% endif %}
         <div>
           <h2><a href="{{ post.output_url }}">{{ post.title }}</a></h2>
-          {% if post.excerpt %}<div class="prose dark:prose-invert max-w-none">{{ post.excerpt | safe }}</div>{% endif %}
+          {% if post.excerpt_html %}<div class="prose dark:prose-invert max-w-none">{{ post.excerpt_html | safe }}</div>{% endif %}
         </div>
       </li>
       {% endfor %}

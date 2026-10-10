@@ -38,7 +38,11 @@ from bartleby.llm import (
     generate_llms_txt,
     write_markdown_variant,
 )
-from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
+from bartleby.markdown_pipeline import (
+    create_markdown_renderer,
+    html_to_plain_text,
+    render_markdown,
+)
 from bartleby.metadata import validate_all_metadata
 from bartleby.navigation import build_navigation, link_pages
 from bartleby.plugins import PluginCollection, discover_hooks, discover_plugins
@@ -384,7 +388,10 @@ def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
         if content_type is not None and content_type.readtime and page.raw_content:
             page.readtime = calculate_readtime(page.raw_content)
         if content_type is not None and content_type.excerpt_separator and page.raw_content:
-            page.excerpt = extract_excerpt(page.raw_content, content_type.excerpt_separator)
+            # Listings show the rendered excerpt; feeds and llms.txt get its plain text.
+            excerpt_markdown = extract_excerpt(source, content_type.excerpt_separator)
+            page.excerpt_html = render_markdown(excerpt_markdown, state.md_renderer).html
+            page.excerpt = html_to_plain_text(page.excerpt_html)
 
     if page_errors:
         _fail_build(page_errors, plugins)

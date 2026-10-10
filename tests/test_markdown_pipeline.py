@@ -15,6 +15,7 @@ from bartleby.config import (
 from bartleby.markdown_pipeline import (
     RenderedContent,
     create_markdown_renderer,
+    html_to_plain_text,
     render_markdown,
 )
 
@@ -143,3 +144,12 @@ def test_config_override_applied() -> None:
     renderer = create_markdown_renderer(_config(markdown_extensions=overrides))
     html = render_markdown("hello", renderer).html
     assert "hello" in html
+
+
+def test_html_to_plain_text_drops_tags_and_collapses_whitespace() -> None:
+    """Tags vanish, entities decode, and runs of whitespace become single spaces."""
+    html = (
+        "<p>Run <code>bartleby build</code>\n  and read "
+        "<a href='/x/'>the&nbsp;docs</a> &amp; more.</p>"
+    )
+    assert html_to_plain_text(html) == "Run bartleby build and read the docs & more."

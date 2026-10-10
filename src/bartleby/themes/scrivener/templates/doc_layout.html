@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{# Scrivener article layout shared by pages, posts, and listings. #}
+{# A page with a section sidebar or a table of contents gets the layout-docs grid: section index, reading column, table of contents. #}
+{# Columns with nothing to show are dropped by modifier classes. A page with neither is the plain reading column. #}
+{# Children fill the article_head (under the title), article_body (inside the prose), and article_foot (below the prose) blocks. #}
+{% import "partials/section_nav.html" as section with context %}
+{% block content %}
+{% set sidebar_items = section.sidebar_items %}
+{% set sidebar_title = section.sidebar_title %}
+{% set sidebar_index_url = section.sidebar_index_url %}
+{% set has_columns = sidebar_items or page.toc %}
+{% if has_columns %}
+<div class="layout-docs{% if not sidebar_items %} layout-docs--no-sidebar{% endif %}{% if not page.toc %} layout-docs--no-toc{% endif %}">
+  {% if sidebar_items %}{% include "partials/sidebar.html" %}{% endif %}
+  <article class="docs-content" data-search-highlight-root>
+{% else %}
+<div class="layout-prose">
+  <article class="prose-column" data-search-highlight-root>
+{% endif %}
+    <div class="prose dark:prose-invert max-w-none">
+      <h1>{{ page.title }}</h1>
+      {% block article_head %}{% endblock %}
+      {% block article_body %}{{ page.content | safe if page.content else "" }}{% endblock %}
+    </div>
+    {% block article_foot %}{% endblock %}
+  </article>
+{% if has_columns %}
+  {% include "partials/toc.html" %}
+{% endif %}
+</div>
+{% endblock %}

@@ -36,9 +36,11 @@ It is the `Page` object itself, so every attribute is reachable in a template.
 | `content` | string | Rendered HTML body |
 | `url` | string | The output URL, with a trailing `/` |
 | `readtime` | int or null | Set when the content type has `readtime: true` |
-| `excerpt` | string | The excerpt, taken from the Markdown source and not rendered. Empty when the content type has no `excerpt_separator`. |
+| `excerpt` | string | The excerpt as plain text, with the Markdown syntax removed. Feeds and `llms.txt` use it. Empty when the content type has no `excerpt_separator`. |
+| `excerpt_html` | string | The same excerpt rendered to HTML. Listing templates use it. |
 | `authors` | list | `Author` objects with `key`, `name`, `description`, `avatar`, and `url`. An unknown key stays a plain string. |
 | `taxonomies` | dict of lists | For example `{"tags": ["python"]}` |
+| `taxonomy_links` | dict of lists | The same terms as links. Each entry has `term` and `url`, for example `{"tags": [{"term": "python", "url": "/blog/tags/python/"}]}`. A post in a content type links to that type's term page, which lists its siblings. A page outside any content type links to the global term page. `url` is null when the term has no page, so check it before building an anchor. |
 | `custom_metadata` | dict | Front matter fields that are neither standard nor taxonomy names |
 | `toc` | list | Table of contents entries from the Markdown render |
 | `previous`, `next` | Page or null | Neighbors in navigation order |

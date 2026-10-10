@@ -10,7 +10,7 @@
     {% for post in listed %}
     <li>
       <a href="{{ post.output_url }}">{{ post.title }}</a>
-      {% if post.excerpt %}<p>{{ post.excerpt | safe }}</p>{% endif %}
+      {% if post.excerpt_html %}{{ post.excerpt_html | safe }}{% endif %}
     </li>
     {% endfor %}
   </ul>

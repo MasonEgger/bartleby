@@ -428,7 +428,7 @@
     font-variant-numeric: oldstyle-nums;
   }
   .post-list {
-    margin: 0;
+    margin: var(--sc-half) 0 0;
     padding: 0;
     list-style: none;
   }
@@ -439,6 +439,10 @@
     column-gap: var(--sc-ruling-unit);
     padding: var(--sc-half) 0;
     border-bottom: 1px dotted var(--sc-ruling);
+  }
+  /* A row with no date has no margin column to fill. */
+  .post-list-item--undated {
+    grid-template-columns: minmax(0, 1fr);
   }
   .post-list-item time {
     color: var(--sc-muted);
@@ -486,6 +490,10 @@
   .tag-list a:hover {
     border-color: var(--sc-margin);
     color: var(--sc-ink);
+  }
+  .tag-list a:focus-visible {
+    outline: 2px solid var(--sc-margin);
+    outline-offset: 2px;
   }
   .prev-next {
     display: flex;

@@ -64,6 +64,30 @@ They get URLs, but no listing page, no feed, and no reading time.
 
 Each content type automatically gets a listing page at its base URL, such as `/blog/`.
 If `content/{type}/index.md` exists, its rendered body appears above the post list as introductory content.
+Relative `.md` links in that intro resolve against the `content/{type}/` directory, the same way links in a page body do.
+
+Each row in the list shows the page's title, its date when it has one, and its excerpt when the content type sets `excerpt_separator`.
+A page without a date gets a row without a date column.
+The excerpt is the part of the page above the separator, or the first paragraph when the page has no separator.
+The listing renders it as HTML, so inline code and links work.
+Feeds and `llms.txt` carry the same excerpt as plain text.
+
+## Navigation for a Content Type
+
+A content type is a listing, so `nav` treats a content-type directory such as `guides/` as one link.
+That keeps a blog with hundreds of posts out of the sidebar.
+When you want a section tree for a finite set of pages, such as a reference, list the pages yourself under the section:
+
+```yaml
+nav:
+  - Reference:
+      - All Reference Pages: reference/
+      - CLI Commands: reference/pages/cli.md
+      - Themes: reference/pages/themes.md
+```
+
+Every page in that section, and the listing page itself, then shows the section as a sidebar.
+Both bundled themes do this for posts, listings, and pages alike.
 
 ## Co-Located Assets
 

@@ -44,6 +44,19 @@ Any other mkdocs-material feature (`navigation.footer`, `navigation.tracking`, `
   Point `theme.path` at that directory and edit the templates directly.
 - `bartleby theme inspect` lists every theme file with the layer that provides it, so you can see which files a project, an ejected theme, or a bundled theme supplies.
 
+### Fixed
+
+- Relative `.md` links in a listing intro (`content/{type}/index.md`) now resolve to the target page's URL.
+  Before, they were left as `.md` links that returned 404.
+- Excerpts no longer show literal backticks and other Markdown syntax.
+  Listings render the excerpt as HTML (`page.excerpt_html`), and `page.excerpt` is plain text, which feeds and `llms.txt` use.
+  A theme template that printed `post.excerpt | safe` should print `post.excerpt_html | safe`.
+- Taxonomy pages scoped to a content type are titled by their scope ("Tags in Guides"), so they no longer look like duplicates of the global tag pages.
+- A listing row for a page without a date drops the date column in `scrivener`.
+- Posts with no date, author, or reading time no longer render an empty meta paragraph under the title.
+- Posts and listings in both bundled themes now get the section sidebar and table of contents that pages get.
+  The sidebar needs the section's pages listed under it in `nav`, because `nav` keeps a content-type directory as one link.
+
 ## [0.1.0] - 2026-10-05
 
 ### Fixed

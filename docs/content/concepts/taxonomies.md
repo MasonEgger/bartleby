@@ -64,6 +64,11 @@ For every taxonomy, Bartleby generates pages at two scopes.
 The same applies to every taxonomy a content type opts in to.
 Both scopes come from the same opt-in, so a content type that uses `tags` always gets its own tag pages as well as a share of the global ones.
 
+The scoped pages carry the content type in their titles, so they read as different pages.
+The global index is "Tags" and the blog's is "Tags in Blog".
+A term page is "Tags: python" globally and "Tags in Blog: python" for the blog.
+The back link on a scoped term page reads "All tags in blog".
+
 ## Slug Formats
 
 Each taxonomy's `slug_format` is a template applied to the slugified term.

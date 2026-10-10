@@ -101,3 +101,35 @@ def test_index_md_link() -> None:
     new_html, errors = resolve_page_crossrefs(html, current, [current, target], Path("/content"))
     assert errors == []
     assert 'href="/about/"' in new_html
+
+
+def test_listing_intro_links_are_rewritten() -> None:
+    """A listing intro resolves ``.md`` links relative to its content type's directory."""
+    target = _page("blog/posts/a.md", "/blog/posts/a/")
+    listing = _page("__generated__/listings/blog", "/blog/")
+    listing.content_type_name = "blog"
+    listing.custom_metadata["intro_content"] = '<p><a href="posts/a.md">A</a></p>'
+    errors = resolve_all_crossrefs([target, listing], Path("/content"))
+    assert errors == []
+    assert 'href="/blog/posts/a/"' in str(listing.custom_metadata["intro_content"])
+
+
+def test_listing_intro_broken_link_is_reported() -> None:
+    """An unresolved link in a listing intro is reported against the intro's source file."""
+    listing = _page("__generated__/listings/blog", "/blog/")
+    listing.content_type_name = "blog"
+    listing.custom_metadata["intro_content"] = '<a href="posts/missing.md">x</a>'
+    errors = resolve_all_crossrefs([listing], Path("/content"))
+    assert [error.source_path for error in errors] == ["blog/index.md"]
+    assert errors[0].target_path == "posts/missing.md"
+
+
+def test_excerpt_html_links_are_rewritten() -> None:
+    """Links inside a page's rendered excerpt are rewritten like links in its body."""
+    current = _page("blog/posts/a.md", "/blog/posts/a/")
+    target = _page("blog/posts/b.md", "/blog/posts/b/")
+    current.rendered_content = '<p><a href="b.md">b</a></p>'
+    current.excerpt_html = '<p><a href="b.md">b</a></p>'
+    errors = resolve_all_crossrefs([current, target], Path("/content"))
+    assert errors == []
+    assert 'href="/blog/posts/b/"' in current.excerpt_html

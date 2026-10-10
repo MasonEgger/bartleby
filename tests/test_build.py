@@ -961,3 +961,44 @@ def test_build_docs_layout_opens_current_group_and_marks_current_link(
     assert "layout-prose" in listing
     assert "sidebar-nav" not in listing
     assert "layout-docs" not in listing
+
+
+def test_build_rewrites_md_links_in_listing_intro(project: Path) -> None:
+    """A relative ``.md`` link in ``content/{type}/index.md`` renders as the target's URL."""
+    (project / "content" / "blog" / "index.md").write_text(
+        "---\ntitle: Blog\n---\nStart with [the first post](posts/first-post.md).\n",
+        encoding="utf-8",
+    )
+    build(project / "bartleby.yml")
+    rendered = (project / "site" / "blog" / "index.html").read_text(encoding="utf-8")
+    assert 'href="/blog/posts/first-post/"' in rendered
+    assert "first-post.md" not in rendered
+
+
+def _write_code_excerpt_post(project: Path) -> None:
+    """Add a blog post whose excerpt holds inline code and a link."""
+    (project / "content" / "blog" / "posts" / "code-post.md").write_text(
+        "---\ntitle: Code Post\ndate: 2026-05-01\n---\n\n"
+        "Run `bartleby build` and read [the first post](first-post.md).\n\n"
+        "<!-- more -->\n\nBody text.\n",
+        encoding="utf-8",
+    )
+
+
+def test_build_listing_renders_excerpt_inline_code(project: Path) -> None:
+    """The HTML listing shows an excerpt's inline code as code, with no literal backticks."""
+    _write_code_excerpt_post(project)
+    build(project / "bartleby.yml")
+    rendered = (project / "site" / "blog" / "index.html").read_text(encoding="utf-8")
+    assert "<code>bartleby build</code>" in rendered
+    assert "`bartleby build`" not in rendered
+    assert 'href="/blog/posts/first-post/"' in rendered
+
+
+def test_build_agent_outputs_use_plain_text_excerpts(project: Path) -> None:
+    """The excerpt that reaches llms.txt and feeds is plain text without Markdown syntax."""
+    _write_code_excerpt_post(project)
+    build(project / "bartleby.yml")
+    llms_txt = (project / "site" / "llms.txt").read_text(encoding="utf-8")
+    assert "Run bartleby build and read the first post." in llms_txt
+    assert "`" not in llms_txt.split("Code Post", 1)[1].splitlines()[0]

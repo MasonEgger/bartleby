@@ -50,8 +50,8 @@ The numbered steps below group into five stages.
     - Dispatch `on_page_markdown`.
     - Render Markdown to HTML.
     - Dispatch `on_page_content`.
-    - Compute reading time and the excerpt, if the content type enables them.
-19. **Resolve cross-references.** Rewrite `.md` links to output URLs.
+    - Compute reading time and the excerpt (plain text and HTML), if the content type enables them.
+19. **Resolve cross-references.** Rewrite `.md` links to output URLs in page bodies, excerpts, and listing intros.
     With `--strict`, an unresolved link fails the build.
 20. **Render templates for each page.**
     - Pick the template through the cascade.

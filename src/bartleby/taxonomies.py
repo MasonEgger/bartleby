@@ -8,7 +8,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from bartleby.content import Page
+from bartleby.content import Page, TermLink
 from bartleby.urls import slugify
 
 if TYPE_CHECKING:
@@ -121,6 +121,63 @@ def generate_taxonomy_pages(taxonomy_data: AllTaxonomies, config: BartlebyConfig
     return pages
 
 
+def term_url(taxonomy_name: str, term_slug: str, content_type: str | None = None) -> str:
+    """Return the URL of a taxonomy term page, global or scoped to a content type.
+
+    The page generator and the template context both call this, so a link can
+    never disagree with the page it points at.
+
+    Args:
+        taxonomy_name: The taxonomy, such as ``"tags"``.
+        term_slug: The term's slug after ``slug_format`` is applied.
+        content_type: The content type for a scoped page, or ``None`` for the global one.
+
+    Returns:
+        The root-relative URL with a trailing slash.
+    """
+    if content_type is None:
+        return f"/{taxonomy_name}/{term_slug}/"
+    return f"/{content_type}/{taxonomy_name}/{term_slug}/"
+
+
+def taxonomy_links_for(
+    page: Page,
+    global_taxonomies: dict[str, TaxonomyData],
+    content_type_taxonomies: dict[str, dict[str, TaxonomyData]],
+) -> dict[str, list[TermLink]]:
+    """Resolve a page's taxonomy values to term-page links.
+
+    A page in a content type links to that type's scoped term page, where its
+    siblings are listed. A page outside any content type links to the global
+    term page. A value with no term page gets ``url=None`` so templates can
+    show it as plain text.
+
+    Args:
+        page: The page whose ``taxonomy_values`` are resolved.
+        global_taxonomies: Site-wide taxonomy data keyed by taxonomy name.
+        content_type_taxonomies: Scoped taxonomy data keyed by content type, then taxonomy name.
+
+    Returns:
+        Taxonomy name to the page's terms, in front matter order.
+    """
+    scoped = content_type_taxonomies.get(page.content_type_name or "", {})
+    links: dict[str, list[TermLink]] = {}
+    for taxonomy_name, values in page.taxonomy_values.items():
+        data = scoped.get(taxonomy_name) if page.content_type_name else None
+        if data is None:
+            data = global_taxonomies.get(taxonomy_name)
+        links[taxonomy_name] = [_link_for(value, data) for value in values]
+    return links
+
+
+def _link_for(value: str, data: TaxonomyData | None) -> TermLink:
+    """Link ``value`` to its term page in ``data``, or leave the URL empty."""
+    term = data.terms.get(value) if data is not None else None
+    if data is None or term is None:
+        return TermLink(term=value, url=None)
+    return TermLink(term=value, url=term_url(data.name, term.slug, data.content_type))
+
+
 def _add_term(
     taxonomy_data: TaxonomyData,
     value: str,
@@ -164,6 +221,17 @@ def _sort_term_pages(result: AllTaxonomies) -> None:
                 term.pages = dated + undated
 
 
+def _scoped_title(taxonomy_name: str, content_type: str | None) -> str:
+    """Title a taxonomy page, naming the content type when the page is scoped to one.
+
+    One opt-in yields a global page and a per-content-type page at each taxonomy,
+    so the scoped title keeps them apart in tabs, search, and feeds.
+    """
+    if content_type is None:
+        return taxonomy_name.title()
+    return f"{taxonomy_name.title()} in {content_type.title()}"
+
+
 def _make_taxonomy_index_page(
     taxonomy_name: str, data: TaxonomyData, *, content_type: str | None
 ) -> Page:
@@ -177,7 +245,7 @@ def _make_taxonomy_index_page(
         abs_source_path=Path("/__generated__/taxonomy")
         / (content_type or "_global")
         / taxonomy_name,
-        title=taxonomy_name.title(),
+        title=_scoped_title(taxonomy_name, content_type),
         content_type_name=content_type,
         custom_metadata={
             "taxonomy_name": taxonomy_name,
@@ -196,11 +264,7 @@ def _make_taxonomy_term_page(
     content_type: str | None,
 ) -> Page:
     """Build a virtual page for one taxonomy term (``/tags/python/`` etc.)."""
-    url = (
-        f"/{content_type}/{taxonomy_name}/{term.slug}/"
-        if content_type is not None
-        else f"/{taxonomy_name}/{term.slug}/"
-    )
+    url = term_url(taxonomy_name, term.slug, content_type)
     page = Page(
         source_path=Path("__generated__")
         / "taxonomy"
@@ -211,7 +275,7 @@ def _make_taxonomy_term_page(
         / (content_type or "_global")
         / taxonomy_name
         / term.slug,
-        title=f"{taxonomy_name.title()}: {term_name}",
+        title=f"{_scoped_title(taxonomy_name, content_type)}: {term_name}",
         content_type_name=content_type,
         custom_metadata={
             "taxonomy_name": taxonomy_name,

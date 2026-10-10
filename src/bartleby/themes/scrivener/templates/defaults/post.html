@@ -1,24 +1,20 @@
-{% extends "base.html" %}
-{# Scrivener post: one ruled column, an italic meta line under the title, tags at the foot. #}
-{% block content %}
-<div class="layout-prose">
-  <article class="prose-column" data-search-highlight-root>
-    <div class="prose dark:prose-invert max-w-none">
-      <h1>{{ page.title }}</h1>
+{% extends "doc_layout.html" %}
+{# Scrivener post: an italic meta line under the title, tags at the foot. #}
+{% block article_head %}
+{% if page.date or page.authors or page.readtime %}
       <p class="post-meta">
         {% if page.date %}<time datetime="{{ page.date }}">{{ page.date }}</time>{% endif %}
         {% if page.authors %}<span>By {% for author in page.authors %}{{ author.name }}{% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}
         {% if page.readtime %}<span>{{ page.readtime }} min read</span>{% endif %}
       </p>
-      {{ page.content | safe if page.content else "" }}
-    </div>
-    {% if page.taxonomies and page.taxonomies.tags %}
+{% endif %}
+{% endblock %}
+{% block article_foot %}
+    {% if page.taxonomy_links and page.taxonomy_links.tags %}
     <footer>
       <ul class="tag-list">
-        {% for tag in page.taxonomies.tags %}<li class="tag">{{ tag }}</li>{% endfor %}
+        {% for link in page.taxonomy_links.tags %}<li>{% if link.url %}<a href="{{ link.url }}">{{ link.term }}</a>{% else %}<span class="tag">{{ link.term }}</span>{% endif %}</li>{% endfor %}
       </ul>
     </footer>
     {% endif %}
-  </article>
-</div>
 {% endblock %}

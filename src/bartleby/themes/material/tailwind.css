@@ -393,6 +393,13 @@
     font-size: 0.75rem;
     text-decoration: none;
   }
+  .tag-list a:hover {
+    background: color-mix(in srgb, var(--bm-primary) 22%, var(--bm-bg));
+  }
+  .tag-list a:focus-visible {
+    outline: 2px solid var(--bm-primary);
+    outline-offset: 2px;
+  }
   .prev-next {
     display: flex;
     justify-content: space-between;

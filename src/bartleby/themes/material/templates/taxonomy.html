@@ -1,12 +1,19 @@
 {% extends "base.html" %}
+{# Material taxonomy term page: a row per tagged page, matching the blog listing. #}
 {% block content %}
 {% set posts = page.custom_metadata.posts or [] %}
+{% set index_url = ("/" ~ page.content_type_name ~ "/" if page.content_type_name else "/") ~ page.custom_metadata.taxonomy_name ~ "/" %}
 <section class="taxonomy-term">
-  <h1>{{ page.title }}</h1>
-  <p>Posts tagged with this term:</p>
-  <ul>
+  <p class="taxonomy-crumb"><a href="{{ index_url }}">All {{ page.custom_metadata.taxonomy_name }}</a></p>
+  <h1 class="mb-1 text-3xl font-light">{{ page.title }}</h1>
+  <p class="taxonomy-count">{{ posts | length }} {{ "page" if posts | length == 1 else "pages" }} with this term</p>
+  <ul class="post-list">
     {% for post in posts %}
-    <li><a href="{{ post.output_url }}">{{ post.title }}</a></li>
+    <li class="post-list-item py-5">
+      <h2 class="m-0 text-xl font-medium"><a href="{{ post.output_url }}">{{ post.title }}</a></h2>
+      {% if post.date %}<p class="post-meta mt-1"><time datetime="{{ post.date }}">{{ post.date }}</time></p>{% endif %}
+      {% if post.excerpt %}<div class="prose dark:prose-invert mt-2 max-w-none">{{ post.excerpt | safe }}</div>{% endif %}
+    </li>
     {% endfor %}
   </ul>
 </section>

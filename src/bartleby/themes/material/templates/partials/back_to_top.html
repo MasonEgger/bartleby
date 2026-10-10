@@ -1,10 +1,14 @@
-<button
-  type="button"
+{# Material back-to-top: a real link to the top of the page, so it still works with JS off. #}
+{# Alpine only adds the scroll-threshold reveal and the smooth scroll. #}
+<a
+  href="#"
   class="back-to-top"
   x-data="{ show: false }"
-  x-on:scroll.window="show = window.scrollY > 400"
+  x-init="show = window.scrollY > 400"
+  x-on:scroll.window.passive="show = window.scrollY > 400"
   x-show="show"
-  x-on:click="window.scrollTo({ top: 0, behavior: 'smooth' })"
+  x-transition.opacity
+  x-on:click.prevent="window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })"
   aria-label="Back to top">
-  ↑
-</button>
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true" focusable="false"><path d="M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>
+</a>

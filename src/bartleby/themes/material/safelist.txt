@@ -35,16 +35,33 @@ search-overlay
 search-panel
 search-input
 search-results
+search-head
+search-close
+search-status
+search-result-title
+search-result-snippet
+search-hit
 # Page furniture
 prev-next
 not-found
 taxonomy-index
 taxonomy-term
+taxonomy-crumb
+taxonomy-count
+term-list
+term-link
+term-count
+post-list
+not-found-code
+not-found-actions
+not-found-hint
+not-found-label
 tag-list
 tag
 post-meta
 back-to-top
 code-copy-button
+is-copied
 # Markdown content helpers
 md-button
 md-button--primary

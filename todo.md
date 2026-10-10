@@ -85,11 +85,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 5. Document: none
 
 ### Step 10: Material taxonomy, 404, search, and interactive partials (task)
-- [ ] 1. Scope: taxonomy, taxonomy_index, 404, search, back_to_top, code_copy
-- [ ] 2. Tooling: frontend-design; build docs
-- [ ] 3. Do: classes; search.highlight gated; preserve Alpine/HTMX; manifest gains search.highlight
-- [ ] 4. Verify: pages styled; highlight works; exit 0; no UndefinedError
-- [ ] 5. Document: none
+- [x] 1. Scope: taxonomy, taxonomy_index, 404, search, back_to_top, code_copy
+- [x] 2. Tooling: frontend-design; build docs
+- [x] 3. Do: classes; search.highlight gated; preserve Alpine/HTMX; manifest gains search.highlight
+- [x] 4. Verify: pages styled; highlight works; exit 0; no UndefinedError
+- [x] 5. Document: none
 
 ## Section 3: The `scrivener` theme
 

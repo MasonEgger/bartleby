@@ -1,19 +1,196 @@
-<div class="search-modal" x-data="{ open: false, query: '', results: [] }">
-  <button type="button" class="search-trigger" x-on:click="open = true" aria-label="Open search">
+{# Material search modal. Loads /search/search_index.json on first open and queries it with lunr. #}
+{# With search.highlight on, matched terms are wrapped in <mark> built from DOM text nodes (never #}
+{# innerHTML), and the terms ride along as ?h= so the target page marks them too. #}
+{% set highlight = feature is defined and feature('search.highlight') %}
+<script data-search>
+  (function () {
+    var highlightEnabled = {{ highlight | tojson }};
+    var index = null;
+    var docs = [];
+
+    function termsOf(text) {
+      return text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+    }
+
+    function patternOf(terms) {
+      var escaped = terms
+        .slice()
+        .sort(function (left, right) { return right.length - left.length; })
+        .map(function (term) { return term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); });
+      return escaped.length ? new RegExp(escaped.join("|"), "giu") : null;
+    }
+
+    // Split text into plain and matched pieces; callers turn the pieces into nodes.
+    function pieces(text, pattern) {
+      var result = [];
+      var cursor = 0;
+      if (pattern) {
+        pattern.lastIndex = 0;
+        var match;
+        while ((match = pattern.exec(text)) !== null) {
+          if (match[0] === "") { pattern.lastIndex += 1; continue; }
+          if (match.index > cursor) { result.push({ text: text.slice(cursor, match.index), hit: false }); }
+          result.push({ text: match[0], hit: true });
+          cursor = match.index + match[0].length;
+        }
+      }
+      if (cursor < text.length) { result.push({ text: text.slice(cursor), hit: false }); }
+      return result;
+    }
+
+    function fragmentOf(text, pattern) {
+      var fragment = document.createDocumentFragment();
+      pieces(text, pattern).forEach(function (piece) {
+        if (piece.hit) {
+          var mark = document.createElement("mark");
+          mark.className = "search-hit";
+          mark.textContent = piece.text;
+          fragment.appendChild(mark);
+        } else {
+          fragment.appendChild(document.createTextNode(piece.text));
+        }
+      });
+      return fragment;
+    }
+
+    function markPage(terms) {
+      var root = document.querySelector("main");
+      var pattern = patternOf(terms);
+      if (!root || !pattern) { return; }
+      var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      var nodes = [];
+      while (walker.nextNode()) {
+        var parent = walker.currentNode.parentElement;
+        if (parent && !parent.closest("script, style, textarea, mark")) { nodes.push(walker.currentNode); }
+      }
+      nodes.forEach(function (node) {
+        var text = node.nodeValue || "";
+        pattern.lastIndex = 0;
+        if (pattern.test(text)) { node.replaceWith(fragmentOf(text, pattern)); }
+      });
+    }
+
+    if (highlightEnabled) {
+      document.addEventListener("DOMContentLoaded", function () {
+        var carried = new URLSearchParams(window.location.search).get("h");
+        if (carried) { markPage(termsOf(carried)); }
+      });
+    }
+
+    document.addEventListener("alpine:init", function () {
+      Alpine.data("bartlebySearch", function () {
+        return {
+          open: false,
+          query: "",
+          results: [],
+          failed: false,
+          loading: false,
+          show: function () {
+            this.open = true;
+            this.load();
+            this.$nextTick(function () { this.$refs.input.focus(); }.bind(this));
+          },
+          close: function () {
+            this.open = false;
+            this.$refs.trigger.focus();
+          },
+          load: function () {
+            if (index || this.loading) { return Promise.resolve(); }
+            this.loading = true;
+            var component = this;
+            return fetch("/search/search_index.json")
+              .then(function (response) {
+                if (!response.ok) { throw new Error("search index " + response.status); }
+                return response.json();
+              })
+              .then(function (payload) {
+                docs = payload.docs;
+                index = lunr(function () {
+                  this.ref("id");
+                  this.field("title", { boost: 10 });
+                  this.field("tags", { boost: 5 });
+                  this.field("text");
+                  docs.forEach(function (doc, position) {
+                    this.add({ id: String(position), title: doc.title, tags: (doc.tags || []).join(" "), text: doc.text });
+                  }, this);
+                });
+                component.failed = false;
+                if (component.query) { component.search(); }
+              })
+              .catch(function () { component.failed = true; component.loading = false; });
+          },
+          search: function () {
+            var terms = termsOf(this.query);
+            if (!terms.length || !index) { this.results = []; return; }
+            var pattern = patternOf(terms);
+            var hits = index.query(function (query) {
+              terms.forEach(function (term) {
+                query.term(term, { wildcard: lunr.Query.wildcard.TRAILING, presence: lunr.Query.presence.REQUIRED });
+              });
+            });
+            this.results = hits.slice(0, 10).map(function (hit) {
+              var doc = docs[Number(hit.ref)];
+              var lowered = doc.text.toLowerCase();
+              var first = terms.reduce(function (best, term) {
+                var found = lowered.indexOf(term);
+                return found >= 0 && (best < 0 || found < best) ? found : best;
+              }, -1);
+              var start = Math.max(0, first - 60);
+              var snippet = first < 0 ? doc.text.slice(0, 140) : doc.text.slice(start, start + 160);
+              var parts = doc.location.split("#");
+              var carried = highlightEnabled ? "?h=" + encodeURIComponent(terms.join(" ")) : "";
+              return {
+                title: doc.title,
+                snippet: (start > 0 ? "..." : "") + snippet + (doc.text.length > start + 160 ? "..." : ""),
+                href: parts[0] + carried + (parts.length > 1 ? "#" + parts[1] : "")
+              };
+            });
+          },
+          go: function () {
+            if (this.results.length) { window.location.href = this.results[0].href; }
+          },
+          status: function () {
+            if (this.failed) { return "Search is unavailable. Reload the page to try again."; }
+            if (!termsOf(this.query).length) { return ""; }
+            if (!this.results.length) { return "No results for “" + this.query + "”"; }
+            return this.results.length + (this.results.length === 1 ? " result" : " results");
+          },
+          mark: function (element, text) {
+            element.replaceChildren(highlightEnabled ? fragmentOf(text, patternOf(termsOf(this.query))) : document.createTextNode(text));
+          }
+        };
+      });
+    });
+  })();
+</script>
+<div class="search-modal" x-cloak x-data="bartlebySearch()" x-on:keydown.escape.window="open && close()">
+  <button type="button" class="search-trigger" x-ref="trigger" x-on:click="show()" aria-label="Open search" aria-haspopup="dialog">
     Search
   </button>
-  <div class="search-overlay" x-show="open" x-on:keydown.escape.window="open = false">
-    <div class="search-panel" x-on:click.outside="open = false">
-      <input
-        type="search"
-        class="search-input"
-        placeholder="Search…"
-        x-model="query"
-        x-on:input.debounce.150ms="results = window.__bartlebySearch ? window.__bartlebySearch(query) : []"
-        autofocus>
+  <div class="search-overlay" x-show="open" x-cloak>
+    <div class="search-panel" role="dialog" aria-modal="true" aria-label="Search" x-on:click.outside="open && close()">
+      <div class="search-head">
+        <input
+          type="search"
+          class="search-input"
+          placeholder="Search"
+          aria-label="Search the site"
+          autocomplete="off"
+          x-ref="input"
+          x-model="query"
+          x-on:input.debounce.150ms="search()"
+          x-on:keydown.enter.prevent="go()">
+        <button type="button" class="search-close" x-on:click="close()" aria-label="Close search">Close</button>
+      </div>
+      <p class="search-status" role="status" aria-live="polite" x-text="status()"></p>
       <ul class="search-results">
-        <template x-for="result in results" :key="result.location">
-          <li><a x-bind:href="result.location" x-text="result.title"></a></li>
+        <template x-for="result in results" :key="result.href">
+          <li>
+            <a x-bind:href="result.href">
+              <span class="search-result-title" x-effect="mark($el, result.title)"></span>
+              <span class="search-result-snippet" x-effect="mark($el, result.snippet)"></span>
+            </a>
+          </li>
         </template>
       </ul>
     </div>

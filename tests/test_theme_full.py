@@ -199,3 +199,24 @@ def test_missing_or_unknown_default_keeps_light_and_script_falls_through() -> No
         rendered = template.render(**_color_mode_ctx(color_mode))
         assert '<html lang="en" data-theme="light">' in rendered
         assert "var configured = null;" in rendered
+
+
+def _search_partial(features: list[str]) -> str:
+    from bartleby.templates import make_feature_checker
+
+    env = _env()
+    env.globals["feature"] = make_feature_checker(features)
+    return env.get_template("partials/search.html").render(**_ctx())
+
+
+def test_search_highlight_gated_by_feature() -> None:
+    """``?h=`` carry-over and mark building only switch on with ``search.highlight``."""
+    assert "var highlightEnabled = true" in _search_partial(["search", "search.highlight"])
+    assert "var highlightEnabled = false" in _search_partial(["search"])
+
+
+def test_search_highlight_never_injects_html() -> None:
+    """Marks are built from DOM text nodes; the partial never assigns innerHTML."""
+    rendered = _search_partial(["search", "search.highlight"])
+    assert "innerHTML" not in rendered
+    assert "x-html" not in rendered

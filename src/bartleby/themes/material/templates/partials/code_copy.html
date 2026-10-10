@@ -1,5 +1,9 @@
 <script data-code-copy>
   document.addEventListener("DOMContentLoaded", function () {
+    // Without the async clipboard API (plain http, old browsers) a button would be dead, so add none.
+    if (!navigator.clipboard) {
+      return;
+    }
     document.querySelectorAll("pre > code").forEach(function (codeBlock) {
       var pre = codeBlock.parentElement;
       if (pre.querySelector(".code-copy-button")) {
@@ -10,10 +14,25 @@
       button.className = "code-copy-button";
       button.setAttribute("aria-label", "Copy code to clipboard");
       button.textContent = "Copy";
+      var status = document.createElement("span");
+      status.className = "sr-only";
+      status.setAttribute("role", "status");
+      var resetTimer = null;
       button.addEventListener("click", function () {
-        navigator.clipboard.writeText(codeBlock.textContent || "");
+        navigator.clipboard.writeText(codeBlock.textContent || "").then(function () {
+          button.textContent = "Copied";
+          button.classList.add("is-copied");
+          status.textContent = "Code copied to clipboard";
+          clearTimeout(resetTimer);
+          resetTimer = setTimeout(function () {
+            button.textContent = "Copy";
+            button.classList.remove("is-copied");
+            status.textContent = "";
+          }, 2000);
+        });
       });
       pre.appendChild(button);
+      pre.appendChild(status);
     });
   });
 </script>

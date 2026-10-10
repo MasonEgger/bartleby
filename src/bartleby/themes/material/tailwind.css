@@ -10,6 +10,9 @@
 @tailwind utilities;
 
 @layer base {
+  [x-cloak] {
+    display: none !important;
+  }
   :root {
     --bm-primary: var(--bb-color-primary, #3f51b5);
     --bm-primary-dark: color-mix(in srgb, var(--bm-primary) 80%, black);
@@ -359,17 +362,76 @@
     max-width: 36rem;
     margin: 4rem auto;
     padding: 0 1rem;
-    text-align: center;
+  }
+  .not-found-code {
+    margin: 0;
+    color: var(--bm-primary);
+    font-size: 6rem;
+    font-weight: 300;
+    line-height: 1;
+  }
+  .not-found-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+    margin: 1.5rem 0 2.5rem;
+  }
+  .not-found-hint,
+  .not-found-label {
+    color: var(--bm-text-muted);
+    font-size: 0.85rem;
+  }
+  .not-found-label {
+    margin: 0 0 0.5rem;
   }
   .taxonomy-index,
   .taxonomy-term {
     max-width: 46rem;
     margin: 0 auto;
-    padding: 2rem 1rem;
+    padding: 2rem 1rem 4rem;
   }
-  .taxonomy-index ul,
-  .taxonomy-term ul {
-    padding-left: 1.25rem;
+  .taxonomy-crumb {
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+  }
+  .taxonomy-count {
+    margin: 0 0 1.5rem;
+    color: var(--bm-text-muted);
+  }
+  .post-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .term-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .term-link {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.55rem 0.8rem;
+    border: 1px solid var(--bm-border);
+    border-radius: var(--bm-radius);
+    color: var(--bm-link);
+    text-decoration: none;
+    transition: border-color 125ms, background 125ms;
+  }
+  .term-link:hover {
+    border-color: var(--bm-accent);
+    background: var(--bm-surface);
+  }
+  .term-count {
+    color: var(--bm-text-muted);
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
   }
 
   /* Search modal. */
@@ -393,9 +455,14 @@
     color: var(--bm-text);
     box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 0.35);
   }
+  .search-head {
+    display: flex;
+    gap: 0.5rem;
+  }
   .search-input {
     box-sizing: border-box;
-    width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
     padding: 0.6rem 0.75rem;
     border: 1px solid var(--bm-border);
     border-radius: var(--bm-radius);
@@ -404,18 +471,55 @@
     font: inherit;
     font-size: 1rem;
   }
+  .search-close {
+    padding: 0 0.75rem;
+    border: 1px solid var(--bm-border);
+    border-radius: var(--bm-radius);
+    background: transparent;
+    color: var(--bm-text-muted);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .search-close:hover {
+    border-color: var(--bm-accent);
+    color: var(--bm-text);
+  }
+  .search-status {
+    min-height: 1.2em;
+    margin: 0.6rem 0 0;
+    color: var(--bm-text-muted);
+    font-size: 0.8rem;
+  }
   .search-results {
-    margin: 0.75rem 0 0;
+    margin: 0.25rem 0 0;
     padding: 0;
     list-style: none;
   }
   .search-results a {
     display: block;
-    padding: 0.5rem 0.25rem;
+    padding: 0.6rem 0.5rem;
     border-bottom: 1px solid var(--bm-border);
     text-decoration: none;
   }
-  .search-results mark {
+  .search-results a:hover,
+  .search-results a:focus-visible {
+    background: var(--bm-surface);
+  }
+  .search-result-title {
+    display: block;
+    color: var(--bm-heading);
+    font-weight: 500;
+  }
+  .search-result-snippet {
+    display: block;
+    margin-top: 0.15rem;
+    color: var(--bm-text-muted);
+    font-size: 0.85rem;
+    line-height: 1.4;
+  }
+  .search-hit {
+    border-radius: 2px;
     background: color-mix(in srgb, var(--bm-accent) 28%, transparent);
     color: inherit;
   }
@@ -426,15 +530,23 @@
     right: 1.5rem;
     bottom: 1.5rem;
     z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: 2.5rem;
     height: 2.5rem;
-    border: 0;
     border-radius: 50%;
     background: var(--bm-primary);
     color: var(--bm-on-primary);
-    font-size: 1.1rem;
-    cursor: pointer;
+    text-decoration: none;
     box-shadow: 0 0.2rem 0.5rem rgb(0 0 0 / 0.3);
+  }
+  .back-to-top:hover {
+    background: var(--bm-primary-dark);
+  }
+  .back-to-top:focus-visible {
+    outline: 2px solid var(--bm-accent);
+    outline-offset: 2px;
   }
   pre:has(> .code-copy-button) {
     position: relative;
@@ -455,8 +567,23 @@
     transition: opacity 125ms;
   }
   pre:hover > .code-copy-button,
-  .code-copy-button:focus-visible {
+  .code-copy-button:focus-visible,
+  .code-copy-button.is-copied {
     opacity: 1;
+  }
+  .code-copy-button:hover {
+    border-color: var(--bm-accent);
+    color: var(--bm-text);
+  }
+  .code-copy-button.is-copied {
+    border-color: var(--bm-accent);
+    color: var(--bm-accent);
+  }
+  /* Touch screens have no hover, so the copy button stays visible there. */
+  @media (hover: none) {
+    .code-copy-button {
+      opacity: 1;
+    }
   }
 
   /* Markdown content helpers: buttons and card grids. */

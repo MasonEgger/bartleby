@@ -59,7 +59,7 @@ from bartleby.templates import (
     load_data_files,
     resolve_template_name,
 )
-from bartleby.theme_loader import DEFAULT_THEME_NAME, default_theme, resolve_theme
+from bartleby.theme_loader import select_theme
 from bartleby.urls import generate_all_urls
 
 if TYPE_CHECKING:
@@ -249,7 +249,7 @@ def _load_inputs(config_path: Path, theme: ResolvedTheme | None) -> _BuildState:
     config = plugins.run_event("on_config", config)
     plugins.run_event("on_pre_build", config)
     authors = load_authors(project_dir / config.authors_file)
-    active_theme = _select_theme(config, project_dir) if theme is None else theme
+    active_theme = select_theme(config.theme, project_dir) if theme is None else theme
     _warn_unimplemented_features(config, active_theme)
 
     content_dir = project_dir / "content"
@@ -264,31 +264,6 @@ def _load_inputs(config_path: Path, theme: ResolvedTheme | None) -> _BuildState:
         pages=pages,
         assets=assets,
         theme=active_theme,
-    )
-
-
-def _select_theme(config: BartlebyConfig, project_dir: Path) -> ResolvedTheme:
-    """Resolve the theme that ``config.theme`` selects.
-
-    Transitional: the bundled theme directories do not exist yet, so an unset
-    selection (the bundled default name with no ``path`` or ``package``) keeps
-    using :func:`default_theme`, the package in ``bartleby/theme/``. This branch
-    ends at plan Step 6, when ``scrivener`` ships and every build resolves through
-    :func:`resolve_theme`.
-    """
-    theme_config = config.theme
-    if (
-        theme_config.name == DEFAULT_THEME_NAME
-        and theme_config.path is None
-        and theme_config.package is None
-    ):
-        return default_theme()
-    uses_name = theme_config.path is None and theme_config.package is None
-    return resolve_theme(
-        project_dir=project_dir,
-        name=theme_config.name if uses_name else None,
-        path=theme_config.path,
-        package=theme_config.package,
     )
 
 
@@ -501,7 +476,7 @@ def _emit_outputs(state: _BuildState, rendered_html: list[str]) -> None:
 
     static_file_count = copy_theme_static(state.theme.static_dirs(), output_dir)
     static_file_count += copy_static_files(project_dir / "static", output_dir)
-    _apply_compiled_theme_css(project_dir, output_dir)
+    _apply_compiled_theme_css(project_dir, output_dir, state.theme)
     try:
         static_file_count += copy_colocated_assets(
             state.assets, state.pages, state.content_dir, output_dir
@@ -589,7 +564,7 @@ def _finish_build(
     )
 
 
-def _apply_compiled_theme_css(project_dir: Path, output_dir: Path) -> None:
+def _apply_compiled_theme_css(project_dir: Path, output_dir: Path, theme: ResolvedTheme) -> None:
     """Override the shipped CSS with the project's compiled ``.bartleby/theme.css``.
 
     The compiled CSS wins only when it exists and is at least as new as the
@@ -599,7 +574,7 @@ def _apply_compiled_theme_css(project_dir: Path, output_dir: Path) -> None:
     """
     from bartleby.theme_compile import active_theme_css
 
-    compiled = active_theme_css(project_dir)
+    compiled = active_theme_css(project_dir, theme)
     if compiled is None:
         return
     destination = output_dir / "css" / "main.css"

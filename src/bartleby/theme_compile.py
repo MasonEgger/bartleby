@@ -12,11 +12,13 @@ import subprocess
 import time
 import urllib.request
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
+
+    from bartleby.theme_loader import ResolvedTheme
 
 # Pinned Tailwind standalone CLI release. Bump together with the SHA-256 map.
 PINNED_TAILWIND_VERSION = "3.4.17"
@@ -44,6 +46,11 @@ _GITHUB_RELEASE = (
 
 # Directory names scanned for user-added utility classes, relative to the project.
 _SCAN_SUBDIRS = ("overrides", "partials", "shortcodes", "templates")
+
+
+# Wrapper input body used when no theme layer ships a tailwind.css. The wrapper
+# sits beside the generated tokens.css, which is how the relative import resolves.
+_TAILWIND_DIRECTIVES = "@tailwind base;\n@tailwind components;\n@tailwind utilities;\n"
 
 
 class ThemeCompileError(Exception):
@@ -192,15 +199,18 @@ def _download_binary(
     return target, "downloaded"
 
 
-def active_theme_css(project_dir: Path) -> Path | None:
+def active_theme_css(project_dir: Path, theme: ResolvedTheme | None = None) -> Path | None:
     """Return the project's compiled theme CSS when it should be preferred.
 
     ``<project>/.bartleby/theme.css`` is preferred over the shipped CSS only
-    when it exists and is at least as new as every file in the template tree.
-    A compiled CSS older than any template is stale and ignored so the build
-    falls back to the shipped CSS.
+    when it exists and is at least as new as every file in the project
+    ``templates/`` tree and in the ``templates/`` of every project-local theme
+    layer (a ``theme.path`` directory is a project file the user edits). A
+    compiled CSS older than any of those is stale and ignored so the build
+    falls back to the shipped CSS. Bundled and package layers are not checked.
 
     :param project_dir: The project root directory.
+    :param theme: The resolved theme whose project-local layers are checked.
     :returns: The compiled CSS path when it should win, else ``None``.
     """
     compiled = project_dir / ".bartleby" / "theme.css"
@@ -208,29 +218,80 @@ def active_theme_css(project_dir: Path) -> Path | None:
         return None
 
     compiled_mtime = compiled.stat().st_mtime
-    templates_dir = project_dir / "templates"
-    if templates_dir.exists():
+    watched = [project_dir / "templates"]
+    if theme is not None:
+        project_root = project_dir.resolve()
+        watched.extend(
+            layer.root / "templates"
+            for layer in theme.chain
+            if layer.root.resolve().is_relative_to(project_root)
+        )
+    for templates_dir in watched:
+        if not templates_dir.exists():
+            continue
         for source in templates_dir.rglob("*"):
             if source.is_file() and source.stat().st_mtime > compiled_mtime:
                 return None
     return compiled
 
 
+def css_import_line(path: PurePath) -> str:
+    """Build a CSS ``@import`` line for an absolute file path.
+
+    Forward slashes are used on every platform because CSS reads a backslash in
+    a string as an escape sequence.
+
+    :param path: The file to import.
+    :returns: The ``@import`` statement, newline-terminated.
+    :raises ThemeCompileError: When the path contains a double quote, which
+        would end the CSS string early.
+    """
+    posix = path.as_posix()
+    if '"' in posix:
+        raise ThemeCompileError(f"cannot import a path containing a double quote: {posix}")
+    return f'@import "{posix}";\n'
+
+
+def format_tokens_css(tokens: Mapping[str, str]) -> str:
+    """Render design tokens as a ``:root`` block of ``--bb-*`` custom properties.
+
+    A dotted token name becomes a dashed property: ``color.primary`` is
+    ``--bb-color-primary``. An empty map renders an empty string.
+    """
+    if not tokens:
+        return ""
+    lines = [f"  --bb-{name.replace('.', '-')}: {value};" for name, value in tokens.items()]
+    return ":root {\n" + "\n".join(lines) + "\n}\n"
+
+
 def compile_theme_css(
     project_dir: Path,
-    theme_templates_dir: Path,
+    theme: ResolvedTheme,
+    tokens: Mapping[str, str],
     *,
     refresh: bool = False,
     cache_dir: Path | None = None,
 ) -> ThemeCompileResult:
-    """Compile theme CSS including project overrides via the Tailwind binary.
+    """Compile the resolved theme's CSS, including tokens and project overrides.
 
-    Resolves the binary (PATH -> cache -> download), scans the bundled theme
-    templates plus the project ``overrides/``, ``partials/``, ``shortcodes/``,
-    and ``templates/`` directories, and writes ``<project>/.bartleby/theme.css``.
+    Resolves the binary (PATH -> cache -> download), then writes
+    ``<project>/.bartleby/tokens.css`` from ``tokens`` (always, even when
+    empty, so an ``@import`` of it never fails). ``--config`` comes from the
+    nearest layer (leaf-first) with a ``tailwind.config.js``. ``--input`` is
+    always the generated wrapper ``.bartleby/input.css``, which sits beside
+    ``tokens.css`` (postcss-import resolves relative imports from the input's
+    own directory) and imports ``tokens.css`` first, then the absolute path of
+    the nearest layer's ``tailwind.css``. When no layer has a ``tailwind.css``
+    the wrapper carries the three ``@tailwind`` directives instead. Tokens
+    therefore reach every theme's CSS without the theme importing them.
+    ``--content`` covers
+    every layer's ``templates/`` plus the project ``overrides/``,
+    ``partials/``, ``shortcodes/``, and ``templates/`` directories. The result
+    is written to ``<project>/.bartleby/theme.css``.
 
     :param project_dir: The project root directory.
-    :param theme_templates_dir: The bundled theme template directory.
+    :param theme: The resolved theme chain, leaf-first.
+    :param tokens: The ``theme.tokens`` map of dotted names to CSS values.
     :param refresh: Force a re-download of the Tailwind binary.
     :param cache_dir: Override the binary cache location (defaults to the
         platform cache dir).
@@ -246,22 +307,33 @@ def compile_theme_css(
         refresh=refresh,
     )
 
-    content_globs = _content_globs(project_dir, theme_templates_dir)
-    output = project_dir / ".bartleby" / "theme.css"
-    output.parent.mkdir(parents=True, exist_ok=True)
+    output_dir = project_dir / ".bartleby"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "tokens.css").write_text(format_tokens_css(tokens), encoding="utf-8")
 
-    command = [
-        str(binary),
+    # Both @imports lead the file so postcss-import accepts them.
+    theme_input = theme.find_file("tailwind.css")
+    theme_body = (
+        _TAILWIND_DIRECTIVES if theme_input is None else css_import_line(theme_input.resolve())
+    )
+    tailwind_input = output_dir / "input.css"
+    tailwind_input.write_text(f'@import "tokens.css";\n{theme_body}', encoding="utf-8")
+    tailwind_config = theme.find_file("tailwind.config.js")
+
+    output = output_dir / "theme.css"
+    command = [str(binary)]
+    if tailwind_config is not None:
+        command += ["--config", str(tailwind_config)]
+    command += [
         "--input",
-        "-",
+        str(tailwind_input),
         "--content",
-        ",".join(content_globs),
+        ",".join(_content_globs(project_dir, theme)),
         "--output",
         str(output),
     ]
     completed = subprocess.run(  # noqa: S603 - resolved binary, fixed arg list
         command,
-        input="@tailwind base;@tailwind components;@tailwind utilities;",
         capture_output=True,
         text=True,
         check=False,
@@ -279,9 +351,9 @@ def compile_theme_css(
     )
 
 
-def _content_globs(project_dir: Path, theme_templates_dir: Path) -> list[str]:
+def _content_globs(project_dir: Path, theme: ResolvedTheme) -> list[str]:
     """Build the list of template globs Tailwind scans for utility classes."""
-    globs = [str(theme_templates_dir / "**" / "*.html")]
+    globs = [str(templates_dir / "**" / "*.html") for templates_dir in theme.templates_dirs()]
     for subdir in _SCAN_SUBDIRS:
         candidate = project_dir / subdir
         if candidate.exists():

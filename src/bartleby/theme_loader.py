@@ -33,12 +33,15 @@ from __future__ import annotations
 import importlib.metadata
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
 from bartleby.theme import get_theme_templates_dir
 from bartleby.themes import BUNDLED_THEME_NAMES, bundled_theme_root
+
+if TYPE_CHECKING:
+    from bartleby.config import ThemeConfig
 
 THEME_ENTRY_POINT_GROUP = "bartleby.themes"
 MANIFEST_FILENAME = "theme.yml"
@@ -138,6 +141,21 @@ class ResolvedTheme:
         """Existing ``icons/`` directories, leaf-first."""
         return self._existing_dirs("icons")
 
+    def find_file(self, relative_path: str) -> Path | None:
+        """The file at ``relative_path`` in the nearest layer that provides it.
+
+        Args:
+            relative_path: A path relative to a theme root, such as ``tailwind.css``.
+
+        Returns:
+            The file in the first (leaf-most) layer holding it, or ``None``.
+        """
+        for layer in self.chain:
+            candidate = layer.root / relative_path
+            if candidate.is_file():
+                return candidate
+        return None
+
     def _existing_dirs(self, subdirectory: str) -> list[Path]:
         candidates = (layer.root / subdirectory for layer in self.chain)
         return [candidate for candidate in candidates if candidate.is_dir()]
@@ -161,6 +179,40 @@ def default_theme() -> ResolvedTheme:
     root = get_theme_templates_dir().parent
     manifest = ThemeManifest(name="default", features=sorted(_DEFAULT_THEME_FEATURES))
     return ResolvedTheme(chain=[ThemeLayer(name="default", root=root, manifest=manifest)])
+
+
+def select_theme(theme_config: ThemeConfig, project_dir: Path) -> ResolvedTheme:
+    """Resolve the theme that a ``theme:`` config section selects.
+
+    Transitional: the bundled theme directories do not exist yet, so an unset
+    selection (the bundled default name with no ``path`` or ``package``) keeps
+    using :func:`default_theme`, the package in ``bartleby/theme/``. This branch
+    ends at plan Step 6, when ``scrivener`` ships and every build resolves through
+    :func:`resolve_theme`.
+
+    Args:
+        theme_config: The parsed ``theme:`` section.
+        project_dir: The project directory that relative ``path`` values resolve against.
+
+    Returns:
+        The resolved chain.
+
+    Raises:
+        ThemeError: If the selected theme cannot be resolved.
+    """
+    if (
+        theme_config.name == DEFAULT_THEME_NAME
+        and theme_config.path is None
+        and theme_config.package is None
+    ):
+        return default_theme()
+    uses_name = theme_config.path is None and theme_config.package is None
+    return resolve_theme(
+        project_dir=project_dir,
+        name=theme_config.name if uses_name else None,
+        path=theme_config.path,
+        package=theme_config.package,
+    )
 
 
 def load_manifest(root: Path) -> ThemeManifest:

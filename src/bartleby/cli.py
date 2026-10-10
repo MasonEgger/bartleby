@@ -63,6 +63,7 @@ from bartleby.schema_introspection import (
 from bartleby.shortcodes import ShortcodeError, process_shortcodes
 from bartleby.skills import generate_skills
 from bartleby.theme_compile import ThemeCompileError, ThemeCompileResult, compile_theme_css
+from bartleby.theme_loader import select_theme
 from bartleby.urls import generate_all_urls
 
 if TYPE_CHECKING:
@@ -800,9 +801,9 @@ def _cmd_theme_compile(args: argparse.Namespace) -> ThemeCompileResult:
     """Recompile the theme CSS including project overrides via the Tailwind CLI."""
     config_path = _resolve_config_path(args)
     project_dir = config_path.parent
-    from bartleby.theme import get_theme_templates_dir
-
-    return compile_theme_css(project_dir, get_theme_templates_dir(), refresh=args.refresh)
+    config = load_config(config_path)
+    theme = select_theme(config.theme, project_dir)
+    return compile_theme_css(project_dir, theme, config.theme.tokens, refresh=args.refresh)
 
 
 def _cmd_serve(args: argparse.Namespace) -> None:

@@ -1,0 +1,9 @@
+/* ABOUTME: Fixture Tailwind input for the parent theme. */
+/* Compiled by the skip-guarded real-binary test in tests/test_theme_compile.py. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.bb-primary {
+  color: var(--bb-color-primary);
+}

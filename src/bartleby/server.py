@@ -334,13 +334,13 @@ class DevServer:
         :returns: ``"recompiled"`` when CSS was rebuilt, ``"hint"`` when only a
             hint was printed.
         """
-        from bartleby.theme import get_theme_templates_dir
         from bartleby.theme_compile import (
             ThemeCompileError,
             compile_theme_css,
             default_cache_dir,
             resolve_tailwind_binary,
         )
+        from bartleby.theme_loader import select_theme
 
         project_dir = self.config_path.parent
         cache_dir = default_cache_dir()
@@ -353,7 +353,9 @@ class DevServer:
             )
             return "hint"
 
-        compile_theme_css(project_dir, get_theme_templates_dir(), cache_dir=cache_dir)
+        config = load_config(self.config_path)
+        theme = select_theme(config.theme, project_dir)
+        compile_theme_css(project_dir, theme, config.theme.tokens, cache_dir=cache_dir)
         return "recompiled"
 
     def dispatch_change(self, rel_path: str, *, rebuild: Callable[[], object]) -> None:

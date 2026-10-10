@@ -3,6 +3,7 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- Tailwind 3 standalone's postcss-import resolves `@import` relative to the input file, so generated files (theme tokens) must be pulled in through a generated wrapper input that sits beside them, not from a theme's own tailwind.css. Absolute paths inside a CSS `@import` must use forward slashes (`Path.as_posix()`); backslashes parse as CSS escapes (2026-10-10)
 - `git diff HEAD` and `git diff --staged` omit untracked files, so a validator reviewing a step that is mostly new files sees an empty or tiny diff. Tell it the new paths explicitly (or `git add -N` them) and have it read them directly (2026-10-10)
 - When a BPE plan is for "polish the theme" (or any "make X look good" goal), grep the shipped artifact's header and the compile invocation before drafting: Bartleby's `main.css` declared itself a placeholder and `theme_compile.py` fed Tailwind a bare inline directive string with no config, so the real step was "build the theme," not "polish" it. Verify the artifact exists before planning to improve it (2026-10-09)
 - When auditing a published 0.x config interface, count accepted-vs-honored values: `config.py` accepted 18 mkdocs-material `theme.features` names and the templates acted on 3. Every silently ignored value is a public-interface lie and becomes a plan step (implement or warn) (2026-10-09)
@@ -13,7 +14,6 @@
 - Scheduling a filesystem watcher (watchdog `Observer`) per entry in a configured list of watch-roots can raise when a root doesn't exist in every project (optional `hooks/`, `data/`, `shortcodes/` directories); schedule a single recursive `Observer` over the project root instead and route every event through the existing watched-path decision primitive (`is_watched`/`dispatch_change`) so there is still exactly one place deciding what matters (2026-09-06)
 - A value rendered into an inline `<script type="application/ld+json">` block via `| safe` needs its own escaping pass beyond "is this valid JSON": a title containing a literal `</script>` closes the tag early and breaks out into HTML/script context. Escape `<`, `>`, and `&` as `<`/`>`/`&` after `json.dumps`; these are valid JSON string escapes so `json.loads` round-trips them back unchanged, and only the raw HTML context sees the escaped form (2026-09-06)
 - For a "build on their thing vs build our own" call, the load-bearing research axis is extensibility: check whether a shipped, stable third-party plugin/module API actually exists, not whether one is promised. Zensical had a designed module system (ZAP-007) that explicitly declined to define a public API, so "build plugins for it" was a non-option despite the project being real and MIT (2026-08-30)
-- Record a positioning/strategy decision in BOTH the memory system and the project CLAUDE.md: CLAUDE.md steers future in-repo edits (e.g. the README one-liner), while memory carries the rationale across sessions. Editing one without the other lets a later session drift back (2026-08-30)
 
 ## Packaging
 
@@ -71,6 +71,7 @@
 
 ## Tooling
 
+- Tailwind 3 standalone's postcss-import resolves `@import` relative to the input file, so generated files (theme tokens) must be pulled in through a generated wrapper input that sits beside them, not from a theme's own tailwind.css. Absolute paths inside a CSS `@import` must use forward slashes (`Path.as_posix()`); backslashes parse as CSS escapes (2026-10-10)
 - Launch long-lived local servers (`/bpe:review`, preview HTTP) with `setsid <cmd> > log 2>&1 < /dev/null &` — a plain background job gets reaped on shell teardown and a separately-run server gets killed by the background-task timeout; setsid in its own session survives both (2026-06-21)
 - `do-markdown` is not on PyPI — must add `[tool.uv.sources]` with `path = "../do-markdown", editable = true` for local resolution (2026-05-02)
 - In `bpe.local.md` profiles, pin exact current release ids (`claude-sonnet-5-5`, `claude-fable-5-1`), not family-less forms like `claude-fable-5`; and treat the session-start "profile expects X, session is Y" note as a to-do, not an FYI (2026-10-09)

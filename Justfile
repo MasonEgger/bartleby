@@ -22,14 +22,21 @@ smoke:
 format:
     uv run ruff format src/ tests/
 
-# Package-build step: compile the shipped theme CSS from the bundled templates
-# plus the curated safelist using the real Tailwind standalone CLI. The wheel
-# ships the resulting static/css/main.css; end users never run this. Requires a
+# Package-build step: compile each bundled theme's shipped CSS with the real
+# Tailwind standalone CLI. Every src/bartleby/themes/<name>/ that has a
+# tailwind.css is compiled into its own static/css/main.css, using its own
+# tailwind.config.js when it has one; themes without sources are skipped. The
+# wheel ships the resulting files; end users never run this. Requires a
 # `tailwindcss` binary on PATH (the same pinned version bartleby downloads on
 # demand for `bartleby theme compile`).
 theme-css:
-    tailwindcss \
-      --content 'src/bartleby/theme/templates/**/*.html' \
-      --content 'src/bartleby/theme/safelist.txt' \
-      --output src/bartleby/theme/static/css/main.css \
-      --minify
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for theme_dir in src/bartleby/themes/*/; do
+      [ -f "${theme_dir}tailwind.css" ] || continue
+      args=(--input "${theme_dir}tailwind.css" --output "${theme_dir}static/css/main.css" --minify)
+      if [ -f "${theme_dir}tailwind.config.js" ]; then
+        args+=(--config "${theme_dir}tailwind.config.js")
+      fi
+      tailwindcss "${args[@]}"
+    done

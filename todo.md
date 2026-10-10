@@ -35,14 +35,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 8. Verify: coverage + `just check`
 
 ### Step 4: Per-theme Tailwind compile and token emission (feature)
-- [ ] 1. RED: leaf-first --config/--input with parent fallback; --content over all layers + project dirs; tokens -> .bartleby/tokens.css with --bb-* vars; empty tokens file present
-- [ ] 2. Document: compile_theme_css docstring
-- [ ] 3. GREEN: theme_compile.py takes ResolvedTheme + tokens; cli.py passes resolved theme
-- [ ] 4. RED: skip-guarded real-binary compile of base
-- [ ] 5. GREEN: wire minimally
-- [ ] 6. REFACTOR: shared "nearest layer providing path" helper
-- [ ] 7. Document: Justfile theme-css loops over bundled themes
-- [ ] 8. Verify: coverage + `just check`
+- [x] 1. RED: leaf-first --config/--input with parent fallback; --content over all layers + project dirs; tokens -> .bartleby/tokens.css with --bb-* vars; empty tokens file present
+- [x] 2. Document: compile_theme_css docstring
+- [x] 3. GREEN: theme_compile.py takes ResolvedTheme + tokens; cli.py passes resolved theme
+- [x] 4. RED: skip-guarded real-binary compile of base
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: shared "nearest layer providing path" helper
+- [x] 7. Document: Justfile theme-css loops over bundled themes
+- [x] 8. Verify: coverage + `just check`
 
 ### Step 5: `bartleby theme eject` and `bartleby theme inspect` (feature)
 - [ ] 1. RED: eject flattens chain leaf-wins with no `extends`; refuses overwrite without --force; --to honored; inspect lists provider layer + overrides shadowing; --format json stable

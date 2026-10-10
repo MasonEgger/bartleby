@@ -1,0 +1,5 @@
+name: parent
+version: "1.0.0"
+description: Fixture parent theme.
+features:
+  - search

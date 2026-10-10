@@ -5,14 +5,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 ## Section 1: Theme system core
 
 ### Step 1: Theme manifest and resolver (feature)
-- [ ] 1. RED: fixtures (parent, child extends parent, cyclic-a/b) + tests for manifest parse, missing/invalid manifest, leaf-first chain, cycle error, extends-bundled, bad path, package entry point
-- [ ] 2. Document: theme_loader.py module docstring (manifest schema, three sources, chain semantics)
-- [ ] 3. GREEN: theme_loader.py (ThemeManifest, ThemeLayer, ResolvedTheme, ThemeError, load_manifest, resolve_theme) + themes/__init__.py
-- [ ] 4. RED: bundled-name resolution tests (xfail until Step 6/11)
-- [ ] 5. GREEN: wire minimally
-- [ ] 6. REFACTOR: per-field manifest helpers in config.py style
-- [ ] 7. Document: none beyond docstring
-- [ ] 8. Verify: coverage + `just check`
+- [x] 1. RED: fixtures (parent, child extends parent, cyclic-a/b) + tests for manifest parse, missing/invalid manifest, leaf-first chain, cycle error, extends-bundled, bad path, package entry point
+- [x] 2. Document: theme_loader.py module docstring (manifest schema, three sources, chain semantics)
+- [x] 3. GREEN: theme_loader.py (ThemeManifest, ThemeLayer, ResolvedTheme, ThemeError, load_manifest, resolve_theme) + themes/__init__.py
+- [x] 4. RED: bundled-name resolution tests (xfail until Step 6/11)
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: per-field manifest helpers in config.py style
+- [x] 7. Document: none beyond docstring
+- [x] 8. Verify: coverage + `just check`
 
 ### Step 2: Resolution chain drives templates, static assets, and icons (feature)
 - [ ] 1. RED: cascade tests (search bases order, parent fallback, child wins, overrides/ beats all), static copy child-wins, icon lookup leaf-first

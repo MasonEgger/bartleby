@@ -3,6 +3,7 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- `git diff HEAD` and `git diff --staged` omit untracked files, so a validator reviewing a step that is mostly new files sees an empty or tiny diff. Tell it the new paths explicitly (or `git add -N` them) and have it read them directly (2026-10-10)
 - When a BPE plan is for "polish the theme" (or any "make X look good" goal), grep the shipped artifact's header and the compile invocation before drafting: Bartleby's `main.css` declared itself a placeholder and `theme_compile.py` fed Tailwind a bare inline directive string with no config, so the real step was "build the theme," not "polish" it. Verify the artifact exists before planning to improve it (2026-10-09)
 - When auditing a published 0.x config interface, count accepted-vs-honored values: `config.py` accepted 18 mkdocs-material `theme.features` names and the templates acted on 3. Every silently ignored value is a public-interface lie and becomes a plan step (implement or warn) (2026-10-09)
 - For visual or product-identity work, ask the direction questions (replicate vs original, one theme vs a system) before the first plan draft; punting to a design skill cost two full rewrites (17 -> 19 -> 26 steps) in one session (2026-10-09)
@@ -21,6 +22,7 @@
 
 ## Workflow
 
+- `git diff HEAD` and `git diff --staged` omit untracked files, so a validator reviewing a step that is mostly new files sees an empty or tiny diff. Tell it the new paths explicitly (or `git add -N` them) and have it read them directly (2026-10-10)
 - For a "build on their thing vs build our own" call, the load-bearing research axis is extensibility: check whether a shipped, stable third-party plugin/module API actually exists, not whether one is promised (Zensical's ZAP-007 declined to define a public API, so "build plugins for it" was a non-option) (2026-08-30)
 - Record a positioning/strategy decision in BOTH the memory system and the project CLAUDE.md: CLAUDE.md steers future in-repo edits, memory carries the rationale across sessions; editing one without the other lets a later session drift back (2026-08-30)
 - For a competitive/strategic review, fan out one web-research subagent per axis (architecture, features, extensibility, business) in parallel and read the local codebase yourself at the same time; keeps the comparison grounded and fast (2026-08-30)

@@ -3,6 +3,7 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- Flipping a default (here `DEFAULT_THEME_NAME`) breaks every test that relied on the old default implicitly: sixteen did. Grep tests for the default accessor and for fixtures that build with no explicit setting, and add one named helper (`tests/theme_helpers.py::material_theme()`) so the dependency is stated, not inherited (2026-10-10)
 - A plan that says "on top of the existing wiring" can describe wiring that does not exist. The material search modal called `window.__bartlebySearch`, which nothing defined, so search silently returned no results. Grep for the definition of every global a template calls before scoping a step as polish (2026-10-10)
 - A field a theme reads (`page.toc`) can be documented in a dataclass and assigned nowhere. Before building a template on a page or nav attribute, grep for its assignment, not just its declaration; Step 9 found `page.toc` and directory nav targets both produced nothing, so the sidebar and TOC had no data to render (2026-10-10)
 - Interactive UI state a theme owns (color-mode toggle) needs an owner in the plan: Step 8's toggle held state in memory only and no later step covered persistence, so the validator caught it. For any toggle, ask where its state is stored and who reads it before first paint; put the pre-paint script in `base`, not in one theme, so every theme reuses it (2026-10-10)

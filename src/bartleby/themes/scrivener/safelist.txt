@@ -1,0 +1,102 @@
+# ABOUTME: Curated Tailwind safelist for the scrivener theme.
+# ABOUTME: tailwind.config.js reads this file; one class per line, # starts a comment.
+#
+# Classes listed here are always emitted, even when no template references them
+# statically. Component classes defined under @layer components are purged when
+# unused, so every semantic class the scrivener templates (or Markdown content)
+# can produce is named here. Runtime-toggled utilities live here too.
+#
+# Layout regions
+layout-docs
+layout-prose
+layout-docs--no-sidebar
+layout-docs--no-toc
+prose-column
+docs-content
+sidebar-nav
+nav-tabs
+toc-sidebar
+toc-nav
+# Header, navigation, footer
+site-header
+header-inner
+site-title
+site-nav
+site-footer
+site-meta
+theme-toggle
+nav-link
+nav-section
+nav-section-title
+nav-item
+# Search modal
+search-modal
+search-trigger
+search-overlay
+search-panel
+search-input
+search-results
+search-head
+search-close
+search-status
+search-result-title
+search-result-snippet
+search-hit
+# Page furniture
+prev-next
+not-found
+taxonomy-index
+taxonomy-term
+taxonomy-crumb
+taxonomy-count
+term-list
+term-link
+term-count
+post-list
+post-list-item
+not-found-code
+not-found-actions
+not-found-hint
+not-found-label
+tag-list
+tag
+post-meta
+back-to-top
+code-copy-button
+is-copied
+# Markdown content helpers
+md-button
+md-button--primary
+cards
+# Classes emitted by Markdown extensions, never present in templates
+admonition
+admonition-title
+note
+abstract
+info
+tip
+success
+question
+warning
+failure
+danger
+bug
+example
+quote
+tabbed-set
+tabbed-labels
+tabbed-content
+tabbed-block
+tabbed-alternate
+# Utilities toggled at runtime or by Markdown attributes
+hidden
+block
+flex
+grid
+sr-only
+container
+mx-auto
+prose
+prose-invert
+dark:prose-invert
+active

@@ -11,6 +11,7 @@ import pytest
 from bartleby import theme_loader
 from bartleby.theme_loader import ThemeError, load_manifest, resolve_theme
 from bartleby.themes import bundled_theme_root
+from tests.theme_helpers import material_theme
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -96,8 +97,15 @@ def test_manifest_rejects_feature_outside_native_vocabulary(tmp_path: Path) -> N
         load_manifest(tmp_path)
 
 
-def test_default_theme_declares_the_features_its_templates_honor() -> None:
+def test_default_theme_is_scrivener_over_base() -> None:
     resolved = theme_loader.default_theme()
+
+    assert [layer.name for layer in resolved.chain] == ["scrivener", "base"]
+    assert set(resolved.chain[0].manifest.features) == set(theme_loader.THEME_FEATURES)
+
+
+def test_material_theme_declares_the_features_its_templates_honor() -> None:
+    resolved = material_theme()
     assert [layer.name for layer in resolved.chain] == ["material", "base"]
     manifest = resolved.chain[0].manifest
 
@@ -260,7 +268,6 @@ def test_bundled_material_resolves_with_base_parent() -> None:
     assert [layer.name for layer in resolved.chain] == ["material", "base"]
 
 
-@pytest.mark.xfail(reason="bundled scrivener theme lands in Step 11", strict=True)
 def test_bundled_scrivener_resolves() -> None:
     resolved = resolve_theme(name="scrivener", project_dir=THEMES)
 

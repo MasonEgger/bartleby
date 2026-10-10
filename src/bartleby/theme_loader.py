@@ -79,7 +79,7 @@ A feature enabled in config but missing from the active theme's manifest is a bu
 warning, not an error. Keep this set and :func:`_parse_features` together.
 """
 
-DEFAULT_THEME_NAME = "material"
+DEFAULT_THEME_NAME = "scrivener"
 """The bundled theme selected when ``theme:`` sets none of ``name``, ``path``, ``package``."""
 
 

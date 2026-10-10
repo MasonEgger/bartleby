@@ -9,8 +9,8 @@ import jinja2
 import pytest
 
 from bartleby.assets import copy_theme_static
-from bartleby.theme_loader import default_theme
 from bartleby.themes import bundled_theme_root
+from tests.theme_helpers import material_theme
 
 # Pinned vendored bundle versions. Keep these in sync with THIRD-PARTY-NOTICES.
 VENDORED_BUNDLES = {
@@ -25,7 +25,7 @@ def _env(features: list[str] | None = None) -> jinja2.Environment:
     from bartleby.theme_loader import THEME_FEATURES
 
     enabled = list(THEME_FEATURES) if features is None else features
-    loader = jinja2.FileSystemLoader([str(path) for path in default_theme().templates_dirs()])
+    loader = jinja2.FileSystemLoader([str(path) for path in material_theme().templates_dirs()])
     env = jinja2.Environment(loader=loader, autoescape=True)
     env.globals["feature"] = make_feature_checker(enabled)
     return env
@@ -287,7 +287,7 @@ def test_third_party_notices_lists_vendored_libraries() -> None:
 def test_build_copies_real_bundles_into_site_js(tmp_path: Path) -> None:
     """copy_theme_static places the real bundles under site/js/."""
     output_dir = tmp_path / "site"
-    copy_theme_static(default_theme().static_dirs(), output_dir)
+    copy_theme_static(material_theme().static_dirs(), output_dir)
     for filename in VENDORED_BUNDLES:
         copied = output_dir / "js" / filename
         assert copied.exists(), f"{filename} was not copied into site/js/"
@@ -305,8 +305,12 @@ def test_base_html_wires_search_and_dark_mode_to_bundles() -> None:
     assert "search-modal" in rendered
     assert 'x-on:click="show()"' in rendered
     assert 'x-data="bartlebySearch()"' in rendered
-    assert "/search/search_index.json" in rendered
-    assert "lunr(" in rendered
+    # The engine is a base static script loaded ahead of Alpine, not inline markup.
+    assert "/js/search.js" in rendered
+    assert rendered.index("/js/search.js") < rendered.index("/js/alpine.min.js")
+    engine = (bundled_theme_root("base") / "static" / "js" / "search.js").read_text()
+    assert "/search/search_index.json" in engine
+    assert "lunr(" in engine
     # Dark-mode toggle wired to Alpine.
     assert "theme-toggle" in rendered
     assert "document.documentElement.dataset.theme" in rendered

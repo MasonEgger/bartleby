@@ -18,6 +18,9 @@
   <link rel="stylesheet" href="/{{ css.lstrip('/') }}">
   {% endfor %}
   {% include "partials/jsonld.html" %}
+  {% if feature is defined and feature('search') %}
+  <script defer src="/js/search.js" data-highlight="{{ (feature('search.highlight')) | tojson }}"></script>
+  {% endif %}
   <script defer src="/js/alpine.min.js"></script>
   <script defer src="/js/htmx.min.js"></script>
   <script defer src="/js/lunr.min.js"></script>

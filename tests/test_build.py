@@ -18,7 +18,8 @@ from bartleby.build import (
     extract_excerpt,
 )
 from bartleby.config import ConfigError
-from bartleby.theme_loader import default_theme, resolve_theme
+from bartleby.theme_loader import resolve_theme
+from tests.theme_helpers import material_theme
 
 
 @pytest.fixture
@@ -27,6 +28,12 @@ def project(tmp_path: Path) -> Path:
     source = Path(__file__).parent / "fixtures" / "site"
     destination = tmp_path / "site_project"
     shutil.copytree(source, destination)
+    # The sample site exercises material's templates; name it so the default theme can change.
+    config_path = destination / "bartleby.yml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8") + "\ntheme:\n  name: material\n",
+        encoding="utf-8",
+    )
     return destination
 
 
@@ -376,7 +383,7 @@ def test_static_file_count_excludes_generated_artifacts(project: Path) -> None:
 
     theme_static_count = sum(
         1
-        for static_dir in default_theme().static_dirs()
+        for static_dir in material_theme().static_dirs()
         for path in static_dir.rglob("*")
         if path.is_file()
     )

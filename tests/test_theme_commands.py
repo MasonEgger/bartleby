@@ -13,11 +13,11 @@ import yaml
 from bartleby.cli import main
 from bartleby.theme_loader import (
     ThemeError,
-    default_theme,
     flatten_chain,
     inspect_chain,
     resolve_theme,
 )
+from tests.theme_helpers import material_theme
 
 THEMES = Path(__file__).parent / "fixtures" / "themes"
 
@@ -103,9 +103,9 @@ class TestEject:
         project = _project(tmp_path, monkeypatch, None)
         main(["theme", "eject"])
 
-        target = project / "themes" / "material"
+        target = project / "themes" / "scrivener"
         manifest = yaml.safe_load((target / "theme.yml").read_text(encoding="utf-8"))
-        assert manifest["name"] == "material"
+        assert manifest["name"] == "scrivener"
         assert "extends" not in manifest
         assert "search" in manifest["features"]
         assert (target / "templates" / "base.html").is_file()
@@ -206,7 +206,7 @@ class TestInspect:
 
     @staticmethod
     def _shadow_of(project: Path, template: str) -> str | None:
-        result = inspect_chain(default_theme(), project)
+        result = inspect_chain(material_theme(), project)
         return next(item.shadowed_by for item in result.files if item.path == template)
 
     def test_templates_dir_shadows_theme_template(self, tmp_path: Path) -> None:
@@ -224,8 +224,8 @@ class TestInspect:
             (tmp_path / directory / "base.html").write_text("x", encoding="utf-8")
         assert self._shadow_of(tmp_path, "templates/base.html") == "overrides/base.html"
 
-    def test_inspect_default_theme_reports_material_over_base(self, tmp_path: Path) -> None:
-        result = inspect_chain(default_theme(), tmp_path)
+    def test_inspect_material_theme_reports_material_over_base(self, tmp_path: Path) -> None:
+        result = inspect_chain(material_theme(), tmp_path)
         assert result.chain == ["material", "base"]
         assert {item.layer for item in result.files} == {"material", "base"}
 

@@ -94,11 +94,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 ## Section 3: The `scrivener` theme
 
 ### Step 11: Scrivener design direction and sources (task)
-- [ ] 1. Scope: themes/scrivener/{theme.yml,tailwind.config.js,tailwind.css,safelist.txt}; default theme -> scrivener; un-xfail test
-- [ ] 2. Tooling: frontend-design (real design effort here)
-- [ ] 3. Do: write sources; present direction (palette, type, three adjectives) for Mason
-- [ ] 4. Verify: compile exits 0; `just check` green after default flip
-- [ ] 5. Document: design-direction comment block
+- [x] 1. Scope: themes/scrivener/{theme.yml,tailwind.config.js,tailwind.css,safelist.txt}; default theme -> scrivener; un-xfail test
+- [x] 2. Tooling: frontend-design (real design effort here)
+- [x] 3. Do: write sources; present direction (palette, type, three adjectives) for Mason
+- [x] 4. Verify: compile exits 0; `just check` green after default flip
+- [x] 5. Document: design-direction comment block
 
 ### Step 12: Scrivener shell and content templates (task)
 - [ ] 1. Scope: header, nav, footer, page, post, list under themes/scrivener

@@ -1,0 +1,12 @@
+name: scrivener
+description: Bartleby's own theme. A ruled-ledger reading layout with a margin rule, serif text, and a pale paper palette.
+extends: base
+features:
+  - search
+  - search.highlight
+  - nav.tabs
+  - nav.sidebar
+  - nav.section-index
+  - nav.back-to-top
+  - content.code.copy
+  - color-mode.toggle

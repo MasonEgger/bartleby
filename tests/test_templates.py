@@ -33,6 +33,7 @@ from bartleby.templates import (
     template_search_bases,
 )
 from bartleby.theme_loader import ResolvedTheme, resolve_theme
+from tests.theme_helpers import material_theme
 
 _JSONLD_SCRIPT_RE = re.compile(
     r'<script type="application/ld\+json">\n?(.*?)\n?</script>', re.DOTALL
@@ -366,7 +367,7 @@ def test_taxonomy_template_lookup(tmp_path: Path) -> None:
 
 def test_jinja_env_has_correct_search_paths(tmp_path: Path) -> None:
     """Search paths are overrides → templates → project_dir → theme, in order."""
-    env = create_jinja_env(_empty_config(), tmp_path)
+    env = create_jinja_env(_empty_config(), tmp_path, theme=material_theme())
     loader = env.loader
     assert loader is not None
     paths = getattr(loader, "searchpath", [])

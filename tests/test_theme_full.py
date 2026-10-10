@@ -7,8 +7,8 @@ import re
 
 import jinja2
 
-from bartleby.theme_loader import default_theme
 from bartleby.themes import bundled_theme_root
+from tests.theme_helpers import material_theme
 
 
 def _render_markdown(source: str) -> str:
@@ -61,7 +61,7 @@ def _env() -> jinja2.Environment:
     from bartleby.theme_loader import THEME_FEATURES
 
     env = jinja2.Environment(
-        loader=jinja2.FileSystemLoader([str(path) for path in default_theme().templates_dirs()]),
+        loader=jinja2.FileSystemLoader([str(path) for path in material_theme().templates_dirs()]),
         autoescape=True,
     )
     env.globals["feature"] = make_feature_checker(list(THEME_FEATURES))
@@ -201,22 +201,42 @@ def test_missing_or_unknown_default_keeps_light_and_script_falls_through() -> No
         assert "var configured = null;" in rendered
 
 
-def _search_partial(features: list[str]) -> str:
+def _base_page(features: list[str]) -> str:
     from bartleby.templates import make_feature_checker
 
     env = _env()
     env.globals["feature"] = make_feature_checker(features)
-    return env.get_template("partials/search.html").render(**_ctx())
+    return env.get_template("base.html").render(**_ctx())
 
 
 def test_search_highlight_gated_by_feature() -> None:
-    """``?h=`` carry-over and mark building only switch on with ``search.highlight``."""
-    assert "var highlightEnabled = true" in _search_partial(["search", "search.highlight"])
-    assert "var highlightEnabled = false" in _search_partial(["search"])
+    """The ``search.highlight`` flag rides on the script tag as a JSON data attribute."""
+    on = _base_page(["search", "search.highlight"])
+    off = _base_page(["search"])
+    assert '<script defer src="/js/search.js" data-highlight="true">' in on
+    assert '<script defer src="/js/search.js" data-highlight="false">' in off
+    assert "/js/search.js" not in _base_page([])
+
+
+def test_search_engine_reads_highlight_flag_from_data_attribute() -> None:
+    """The engine takes the flag from its script tag, never from templated source."""
+    engine = _search_engine()
+    assert "script.dataset.highlight" in engine
+    assert "{{" not in engine
 
 
 def test_search_highlight_never_injects_html() -> None:
-    """Marks are built from DOM text nodes; the partial never assigns innerHTML."""
-    rendered = _search_partial(["search", "search.highlight"])
-    assert "innerHTML" not in rendered
-    assert "x-html" not in rendered
+    """Marks are built from DOM text nodes; neither engine nor modal assigns innerHTML."""
+    rendered = _base_page(["search", "search.highlight"])
+    for source in (_search_engine(), rendered):
+        assert "innerHTML" not in source
+        assert "x-html" not in source
+
+
+def test_search_engine_uses_straight_quotes() -> None:
+    """The no-results message keeps straight quotes, per the project's quote rule."""
+    assert all(ord(char) < 128 for char in _search_engine())
+
+
+def _search_engine() -> str:
+    return (bundled_theme_root("base") / "static" / "js" / "search.js").read_text()

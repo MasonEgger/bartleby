@@ -1,9 +1,7 @@
 {# Material search modal markup. The engine (index fetch, lunr query, ?h= highlighting) is base's #}
 {# static/js/search.js; this partial only binds to its bartlebySearch component. #}
+{# The trigger is partials/search_trigger.html (included by the header); it opens this modal with the bartleby:search-open window event. #}
 <div class="search-modal" x-cloak x-data="bartlebySearch()" x-on:keydown.escape.window="open && close()">
-  <button type="button" class="search-trigger" x-ref="trigger" x-on:click="show()" aria-label="Open search" aria-haspopup="dialog">
-    Search
-  </button>
   <div class="search-overlay" x-show="open" x-cloak>
     <div class="search-panel" role="dialog" aria-modal="true" aria-label="Search" x-on:click.outside="open && close()">
       <div class="search-head">

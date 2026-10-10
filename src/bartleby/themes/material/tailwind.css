@@ -134,6 +134,9 @@
   .nav-tabs a.active {
     opacity: 1;
   }
+  .nav-tabs a {
+    color: inherit;
+  }
   .nav-tabs {
     background: var(--bm-primary);
     color: var(--bm-on-primary);
@@ -208,7 +211,15 @@
     .layout-docs--no-sidebar {
       grid-template-columns: minmax(0, 1fr);
     }
-    .layout-docs > .sidebar-nav { display: none; }
+    /* The section tree stays above the article and folds behind a toggle. */
+    .layout-docs > .sidebar-nav {
+      position: static;
+      max-height: none;
+      overflow: visible;
+      margin-bottom: 1rem;
+    }
+    .sidebar-nav.js-collapsible .sidebar-toggle { display: flex; }
+    .sidebar-nav.js-collapsible:not(.is-open) .sidebar-tree { display: none; }
   }
 
   /* Left section sidebar. */
@@ -219,6 +230,35 @@
     max-height: calc(100vh - var(--bm-header-height) - var(--bm-tabs-height) - 2rem);
     overflow-y: auto;
     font-size: 0.8rem;
+  }
+  .sidebar-toggle {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid var(--bm-border);
+    border-radius: var(--bm-radius);
+    background: var(--bm-surface);
+    color: var(--bm-heading);
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .sidebar-toggle::after {
+    content: "";
+    width: 0.4rem;
+    height: 0.4rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    transition: transform 125ms;
+  }
+  .sidebar-nav.is-open .sidebar-toggle::after {
+    transform: rotate(-135deg);
+  }
+  .sidebar-tree {
+    padding-top: 0;
   }
   .sidebar-nav ul {
     margin: 0;
@@ -256,6 +296,9 @@
   }
   /* A collapsible group is a <details>; the browser draws the open state with JS off. */
   .sidebar-nav details > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     cursor: pointer;
     list-style: none;
   }
@@ -264,10 +307,10 @@
   }
   .sidebar-nav details > summary::after {
     content: "";
-    float: right;
+    flex: none;
     width: 0.4rem;
     height: 0.4rem;
-    margin-top: 0.45rem;
+    margin-right: 0.25rem;
     border-right: 2px solid currentColor;
     border-bottom: 2px solid currentColor;
     transform: rotate(-45deg);
@@ -369,6 +412,9 @@
     font-size: 6rem;
     font-weight: 300;
     line-height: 1;
+  }
+  [data-theme="dark"] .not-found-code {
+    color: var(--bm-link);
   }
   .not-found-actions {
     display: flex;
@@ -618,7 +664,7 @@
   }
 
   /* Admonitions and collapsible blocks (pymdownx.details). */
-  :is(.admonition, details) {
+  :is(.admonition, .prose details) {
     --bm-adm: #448aff;
     margin: 1.25rem 0;
     padding: 0 0.8rem;
@@ -628,26 +674,26 @@
     background: color-mix(in srgb, var(--bm-adm) 5%, var(--bm-bg));
     font-size: 0.85em;
   }
-  :is(.admonition, details).note { --bm-adm: #448aff; }
-  :is(.admonition, details).abstract { --bm-adm: #00b0ff; }
-  :is(.admonition, details).info { --bm-adm: #00b8d4; }
-  :is(.admonition, details).tip { --bm-adm: #00bfa5; }
-  :is(.admonition, details).success { --bm-adm: #00c853; }
-  :is(.admonition, details).question { --bm-adm: #64dd17; }
-  :is(.admonition, details).warning { --bm-adm: #ff9100; }
-  :is(.admonition, details).failure { --bm-adm: #ff5252; }
-  :is(.admonition, details).danger { --bm-adm: #ff1744; }
-  :is(.admonition, details).bug { --bm-adm: #f50057; }
-  :is(.admonition, details).example { --bm-adm: #7c4dff; }
-  :is(.admonition, details).quote { --bm-adm: #9e9e9e; }
+  :is(.admonition, .prose details).note { --bm-adm: #448aff; }
+  :is(.admonition, .prose details).abstract { --bm-adm: #00b0ff; }
+  :is(.admonition, .prose details).info { --bm-adm: #00b8d4; }
+  :is(.admonition, .prose details).tip { --bm-adm: #00bfa5; }
+  :is(.admonition, .prose details).success { --bm-adm: #00c853; }
+  :is(.admonition, .prose details).question { --bm-adm: #64dd17; }
+  :is(.admonition, .prose details).warning { --bm-adm: #ff9100; }
+  :is(.admonition, .prose details).failure { --bm-adm: #ff5252; }
+  :is(.admonition, .prose details).danger { --bm-adm: #ff1744; }
+  :is(.admonition, .prose details).bug { --bm-adm: #f50057; }
+  :is(.admonition, .prose details).example { --bm-adm: #7c4dff; }
+  :is(.admonition, .prose details).quote { --bm-adm: #9e9e9e; }
   .admonition-title,
-  details > summary {
+  .prose details > summary {
     margin: 0 -0.8rem;
     padding: 0.5rem 0.8rem;
     background: color-mix(in srgb, var(--bm-adm) 12%, var(--bm-bg));
     font-weight: 500;
   }
-  details > summary {
+  .prose details > summary {
     cursor: pointer;
   }
 

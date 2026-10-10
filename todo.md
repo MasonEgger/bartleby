@@ -124,11 +124,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 ## Section 4: Compile, ship, and browser-verify both themes
 
 ### Step 15: Regenerate, ship, and visually verify `material` and `scrivener` (task)
-- [ ] 1. Scope: both themes' static/css/main.css regenerated + committed; source fixes
-- [ ] 2. Tooling: frontend-design, python; just theme-css, new/build/serve, run/claude-in-chrome
-- [ ] 3. Do: regenerate; scaffold on each theme + docs on scrivener; screenshot 6 page types x 2 modes x 2 widths per theme; eject -> edit -> build -> inspect story; fix + recompile
-- [ ] 4. Verify: `just check` green AND screenshots polished AND eject/inspect works; surface to Mason
-- [ ] 5. Document: CHANGELOG (system, three themes, eject/inspect, breaking config)
+- [x] 1. Scope: both themes' static/css/main.css regenerated + committed; source fixes
+- [x] 2. Tooling: frontend-design, python; just theme-css, new/build/serve, run/claude-in-chrome
+- [x] 3. Do: regenerate; scaffold on each theme + docs on scrivener; screenshot 6 page types x 2 modes x 2 widths per theme; eject -> edit -> build -> inspect story; fix + recompile
+- [x] 4. Verify: `just check` green AND screenshots polished AND eject/inspect works; surface to Mason (surfacing pending: Mason's visual sign-off not yet given)
+- [x] 5. Document: CHANGELOG (system, three themes, eject/inspect, breaking config)
 
 ## Section 5: Theme docs and the docs showcase
 

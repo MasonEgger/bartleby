@@ -26,6 +26,7 @@ def _render(
     template: str,
     nav: list[dict[str, str]] | None = None,
     override_dir: Path | None = None,
+    page_url: str = "/404.html",
 ) -> str:
     template_dirs = list(bundled_theme(theme_name).templates_dirs())
     if override_dir is not None:
@@ -40,7 +41,7 @@ def _render(
         "page": {
             "title": "Not found",
             "content": "",
-            "url": "/404.html",
+            "url": page_url,
             "description": "",
             "previous": None,
             "next": None,
@@ -66,8 +67,6 @@ def test_search_modal_binds_the_base_engine(theme_name: str) -> None:
     assert root is not None
     assert 'x-data="bartlebySearch()"' in root.group(0)
     assert "x-cloak" in root.group(0)
-    if theme_name == "material":
-        assert 'x-ref="trigger"' in rendered
     assert 'x-ref="input"' in rendered
 
 
@@ -77,9 +76,10 @@ def test_search_modal_renders_exactly_once(theme_name: str) -> None:
     assert _render(theme_name, "base.html").count('class="search-modal"') == 1
 
 
-def test_scrivener_header_renders_the_search_trigger() -> None:
+@pytest.mark.parametrize("theme_name", THEMES)
+def test_header_renders_the_search_trigger(theme_name: str) -> None:
     """The header carries the trigger, which opens the modal through the window event."""
-    rendered = _render("scrivener", "base.html")
+    rendered = _render(theme_name, "base.html")
     assert 'class="search-trigger"' in rendered
     assert "bartleby:search-open" in rendered
 
@@ -126,3 +126,68 @@ def test_404_uses_absolute_links(theme_name: str) -> None:
     assert "/" in hrefs
     assert "/guides/" in hrefs
     assert all(href.startswith("/") for href in hrefs)
+
+
+@pytest.mark.parametrize("theme_name", THEMES)
+def test_404_links_a_section_that_has_no_page_of_its_own(theme_name: str) -> None:
+    """A group with no url of its own links to the first page inside it."""
+    nav = [{"title": "Docs", "url": None, "children": [{"title": "Intro", "url": "/docs/intro/"}]}]
+    rendered = _render(theme_name, "404.html", nav=nav)
+    article = rendered[rendered.index('<article class="not-found"') : rendered.index("</article>")]
+    assert 'href="/docs/intro/">Docs</a>' in article
+
+
+@pytest.mark.parametrize("theme_name", THEMES)
+def test_sidebar_folds_behind_a_toggle_that_needs_javascript_to_appear(theme_name: str) -> None:
+    """The toggle button is in the markup, and only Alpine marks the sidebar collapsible."""
+    nav = [
+        {
+            "title": "Docs",
+            "url": None,
+            "index_url": None,
+            "children": [{"title": "Intro", "url": "/docs/intro/", "children": []}],
+        }
+    ]
+    rendered = _render(theme_name, "page.html", nav=nav, page_url="/docs/intro/")
+    sidebar = rendered[rendered.index('<nav class="sidebar-nav"') :]
+    assert 'class="sidebar-toggle"' in sidebar
+    assert 'class="sidebar-tree"' in sidebar
+    assert "classList.add('js-collapsible')" in sidebar
+    assert 'class="sidebar-nav js-collapsible' not in sidebar
+
+
+@pytest.mark.parametrize("theme_name", THEMES)
+def test_sidebar_toggle_controls_the_tree(theme_name: str) -> None:
+    """The toggle names the tree it folds through aria-controls."""
+    nav = [
+        {
+            "title": "Docs",
+            "url": None,
+            "index_url": None,
+            "children": [{"title": "Intro", "url": "/docs/intro/", "children": []}],
+        }
+    ]
+    rendered = _render(theme_name, "page.html", nav=nav, page_url="/docs/intro/")
+    toggle = re.search(r'<button[^>]*class="sidebar-toggle"[^>]*>', rendered)
+    tree = re.search(r'<div class="sidebar-tree" id="([^"]+)"', rendered)
+    assert toggle is not None
+    assert tree is not None
+    assert f'aria-controls="{tree.group(1)}"' in toggle.group(0)
+
+
+@pytest.mark.parametrize("theme_name", THEMES)
+@pytest.mark.parametrize("template", ["page.html", "defaults/post.html"])
+def test_reading_column_is_the_search_highlight_root(theme_name: str, template: str) -> None:
+    """Page and post templates mark their article, so ?h= marks never touch navigation."""
+    rendered = _render(theme_name, template, page_url="/docs/intro/")
+    article = re.search(r"<article[^>]*>", rendered)
+    assert article is not None
+    assert "data-search-highlight-root" in article.group(0)
+
+
+def test_search_engine_scopes_highlight_to_the_reading_column() -> None:
+    """The engine prefers the marked column, then the article, and only then main."""
+    source = ENGINE_SOURCE.read_text(encoding="utf-8")
+    assert "[data-search-highlight-root]" in source
+    assert source.index("[data-search-highlight-root]") < source.index('"main article"')
+    assert source.index('"main article"') < source.index('querySelector("main")')

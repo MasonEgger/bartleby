@@ -78,7 +78,9 @@
   }
 
   function markPage(terms) {
-    var root = document.querySelector("main");
+    // Mark only the reading column, so navigation and the table of contents stay clean.
+    var root = document.querySelector("[data-search-highlight-root]") ||
+      document.querySelector("main article") || document.querySelector("main");
     var pattern = patternOf(terms);
     if (!root || !pattern) { return; }
     var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);

@@ -235,7 +235,15 @@
     .layout-docs--no-sidebar {
       grid-template-columns: minmax(0, 1fr);
     }
-    .layout-docs > .sidebar-nav { display: none; }
+    /* The section tree stays above the article and folds behind a toggle. */
+    .layout-docs > .sidebar-nav {
+      position: static;
+      max-height: none;
+      overflow: visible;
+      margin-bottom: 1rem;
+    }
+    .sidebar-nav.js-collapsible .sidebar-toggle { display: flex; }
+    .sidebar-nav.js-collapsible:not(.is-open) .sidebar-tree { display: none; }
     .layout-docs > .docs-content { max-width: none; }
   }
   @media (max-width: 40rem) {
@@ -262,6 +270,37 @@
     font-family: var(--sc-font-ui);
     font-size: 0.9375rem;
     line-height: 1.25rem;
+  }
+  .sidebar-toggle {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: var(--sc-quarter) 0;
+    border: 0;
+    border-top: 1px solid var(--sc-ruling);
+    border-bottom: 3px double var(--sc-margin);
+    background: transparent;
+    color: var(--sc-ink);
+    font-family: var(--sc-font-text);
+    font-size: 1rem;
+    font-style: italic;
+    cursor: pointer;
+  }
+  .sidebar-toggle::after {
+    content: "";
+    width: 0.375rem;
+    height: 0.375rem;
+    border-right: 1px solid currentColor;
+    border-bottom: 1px solid currentColor;
+    transform: rotate(45deg);
+    transition: transform 125ms;
+  }
+  .sidebar-nav.is-open .sidebar-toggle::after {
+    transform: rotate(-135deg);
+  }
+  .sidebar-tree {
+    padding-top: 0;
   }
   .sidebar-nav ul {
     margin: 0;
@@ -300,6 +339,9 @@
   }
   /* A collapsible group is a <details>; the browser draws the open state with JS off. */
   .sidebar-nav details > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     cursor: pointer;
     list-style: none;
   }
@@ -308,10 +350,10 @@
   }
   .sidebar-nav details > summary::after {
     content: "";
-    float: right;
+    flex: none;
     width: 0.375rem;
     height: 0.375rem;
-    margin: 0.4rem 0.25rem 0 0;
+    margin: 0 0.25rem 0 0;
     border-right: 1px solid currentColor;
     border-bottom: 1px solid currentColor;
     transform: rotate(-45deg);
@@ -713,7 +755,7 @@
   }
 
   /* Admonitions: marginal notes. A single colored rule, an italic run-in title, no icon. */
-  :is(.admonition, details) {
+  :is(.admonition, .prose details) {
     --sc-adm: #3f5f8f;
     margin: 0 0 var(--sc-ruling-unit);
     padding: var(--sc-quarter) var(--sc-half);
@@ -722,46 +764,46 @@
     font-size: 0.9375rem;
     line-height: 1.5;
   }
-  :is(.admonition, details).note { --sc-adm: #3f5f8f; }
-  :is(.admonition, details).abstract { --sc-adm: #3d6f7a; }
-  :is(.admonition, details).info { --sc-adm: #3d6f7a; }
-  :is(.admonition, details).tip { --sc-adm: #4c7550; }
-  :is(.admonition, details).success { --sc-adm: #4c7550; }
-  :is(.admonition, details).question { --sc-adm: #6b6f2f; }
-  :is(.admonition, details).warning { --sc-adm: #94651b; }
-  :is(.admonition, details).failure { --sc-adm: #9b2c32; }
-  :is(.admonition, details).danger { --sc-adm: #9b2c32; }
-  :is(.admonition, details).bug { --sc-adm: #8a3560; }
-  :is(.admonition, details).example { --sc-adm: #62508a; }
-  :is(.admonition, details).quote { --sc-adm: #6d7480; }
-  [data-theme="dark"] :is(.admonition, details) {
+  :is(.admonition, .prose details).note { --sc-adm: #3f5f8f; }
+  :is(.admonition, .prose details).abstract { --sc-adm: #3d6f7a; }
+  :is(.admonition, .prose details).info { --sc-adm: #3d6f7a; }
+  :is(.admonition, .prose details).tip { --sc-adm: #4c7550; }
+  :is(.admonition, .prose details).success { --sc-adm: #4c7550; }
+  :is(.admonition, .prose details).question { --sc-adm: #6b6f2f; }
+  :is(.admonition, .prose details).warning { --sc-adm: #94651b; }
+  :is(.admonition, .prose details).failure { --sc-adm: #9b2c32; }
+  :is(.admonition, .prose details).danger { --sc-adm: #9b2c32; }
+  :is(.admonition, .prose details).bug { --sc-adm: #8a3560; }
+  :is(.admonition, .prose details).example { --sc-adm: #62508a; }
+  :is(.admonition, .prose details).quote { --sc-adm: #6d7480; }
+  [data-theme="dark"] :is(.admonition, .prose details) {
     --sc-adm: #86a6d6;
     background: color-mix(in srgb, var(--sc-adm) 9%, var(--sc-paper));
   }
-  [data-theme="dark"] :is(.admonition, details).tip,
-  [data-theme="dark"] :is(.admonition, details).success { --sc-adm: #8fbf92; }
-  [data-theme="dark"] :is(.admonition, details).warning,
-  [data-theme="dark"] :is(.admonition, details).question { --sc-adm: #d4a95a; }
-  [data-theme="dark"] :is(.admonition, details).failure,
-  [data-theme="dark"] :is(.admonition, details).danger,
-  [data-theme="dark"] :is(.admonition, details).bug { --sc-adm: #d2666b; }
-  [data-theme="dark"] :is(.admonition, details).abstract,
-  [data-theme="dark"] :is(.admonition, details).info { --sc-adm: #7fbac6; }
-  [data-theme="dark"] :is(.admonition, details).example { --sc-adm: #a898d4; }
-  [data-theme="dark"] :is(.admonition, details).quote { --sc-adm: #a3abb8; }
+  [data-theme="dark"] :is(.admonition, .prose details).tip,
+  [data-theme="dark"] :is(.admonition, .prose details).success { --sc-adm: #8fbf92; }
+  [data-theme="dark"] :is(.admonition, .prose details).warning,
+  [data-theme="dark"] :is(.admonition, .prose details).question { --sc-adm: #d4a95a; }
+  [data-theme="dark"] :is(.admonition, .prose details).failure,
+  [data-theme="dark"] :is(.admonition, .prose details).danger,
+  [data-theme="dark"] :is(.admonition, .prose details).bug { --sc-adm: #d2666b; }
+  [data-theme="dark"] :is(.admonition, .prose details).abstract,
+  [data-theme="dark"] :is(.admonition, .prose details).info { --sc-adm: #7fbac6; }
+  [data-theme="dark"] :is(.admonition, .prose details).example { --sc-adm: #a898d4; }
+  [data-theme="dark"] :is(.admonition, .prose details).quote { --sc-adm: #a3abb8; }
   .admonition-title,
-  details > summary {
+  .prose details > summary {
     margin: 0 0 var(--sc-quarter);
     font-family: var(--sc-font-text);
     font-style: italic;
     font-weight: 600;
     color: var(--sc-adm);
   }
-  details > summary {
+  .prose details > summary {
     cursor: pointer;
   }
   .admonition > :last-child,
-  details > :last-child {
+  .prose details > :last-child {
     margin-bottom: 0;
   }
 

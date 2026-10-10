@@ -1,0 +1,2 @@
+{# Material search trigger. It sits outside the modal's x-data scope, so it opens the modal with a window event. #}
+<button type="button" class="search-trigger" x-cloak x-data x-on:click="window.dispatchEvent(new CustomEvent('bartleby:search-open'))" aria-haspopup="dialog" aria-label="Search the site">Search</button>

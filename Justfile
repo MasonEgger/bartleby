@@ -23,20 +23,11 @@ format:
     uv run ruff format src/ tests/
 
 # Package-build step: compile each bundled theme's shipped CSS with the real
-# Tailwind standalone CLI. Every src/bartleby/themes/<name>/ that has a
-# tailwind.css is compiled into its own static/css/main.css, using its own
-# tailwind.config.js when it has one; themes without sources are skipped. The
-# wheel ships the resulting files; end users never run this. Requires a
-# `tailwindcss` binary on PATH (the same pinned version bartleby downloads on
-# demand for `bartleby theme compile`).
-theme-css:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    for theme_dir in src/bartleby/themes/*/; do
-      [ -f "${theme_dir}tailwind.css" ] || continue
-      args=(--input "${theme_dir}tailwind.css" --output "${theme_dir}static/css/main.css" --minify)
-      if [ -f "${theme_dir}tailwind.config.js" ]; then
-        args+=(--config "${theme_dir}tailwind.config.js")
-      fi
-      tailwindcss "${args[@]}"
-    done
+# Tailwind standalone CLI. bartleby.theme_compile owns the content globs (the
+# same ones a user site compiles with), so templates never need a hand-kept
+# safelist; each src/bartleby/themes/<name>/ with a tailwind.css is compiled
+# into its own static/css/main.css. The wheel ships the resulting files; end
+# users never run this. Needs a `tailwindcss` binary on PATH or in the bartleby
+# cache (pass `--binary PATH` through `just theme-css --binary PATH`).
+theme-css *args:
+    uv run python -m bartleby.theme_compile {{args}}

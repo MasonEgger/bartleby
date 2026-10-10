@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import os
 import platform
@@ -15,8 +16,11 @@ from dataclasses import dataclass
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING
 
+from bartleby.theme_loader import resolve_theme
+from bartleby.themes import BUNDLED_THEME_NAMES, bundled_theme_root
+
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Mapping, Sequence
 
     from bartleby.theme_loader import ResolvedTheme
 
@@ -351,14 +355,102 @@ def compile_theme_css(
     )
 
 
+def package_content_globs(theme: ResolvedTheme) -> list[str]:
+    """Template globs Tailwind scans for a theme: every layer's ``templates/``, leaf-first.
+
+    This is the single source of truth for what the shipped CSS and a user
+    site's compiled CSS both extract utilities from.
+    """
+    return [str(templates_dir / "**" / "*.html") for templates_dir in theme.templates_dirs()]
+
+
 def _content_globs(project_dir: Path, theme: ResolvedTheme) -> list[str]:
     """Build the list of template globs Tailwind scans for utility classes."""
-    globs = [str(templates_dir / "**" / "*.html") for templates_dir in theme.templates_dirs()]
+    globs = package_content_globs(theme)
     for subdir in _SCAN_SUBDIRS:
         candidate = project_dir / subdir
         if candidate.exists():
             globs.append(str(candidate / "**" / "*.html"))
     return globs
+
+
+def compile_package_css(
+    theme: ResolvedTheme,
+    *,
+    binary: Path,
+    output: Path | None = None,
+) -> Path:
+    """Compile a bundled theme's shipped CSS (the package-build counterpart).
+
+    Uses the theme's own ``tailwind.css`` and ``tailwind.config.js`` (nearest
+    layer wins) and the same content globs a user site compiles with. No
+    ``tokens.css`` is imported: the shipped CSS relies on the ``var()``
+    fallbacks, and tokens are a user-site layer.
+
+    :param theme: The resolved bundled theme chain, leaf-first.
+    :param binary: The Tailwind standalone binary.
+    :param output: Where to write the CSS; defaults to the leaf theme's
+        ``static/css/main.css``.
+    :returns: The path written.
+    :raises ThemeCompileError: When no layer ships a ``tailwind.css`` or Tailwind
+        exits non-zero.
+    """
+    source = theme.find_file("tailwind.css")
+    if source is None:
+        raise ThemeCompileError(f"theme {theme.chain[0].name!r} ships no tailwind.css")
+    target = output or theme.chain[0].root / "static" / "css" / "main.css"
+    command = [str(binary)]
+    config = theme.find_file("tailwind.config.js")
+    if config is not None:
+        command += ["--config", str(config)]
+    command += [
+        "--input",
+        str(source),
+        "--content",
+        ",".join(package_content_globs(theme)),
+        "--output",
+        str(target),
+        "--minify",
+    ]
+    completed = subprocess.run(  # noqa: S603 - resolved binary, fixed arg list
+        command,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise ThemeCompileError(f"tailwindcss failed: {completed.stderr.strip()}")
+    return target
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Package-build entry point: ``python -m bartleby.theme_compile [--binary PATH] [THEME ...]``.
+
+    With no theme names, compiles every bundled theme that owns a ``tailwind.css``.
+    Not a user-facing command; ``just theme-css`` calls it.
+    """
+    parser = argparse.ArgumentParser(
+        prog="python -m bartleby.theme_compile",
+        description="Compile the shipped CSS of bundled themes (package build only).",
+    )
+    parser.add_argument(
+        "themes", nargs="*", help="bundled theme names (default: all with sources)"
+    )
+    parser.add_argument(
+        "--binary", type=Path, help="Tailwind binary (default: PATH, then the bartleby cache)"
+    )
+    args = parser.parse_args(argv)
+
+    binary = args.binary or resolve_tailwind_binary(cache_dir=default_cache_dir())[0]
+    names = args.themes or [
+        name
+        for name in BUNDLED_THEME_NAMES
+        if (bundled_theme_root(name) / "tailwind.css").exists()
+    ]
+    for name in names:
+        theme = resolve_theme(name=name, project_dir=bundled_theme_root(name).parent)
+        print(f"compiled {name}: {compile_package_css(theme, binary=binary)}")  # noqa: T201
+    return 0
 
 
 def _count_classes(css_path: Path) -> int:
@@ -367,3 +459,7 @@ def _count_classes(css_path: Path) -> int:
         return 0
     text = css_path.read_text(encoding="utf-8")
     return text.count("{")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {# Material 404: absolute links only, so the page reads correctly from any URL depth. #}
+{% from "partials/nav_macros.html" import first_url %}
 {% block content %}
 <article class="not-found">
   <p class="not-found-code" aria-hidden="true">404</p>
@@ -9,12 +10,13 @@
     <a href="/" class="md-button md-button--primary">Go to the home page</a>
     {% if feature is defined and feature('search') %}<span class="not-found-hint">Or use the search button in the header.</span>{% endif %}
   </p>
-  {% set linked = nav | selectattr("url") | list %}
+  {# A section without its own page links to the first page inside it. #}
+  {% set linked = nav | list %}
   {% if linked %}
   <nav aria-label="Sections">
     <p class="not-found-label">Start from a section</p>
     <ul class="tag-list">
-      {% for item in linked %}<li><a href="{{ item.url }}">{{ item.title }}</a></li>{% endfor %}
+      {% for item in linked %}{% set href = (item.index_url or first_url(item) | trim) %}{% if href %}<li><a href="{{ href }}">{{ item.title }}</a></li>{% endif %}{% endfor %}
     </ul>
   </nav>
   {% endif %}

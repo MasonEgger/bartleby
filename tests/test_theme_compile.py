@@ -20,9 +20,12 @@ from bartleby.theme_compile import (
     ThemeCompileError,
     ThemeCompileResult,
     active_theme_css,
+    compile_package_css,
     compile_theme_css,
     css_import_line,
     default_cache_dir,
+    main,
+    package_content_globs,
     resolve_tailwind_binary,
     tailwind_asset_name,
 )
@@ -32,6 +35,7 @@ from bartleby.theme_loader import (
     load_manifest,
     resolve_theme,
 )
+from bartleby.themes import BUNDLED_THEME_NAMES, bundled_theme_root
 
 
 def _make_executable(path: Path) -> None:
@@ -502,3 +506,96 @@ def test_compile_with_real_tailwind_binary(tmp_path: Path) -> None:
     assert "#123456" in css
     assert "var(--bb-color-primary)" in css
     assert (project_dir / ".bartleby" / "tokens.css").is_file()
+
+
+def _real_binary() -> Path:
+    """Return a real Tailwind binary or skip the test."""
+    on_path = shutil.which("tailwindcss")
+    if on_path is not None:
+        return Path(on_path)
+    cached = default_cache_dir() / f"tailwindcss-{PINNED_TAILWIND_VERSION}"
+    if not cached.exists():
+        pytest.skip("no tailwindcss on PATH or in the bartleby cache")
+    return cached
+
+
+def test_package_content_globs_cover_the_theme_and_its_base_only() -> None:
+    """Package builds scan every layer's templates and nothing from a project."""
+    theme = resolve_theme(name="material", project_dir=bundled_theme_root("material").parent)
+
+    globs = package_content_globs(theme)
+
+    assert str(bundled_theme_root("material") / "templates" / "**" / "*.html") in globs
+    assert str(bundled_theme_root("base") / "templates" / "**" / "*.html") in globs
+    assert len(globs) == 2
+
+
+def test_user_site_globs_extend_the_package_globs(tmp_path: Path) -> None:
+    """The user-site compile scans the same package globs plus the project directories."""
+    (tmp_path / "overrides").mkdir()
+    theme = resolve_theme(name="material", project_dir=tmp_path)
+
+    globs = theme_compile._content_globs(tmp_path, theme)
+
+    assert globs[:2] == package_content_globs(theme)
+    assert str(tmp_path / "overrides" / "**" / "*.html") in globs
+
+
+@pytest.mark.parametrize("theme_name", ["material", "scrivener"])
+def test_package_compile_bakes_in_no_tokens(theme_name: str, tmp_path: Path) -> None:
+    """Package CSS relies on the var() fallbacks; tokens.css is a user-site layer only."""
+    theme = resolve_theme(name=theme_name, project_dir=bundled_theme_root(theme_name).parent)
+    output = tmp_path / "main.css"
+
+    compile_package_css(theme, binary=_real_binary(), output=output)
+
+    assert "--bb-color-primary:" not in output.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("theme_name", "utility"), [("material", "text-3xl"), ("scrivener", "max-w-none")]
+)
+def test_package_compile_extracts_a_utility_that_is_not_in_the_safelist(
+    theme_name: str, utility: str, tmp_path: Path
+) -> None:
+    """A template-only utility reaches the CSS through the globs, not the safelist."""
+    root = bundled_theme_root(theme_name)
+    templates = "".join(path.read_text(encoding="utf-8") for path in root.rglob("*.html"))
+    assert utility in templates
+    assert utility not in (root / "safelist.txt").read_text(encoding="utf-8").split()
+    theme = resolve_theme(name=theme_name, project_dir=root.parent)
+    output = tmp_path / "main.css"
+
+    compile_package_css(theme, binary=_real_binary(), output=output)
+
+    assert f".{utility}" in output.read_text(encoding="utf-8")
+
+
+def test_package_main_compiles_each_bundled_theme_that_has_sources(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """With no names, main runs the binary once per bundled theme owning a tailwind.css."""
+    log = tmp_path / "calls.log"
+    fake = tmp_path / "tailwindcss"
+    fake.write_text(f'#!/bin/sh\necho "$@" >> {log}\nexit 0\n', encoding="utf-8")
+    fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
+
+    exit_code = main(["--binary", str(fake)])
+
+    assert exit_code == 0
+    calls = log.read_text(encoding="utf-8").splitlines()
+    sourced = [
+        name
+        for name in BUNDLED_THEME_NAMES
+        if (bundled_theme_root(name) / "tailwind.css").exists()
+    ]
+    assert len(calls) == len(sourced)
+    for name, call in zip(sourced, calls, strict=True):
+        root = bundled_theme_root(name)
+        assert f"--input {root / 'tailwind.css'}" in call
+        assert f"--output {root / 'static' / 'css' / 'main.css'}" in call
+        assert str(root / "templates" / "**" / "*.html") in call
+        assert str(bundled_theme_root("base") / "templates" / "**" / "*.html") in call
+        assert "--minify" in call
+        assert "tokens.css" not in call
+    assert "material" in capsys.readouterr().out

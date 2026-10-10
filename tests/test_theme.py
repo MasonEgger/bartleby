@@ -303,7 +303,7 @@ def test_base_html_wires_search_and_dark_mode_to_bundles() -> None:
     assert "/js/lunr.min.js" in rendered
     # Search container wired to Alpine + the lunr-backed search hook.
     assert "search-modal" in rendered
-    assert 'x-on:click="show()"' in rendered
+    assert "bartleby:search-open" in rendered
     assert 'x-data="bartlebySearch()"' in rendered
     # The engine is a base static script loaded ahead of Alpine, not inline markup.
     assert "/js/search.js" in rendered

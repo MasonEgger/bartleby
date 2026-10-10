@@ -56,6 +56,18 @@ def _stylesheet_defines(selector: str) -> bool:
     return re.search(pattern, text) is not None
 
 
+def _admonition_variant_defined(kind: str) -> bool:
+    """Return whether the shipped stylesheet styles ``.admonition`` of this ``kind``.
+
+    The compiled CSS groups the selectors (``:is(.admonition,.prose details).note``),
+    so a literal ``.admonition.note`` never appears.
+    """
+    css_path = bundled_theme_root("material") / "static" / "css" / "main.css"
+    text = css_path.read_text()
+    pattern = rf"(?::is\(\.admonition[^)]*\)|\.admonition)\.{kind}[^{{}}]*\{{"
+    return re.search(pattern, text) is not None
+
+
 def _env() -> jinja2.Environment:
     from bartleby.templates import make_feature_checker
     from bartleby.theme_loader import THEME_FEATURES
@@ -138,8 +150,8 @@ def test_rendered_admonition_html_carries_styled_classes() -> None:
     assert 'class="admonition warning"' in warning_html
     # The stylesheet defines rules for the classes the HTML actually produces.
     assert _stylesheet_defines(".admonition")
-    assert _stylesheet_defines(".admonition.note")
-    assert _stylesheet_defines(".admonition.warning")
+    assert _admonition_variant_defined("note")
+    assert _admonition_variant_defined("warning")
 
 
 def test_stylesheet_has_responsive_media_query() -> None:

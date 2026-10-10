@@ -3,6 +3,7 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- A shipped-CSS compile that passes no `--content` purges every Tailwind utility the templates use, and a green test suite will not notice. Step 15 found page titles at body size and missing spacing only by screenshotting. Compile the bundled themes with the same content globs user sites use (`package_content_globs`), then grep the output for template classes and open a headless browser on each page type in both modes (2026-10-10)
 - When a base template includes a partial on every page, a theme must not fold a second control into that same partial behind a flag: Step 14 first gated scrivener's search trigger and modal on a `search_in_header` flag, so overriding header.html silently dropped search. Split the trigger from the modal and have the trigger signal it with a window event (`bartleby:search-open`) (2026-10-10)
 - Validators must compare before and after with `git show <rev>:<path>` or a `git worktree`, never `git stash`: in Step 13 iteration 1 a validator ran `git stash` and altered the index, which the finalize step then had to untangle. State this in the validator dispatch prompt (2026-10-10)
 - A theme that `extends` a base but shares no partials with a sibling theme still needs the sibling's small helper macros (nav `holds`, `first_url`). Duplicating them once is cheaper than a premature shared file, but log it as an info finding and move them to `base` at the next step that touches them, as search moved in Step 11 (2026-10-10)
@@ -12,7 +13,6 @@
 - Interactive UI state a theme owns (color-mode toggle) needs an owner in the plan: Step 8's toggle held state in memory only and no later step covered persistence, so the validator caught it. For any toggle, ask where its state is stored and who reads it before first paint; put the pre-paint script in `base`, not in one theme, so every theme reuses it (2026-10-10)
 - Tailwind's `--content` CLI flag overrides the config file's `content`, and `@layer components` classes are purged when no scanned file uses them. A theme's `safelist.txt` therefore does nothing until `tailwind.config.js` reads it (via `__dirname`) and passes it as the config `safelist`. Compile a scratch project and grep the output CSS to prove a class survives (2026-10-10)
 - Plan Verify lines can name a CLI form that does not exist (`bartleby build docs/` exits 2; the real form is `cd docs && bartleby build` or `--config docs/bartleby.yml`). Run `--help` on any command a plan quotes before trusting it (2026-10-10)
-- Tests for a command that writes files (eject, init, scaffold) must run against a `tmp_path` copy of any fixture directory from the first RED test; a destructive command pointed at `tests/fixtures/` before its overwrite or containment guard exists litters the repo with files. Guard destination overlap in both directions (inside a source dir, or containing one) (2026-10-10)
 
 ## Packaging
 

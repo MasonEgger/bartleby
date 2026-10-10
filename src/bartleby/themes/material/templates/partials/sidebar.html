@@ -26,7 +26,11 @@
   {% endfor %}
 </ul>
 {% endmacro %}
-<nav class="sidebar-nav" aria-label="Section">
-  {% if sidebar_title %}<p class="nav-section-title">{{ sidebar_title }}</p>{% endif %}
-  {{ tree(sidebar_items, page.url, sidebar_index_url) }}
+{# Below the desktop breakpoint the tree folds behind a toggle. The toggle only appears once Alpine adds .js-collapsible, so with JS off the whole tree stays visible. #}
+<nav class="sidebar-nav" aria-label="Section" x-data="{ open: false }" x-init="$el.classList.add('js-collapsible')" x-bind:class="{ 'is-open': open }">
+  <button type="button" class="sidebar-toggle" aria-controls="sidebar-tree" x-on:click="open = !open" x-bind:aria-expanded="open">{{ sidebar_title or "Navigation" }}</button>
+  <div class="sidebar-tree" id="sidebar-tree">
+    {% if sidebar_title %}<p class="nav-section-title">{{ sidebar_title }}</p>{% endif %}
+    {{ tree(sidebar_items, page.url, sidebar_index_url) }}
+  </div>
 </nav>

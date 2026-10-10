@@ -33,7 +33,7 @@ Bartleby is 32 single-responsibility modules under `src/bartleby/`, grouped by b
 uv sync                    # Install dependencies
 just check                 # The gate: ruff lint + format check, mypy strict, pytest, e2e smoke
 just lint | typecheck | test | smoke | format   # Individual targets
-just theme-css             # Recompile the shipped theme CSS (needs tailwindcss on PATH; package-build only)
+just theme-css             # Recompile the shipped theme CSS via `python -m bartleby.theme_compile` (needs tailwindcss on PATH or --binary; shares the content globs with user sites; package-build only)
 uv run pytest tests/test_config.py  # Run single test file
 uv run pytest -k "test_name"        # Run single test by name
 (cd docs && uv run bartleby build)  # Build the docs site (itself a Bartleby site; output in docs/site/, gitignored)

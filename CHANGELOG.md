@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed (Breaking)
 
+The default theme is now `scrivener`, which replaces the old built-in look.
+Set `theme.name: material` to keep an indigo, mkdocs-material style layout.
+
 The `theme:` section of `bartleby.yml` now uses Bartleby-native names.
 Old mkdocs-material names are a `ConfigError` that names the replacement.
 
@@ -29,6 +32,17 @@ Any other mkdocs-material feature (`navigation.footer`, `navigation.tracking`, `
 - `theme.name`, `theme.path`, and `theme.package` select a theme; set at most one.
 - `theme.tokens` is a flat map of dotted design-token names to CSS values.
 - A feature enabled in `theme.features` that the active theme does not implement logs a build warning. The build still succeeds.
+- The single hardwired `theme/` package is replaced by a theme system.
+  A theme is a directory with a `theme.yml` manifest, and it can build on another theme with `extends`.
+- Three themes ship with Bartleby.
+  `base` holds the shared templates, scripts, and icons that every other theme builds on.
+  `material` is an indigo header bar, navigation tabs, a section sidebar, and a table of contents, in the style of mkdocs-material.
+  `scrivener` is the default: ruled paper, a serif reading column, and a double-rule margin, with a light and a dark palette.
+- Both `material` and `scrivener` ship compiled CSS, so a site builds with no Tailwind install and no custom CSS.
+  Each has a section sidebar that folds behind a toggle on narrow screens, search with `?h=` result highlighting, and a color-mode toggle.
+- `bartleby theme eject` copies the active theme, flattened, into one editable directory (`themes/<name>` by default; `--to` and `--force` are available).
+  Point `theme.path` at that directory and edit the templates directly.
+- `bartleby theme inspect` lists every theme file with the layer that provides it, so you can see which files a project, an ejected theme, or a bundled theme supplies.
 
 ## [0.1.0] - 2026-10-05
 

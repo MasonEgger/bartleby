@@ -25,7 +25,7 @@
 {% if sidebar_items or page.toc %}
 <div class="layout-docs{% if not sidebar_items %} layout-docs--no-sidebar{% endif %}{% if not page.toc %} layout-docs--no-toc{% endif %}">
   {% if sidebar_items %}{% include "partials/sidebar.html" %}{% endif %}
-  <article class="docs-content">
+  <article class="docs-content" data-search-highlight-root>
     <div class="prose dark:prose-invert max-w-none">
       <h1>{{ page.title }}</h1>
       {{ page.content | safe if page.content else "" }}
@@ -35,7 +35,7 @@
 </div>
 {% else %}
 <div class="layout-prose">
-  <article class="prose-column">
+  <article class="prose-column" data-search-highlight-root>
     <div class="prose dark:prose-invert max-w-none">
       <h1>{{ page.title }}</h1>
       {{ page.content | safe if page.content else "" }}

@@ -3,6 +3,7 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- Tests for a command that writes files (eject, init, scaffold) must run against a `tmp_path` copy of any fixture directory from the first RED test; a destructive command pointed at `tests/fixtures/` before its overwrite or containment guard exists litters the repo with files. Guard destination overlap in both directions (inside a source dir, or containing one) (2026-10-10)
 - Tailwind 3 standalone's postcss-import resolves `@import` relative to the input file, so generated files (theme tokens) must be pulled in through a generated wrapper input that sits beside them, not from a theme's own tailwind.css. Absolute paths inside a CSS `@import` must use forward slashes (`Path.as_posix()`); backslashes parse as CSS escapes (2026-10-10)
 - `git diff HEAD` and `git diff --staged` omit untracked files, so a validator reviewing a step that is mostly new files sees an empty or tiny diff. Tell it the new paths explicitly (or `git add -N` them) and have it read them directly (2026-10-10)
 - When a BPE plan is for "polish the theme" (or any "make X look good" goal), grep the shipped artifact's header and the compile invocation before drafting: Bartleby's `main.css` declared itself a placeholder and `theme_compile.py` fed Tailwind a bare inline directive string with no config, so the real step was "build the theme," not "polish" it. Verify the artifact exists before planning to improve it (2026-10-09)
@@ -22,6 +23,7 @@
 
 ## Workflow
 
+- Tests for a command that writes files (eject, init, scaffold) must run against a `tmp_path` copy of any fixture directory from the first RED test; a destructive command pointed at `tests/fixtures/` before its overwrite or containment guard exists litters the repo with files. Guard destination overlap in both directions (inside a source dir, or containing one) (2026-10-10)
 - `git diff HEAD` and `git diff --staged` omit untracked files, so a validator reviewing a step that is mostly new files sees an empty or tiny diff. Tell it the new paths explicitly (or `git add -N` them) and have it read them directly (2026-10-10)
 - For a "build on their thing vs build our own" call, the load-bearing research axis is extensibility: check whether a shipped, stable third-party plugin/module API actually exists, not whether one is promised (Zensical's ZAP-007 declined to define a public API, so "build plugins for it" was a non-option) (2026-08-30)
 - Record a positioning/strategy decision in BOTH the memory system and the project CLAUDE.md: CLAUDE.md steers future in-repo edits, memory carries the rationale across sessions; editing one without the other lets a later session drift back (2026-08-30)

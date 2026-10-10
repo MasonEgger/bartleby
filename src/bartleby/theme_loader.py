@@ -31,6 +31,7 @@ follows, so a lookup that takes the first hit lets a child override its parent.
 from __future__ import annotations
 
 import importlib.metadata
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -45,6 +46,8 @@ if TYPE_CHECKING:
 
 THEME_ENTRY_POINT_GROUP = "bartleby.themes"
 MANIFEST_FILENAME = "theme.yml"
+THEME_ASSET_DIRS: tuple[str, ...] = ("templates", "static", "icons")
+TAILWIND_SOURCES: tuple[str, ...] = ("tailwind.css", "tailwind.config.js")
 
 THEME_FEATURES: frozenset[str] = frozenset(
     {
@@ -141,6 +144,24 @@ class ResolvedTheme:
         """Existing ``icons/`` directories, leaf-first."""
         return self._existing_dirs("icons")
 
+    def find_provider(self, relative_path: str) -> ThemeLayer | None:
+        """The nearest layer that holds a file at ``relative_path``.
+
+        This is the one per-file layer walk. :meth:`find_file`, :meth:`file_providers`,
+        and so ``theme eject`` and ``theme inspect`` all resolve through it, so they
+        cannot disagree about which layer wins.
+
+        Args:
+            relative_path: A path relative to a theme root, such as ``tailwind.css``.
+
+        Returns:
+            The first (leaf-most) layer holding the file, or ``None``.
+        """
+        for layer in self.chain:
+            if (layer.root / relative_path).is_file():
+                return layer
+        return None
+
     def find_file(self, relative_path: str) -> Path | None:
         """The file at ``relative_path`` in the nearest layer that provides it.
 
@@ -150,11 +171,36 @@ class ResolvedTheme:
         Returns:
             The file in the first (leaf-most) layer holding it, or ``None``.
         """
+        layer = self.find_provider(relative_path)
+        return None if layer is None else layer.root / relative_path
+
+    def file_providers(self) -> dict[str, ThemeLayer]:
+        """Every theme file mapped to the layer that provides it.
+
+        Covers everything under ``templates/``, ``static/``, and ``icons/`` plus the
+        Tailwind sources. Keys are theme-root-relative POSIX paths, sorted.
+
+        Returns:
+            Relative path to the leaf-most providing layer.
+        """
+        relative_paths: set[str] = set()
         for layer in self.chain:
-            candidate = layer.root / relative_path
-            if candidate.is_file():
-                return candidate
-        return None
+            for subdirectory in THEME_ASSET_DIRS:
+                base = layer.root / subdirectory
+                relative_paths.update(
+                    path.relative_to(layer.root).as_posix()
+                    for path in base.rglob("*")
+                    if path.is_file()
+                )
+            relative_paths.update(
+                name for name in TAILWIND_SOURCES if (layer.root / name).is_file()
+            )
+        providers: dict[str, ThemeLayer] = {}
+        for relative_path in sorted(relative_paths):
+            provider = self.find_provider(relative_path)
+            if provider is not None:
+                providers[relative_path] = provider
+        return providers
 
     def _existing_dirs(self, subdirectory: str) -> list[Path]:
         candidates = (layer.root / subdirectory for layer in self.chain)
@@ -362,3 +408,217 @@ def _extends_root(extends: str, child_root: Path) -> Path:
     if sibling.is_dir():
         return sibling
     return _package_root(extends)
+
+
+def _file_kind(relative_path: str) -> str:
+    """Classify a theme-relative path as template, static, icon, or tailwind."""
+    top = relative_path.split("/", 1)[0]
+    return {"templates": "template", "static": "static", "icons": "icon"}.get(top, "tailwind")
+
+
+@dataclass(slots=True)
+class EjectResult:
+    """Result of ``bartleby theme eject``.
+
+    Attributes:
+        theme: The ejected theme's name.
+        target: The directory written, as shown to the user.
+        files: Theme-relative paths copied, sorted.
+        config_line: The ``theme:`` snippet to put in ``bartleby.yml``.
+    """
+
+    theme: str
+    target: str
+    files: list[str]
+    config_line: str
+
+    @property
+    def exit_code(self) -> int:
+        return 0
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "status": "success",
+            "theme": self.theme,
+            "target": self.target,
+            "files": self.files,
+            "config": self.config_line,
+        }
+
+    def to_text(self) -> str:
+        return (
+            f"Ejected theme {self.theme!r} ({len(self.files)} files) to {self.target}\n"
+            f"Add this to bartleby.yml:\n{self.config_line}"
+        )
+
+
+@dataclass(slots=True)
+class InspectedFile:
+    """One file in a resolved theme.
+
+    Attributes:
+        path: Theme-relative POSIX path.
+        kind: ``template``, ``static``, ``icon``, or ``tailwind``.
+        layer: Name of the layer that provides the file.
+        shadowed_by: Project-relative path of the ``overrides/`` file that shadows
+            this template, or ``None``.
+    """
+
+    path: str
+    kind: str
+    layer: str
+    shadowed_by: str | None
+
+
+@dataclass(slots=True)
+class InspectResult:
+    """Result of ``bartleby theme inspect``.
+
+    Attributes:
+        theme: The requested theme's name.
+        chain: Layer names, leaf-first.
+        files: Every theme file, sorted by path.
+    """
+
+    theme: str
+    chain: list[str]
+    files: list[InspectedFile]
+
+    @property
+    def exit_code(self) -> int:
+        return 0
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "status": "success",
+            "theme": self.theme,
+            "chain": self.chain,
+            "files": [
+                {
+                    "path": item.path,
+                    "kind": item.kind,
+                    "layer": item.layer,
+                    "shadowed_by": item.shadowed_by,
+                }
+                for item in self.files
+            ],
+        }
+
+    def to_text(self) -> str:
+        lines = [f"Theme {self.theme} (chain: {' -> '.join(self.chain)})"]
+        for item in self.files:
+            suffix = f"  [shadowed by {item.shadowed_by}]" if item.shadowed_by else ""
+            lines.append(f"{item.path}  ({item.layer}){suffix}")
+        return "\n".join(lines)
+
+
+def flatten_chain(
+    resolved: ResolvedTheme, destination: Path, *, project_dir: Path, force: bool = False
+) -> EjectResult:
+    """Copy a resolved theme chain, flattened leaf-wins, into one directory.
+
+    The directory gets every template, static, icon, and Tailwind source file the
+    chain provides (the leaf's version wins a shared path) and a ``theme.yml`` with
+    the leaf's name, version, and description, the union of features across the chain,
+    and no ``extends``.
+
+    Args:
+        resolved: The theme chain to flatten.
+        destination: The directory to write.
+        project_dir: The project directory, used to show ``destination`` relative to it.
+        force: Overwrite files in an existing destination.
+
+    Returns:
+        The files written and the ``theme:`` config snippet.
+
+    Raises:
+        ThemeError: If the destination exists and ``force`` is false, or is a theme
+            directory in the chain being flattened, inside one, or contains one.
+    """
+    if destination.exists() and not force:
+        raise ThemeError(f"{destination} already exists (use --force to overwrite)")
+    resolved_destination = destination.resolve()
+    for layer in resolved.chain:
+        layer_root = layer.root.resolve()
+        if resolved_destination == layer_root:
+            raise ThemeError(
+                f"{destination} is part of the theme being ejected; choose another --to"
+            )
+        if resolved_destination.is_relative_to(layer_root) or layer_root.is_relative_to(
+            resolved_destination
+        ):
+            raise ThemeError(
+                f"{destination} and theme directory {layer.root} are inside one another; "
+                "choose another --to"
+            )
+
+    # Copy each file from its winning layer
+    providers = resolved.file_providers()
+    for relative_path, layer in providers.items():
+        target = destination / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(layer.root / relative_path, target)
+
+    # Write a manifest that stands alone
+    leaf = resolved.chain[0].manifest
+    features = sorted({name for layer in resolved.chain for name in layer.manifest.features})
+    manifest: dict[str, object] = {"name": leaf.name}
+    if leaf.version is not None:
+        manifest["version"] = leaf.version
+    if leaf.description is not None:
+        manifest["description"] = leaf.description
+    manifest["features"] = features
+    destination.mkdir(parents=True, exist_ok=True)
+    (destination / MANIFEST_FILENAME).write_text(
+        yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8"
+    )
+
+    # Report where it landed, relative to the project when it sits inside it
+    shown = destination.resolve()
+    if shown.is_relative_to(project_dir.resolve()):
+        shown = shown.relative_to(project_dir.resolve())
+    return EjectResult(
+        theme=leaf.name,
+        target=shown.as_posix(),
+        files=sorted([*providers, MANIFEST_FILENAME]),
+        config_line=f"theme:\n  path: {shown.as_posix()}",
+    )
+
+
+def inspect_chain(resolved: ResolvedTheme, project_dir: Path) -> InspectResult:
+    """List every file in a resolved theme with its providing layer.
+
+    A template is marked shadowed when a file at the same template path exists in
+    one of the project-level search bases that precede the theme layers (``overrides/``,
+    ``templates/``, the project root). Those bases come from
+    :func:`bartleby.templates.template_search_bases`, so this report follows the real
+    Jinja cascade; ``shadowed_by`` names the first one that wins.
+
+    Args:
+        resolved: The theme chain to inspect.
+        project_dir: The project directory holding the shadowing files.
+
+    Returns:
+        Files sorted by path.
+    """
+    # templates.py imports this module at load time, so import it lazily here
+    from bartleby.templates import template_search_bases  # noqa: PLC0415
+
+    bases = template_search_bases(project_dir, resolved)
+    project_bases = bases[: len(bases) - len(resolved.templates_dirs())]
+    files: list[InspectedFile] = []
+    for relative_path, layer in resolved.file_providers().items():
+        kind = _file_kind(relative_path)
+        shadowed_by: str | None = None
+        if kind == "template":
+            template_name = relative_path.removeprefix("templates/")
+            for base in project_bases:
+                if (base / template_name).is_file():
+                    shadowed_by = (base / template_name).relative_to(project_dir).as_posix()
+                    break
+        files.append(
+            InspectedFile(path=relative_path, kind=kind, layer=layer.name, shadowed_by=shadowed_by)
+        )
+    return InspectResult(
+        theme=resolved.chain[0].name, chain=[layer.name for layer in resolved.chain], files=files
+    )

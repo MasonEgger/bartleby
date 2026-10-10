@@ -45,14 +45,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 8. Verify: coverage + `just check`
 
 ### Step 5: `bartleby theme eject` and `bartleby theme inspect` (feature)
-- [ ] 1. RED: eject flattens chain leaf-wins with no `extends`; refuses overwrite without --force; --to honored; inspect lists provider layer + overrides shadowing; --format json stable
-- [ ] 2. Document: handler docstrings + argparse help
-- [ ] 3. GREEN: cli.py subparsers; theme_loader flatten_chain + inspect_chain result dataclasses
-- [ ] 4. RED: e2e eject material -> theme.path -> edit partial -> build shows edit (permanent test)
-- [ ] 5. GREEN: wire minimally
-- [ ] 6. REFACTOR: share per-file layer walk with Step 4 helper
-- [ ] 7. Document: none here
-- [ ] 8. Verify: coverage + `just check`
+- [x] 1. RED: eject flattens chain leaf-wins with no `extends`; refuses overwrite without --force; --to honored; inspect lists provider layer + overrides shadowing; --format json stable
+- [x] 2. Document: handler docstrings + argparse help
+- [x] 3. GREEN: cli.py subparsers; theme_loader flatten_chain + inspect_chain result dataclasses
+- [x] 4. RED: e2e eject material -> theme.path -> edit partial -> build shows edit (permanent test)
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: share per-file layer walk with Step 4 helper
+- [x] 7. Document: none here
+- [x] 8. Verify: coverage + `just check`
 
 ### Step 6: Split the existing theme into bundled `base` and `material` (task)
 - [ ] 1. Scope: themes/base + themes/material layout; delete theme/; update imports

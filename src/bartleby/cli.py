@@ -63,7 +63,14 @@ from bartleby.schema_introspection import (
 from bartleby.shortcodes import ShortcodeError, process_shortcodes
 from bartleby.skills import generate_skills
 from bartleby.theme_compile import ThemeCompileError, ThemeCompileResult, compile_theme_css
-from bartleby.theme_loader import select_theme
+from bartleby.theme_loader import (
+    EjectResult,
+    InspectResult,
+    ThemeError,
+    flatten_chain,
+    inspect_chain,
+    select_theme,
+)
 from bartleby.urls import generate_all_urls
 
 if TYPE_CHECKING:
@@ -78,6 +85,7 @@ _ERROR_CODES: dict[type[Exception], str] = {
     ConfigError: "config_error",
     AuthorError: "author_error",
     ThemeCompileError: "theme_compile_error",
+    ThemeError: "theme_error",
     ContentError: "content_error",
 }
 
@@ -108,7 +116,14 @@ def main(argv: list[str] | None = None) -> None:
         result = handler(args)
     except UsageError as exc:
         _emit_error(ErrorOutput(message=str(exc), code=exc.code, usage=True), fmt)
-    except (BuildError, ConfigError, AuthorError, ThemeCompileError, ContentError) as exc:
+    except (
+        BuildError,
+        ConfigError,
+        AuthorError,
+        ThemeCompileError,
+        ThemeError,
+        ContentError,
+    ) as exc:
         _report_error(exc, fmt)
     else:
         if result is not None:
@@ -155,7 +170,8 @@ def _configure_logging() -> None:
 
 
 def _report_error(
-    exc: BuildError | ConfigError | AuthorError | ThemeCompileError | ContentError, fmt: str
+    exc: BuildError | ConfigError | AuthorError | ThemeCompileError | ThemeError | ContentError,
+    fmt: str,
 ) -> None:
     """Surface a build/config/author/content failure in the requested format and exit 1.
 
@@ -357,6 +373,24 @@ def _build_parser() -> argparse.ArgumentParser:
         "--refresh", action="store_true", help="Force re-download of the Tailwind binary"
     )
     theme_compile.set_defaults(_handler=_cmd_theme_compile)
+    theme_eject = theme_sub.add_parser(
+        "eject",
+        help="Copy the active theme, flattened, into one editable directory",
+        parents=[flags],
+    )
+    theme_eject.add_argument(
+        "--to", help="Destination directory (default: themes/<theme-name> in the project)"
+    )
+    theme_eject.add_argument(
+        "--force", action="store_true", help="Overwrite files in an existing destination"
+    )
+    theme_eject.set_defaults(_handler=_cmd_theme_eject)
+    theme_inspect = theme_sub.add_parser(
+        "inspect",
+        help="List every theme file with the layer that provides it",
+        parents=[flags],
+    )
+    theme_inspect.set_defaults(_handler=_cmd_theme_inspect)
 
     return parser
 
@@ -804,6 +838,30 @@ def _cmd_theme_compile(args: argparse.Namespace) -> ThemeCompileResult:
     config = load_config(config_path)
     theme = select_theme(config.theme, project_dir)
     return compile_theme_css(project_dir, theme, config.theme.tokens, refresh=args.refresh)
+
+
+def _cmd_theme_eject(args: argparse.Namespace) -> EjectResult:
+    """Flatten the active theme chain into one directory a person or agent can read."""
+    config_path = _resolve_config_path(args)
+    project_dir = config_path.parent
+    config = load_config(config_path)
+    theme = select_theme(config.theme, project_dir)
+    if args.to:
+        destination = Path(args.to)
+        if not destination.is_absolute():
+            destination = project_dir / destination
+    else:
+        destination = project_dir / "themes" / theme.chain[0].name
+    return flatten_chain(theme, destination, project_dir=project_dir, force=args.force)
+
+
+def _cmd_theme_inspect(args: argparse.Namespace) -> InspectResult:
+    """List each theme file, its providing layer, and any project overrides/ shadowing."""
+    config_path = _resolve_config_path(args)
+    project_dir = config_path.parent
+    config = load_config(config_path)
+    theme = select_theme(config.theme, project_dir)
+    return inspect_chain(theme, project_dir)
 
 
 def _cmd_serve(args: argparse.Namespace) -> None:

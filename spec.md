@@ -46,13 +46,33 @@ Tools the `bpe:validator` agent should consult when reviewing diffs in `/bpe:goa
 
 **Notes:** Validator consults `python:python` for all code under `src/bartleby/` and `tests/` (strict typing, ruff, pytest, idioms). For changes to `docs/` content and to theme templates, it consults the content-design skills for Diataxis structure, prose style, and tutorial conventions. No domain MCPs apply. The project's full gate is `just check` (ruff lint and format check, mypy strict, pytest, and an e2e smoke test); `/bpe:goal` autodetects `pytest` from `pyproject.toml`, but `just check` is the canonical pass to hold diffs to.
 
+## External tool candidates
+
+Cached from `/bpe:plan` Pass 2 discovery (bpe:cheap-research) on 2026-10-08.
+Installed entries can be folded into plan.md per-section Tools blocks; not-installed entries are leads for later, not available to the validator yet.
+
+- frontend-design:frontend-design :: installed (official plugin); distinctive, production-grade front-end visual design guidance, fits theme polish across page types :: /home/mmegger/.claude/plugins/cache/claude-plugins-official/frontend-design/
+- content-design:diataxis :: installed; Diataxis doc authoring for the docs-site cleanup :: mmegger-private-plugins/content-design
+- content-design:style-linting :: installed; prose linting and voice for docs-site copy :: mmegger-private-plugins/content-design
+- Frontend Design Review (dauquangthanh/hanoi-rainbow) :: not installed; UI/UX quality, design-system compliance, accessibility, responsive review :: https://claudemarketplaces.com/skills/dauquangthanh/hanoi-rainbow/frontend-design-review
+- Tailwind CSS Accessibility (josiahsiegel) :: not installed; WCAG 2.2 reference for accessible Tailwind UIs :: https://claudemarketplaces.com/skills/josiahsiegel/claude-plugin-marketplace/tailwindcss-accessibility
+- Frontend Design Deslop (samber/cc-skills) :: not installed; counters generic AI-looking output, strategy-first typography and color tokens :: https://claudemarketplaces.com/skills/samber/cc-skills/frontend-design-deslop
+
+**Gap:** no Jinja2-specific, llms.txt, JSON-LD/schema.org, or HTML-validation skill was found; those sections rely on `python:python` plus hand review.
+
 ## Goals
 
 1. Stabilize 0.1.x into something worth showing off.
    No 0.2.0 and no new features until the default output and the docs are presentable.
    The tool is not being sent to anyone in its current state, and that is the bar to clear.
-2. A polished, presentable base theme.
-   A base theme exists (Material-style), but its rendered output must reach professional visual quality across every page type (home, listing, post, taxonomy, 404) out of the box, with zero user styling required.
+   The one feature this cycle builds is the theme system in Goal 2, because (Mason, 2026-10-09) without deciding it there is nothing to stabilize and nothing to build toward.
+2. A theme system and a set of default themes.
+   A theme is a directory with a manifest (`theme.yml`), templates, static assets, Tailwind sources, and icons; it is selected by `theme.name` (bundled), `theme.path` (project directory), or `theme.package` (entry point), and may `extends` another theme.
+   Bundled themes live under `src/bartleby/themes/` in that same layout and resolve through the same loader as a user's path theme.
+   Three ship: `base` (no visual opinion: metadata partials, feed and alternate links, search wiring, the block skeleton), `material` (faithful to mkdocs-material's look, for people who want that shape), and `scrivener` (Bartleby's own identity, named for Melville's scrivener; the default for new sites and the docs).
+   The theme vocabulary (config keys, feature names, design tokens) is Bartleby-native, with no alias layer to mkdocs-material names.
+   `bartleby theme eject` copies the whole resolved theme into the project and `bartleby theme inspect` reports which layer provides each file, so the entire system is visible to people and coding agents rather than hidden behind blind single-file overrides.
+   Both visual themes must reach professional quality across every page type (home, listing, post, docs page with sidebar and table of contents, taxonomy, 404) out of the box, with zero user styling required.
 3. Docs that render cleanly.
    The docs site is itself a Bartleby site and is the primary dogfood and public showcase.
    It currently renders poorly; it must render correctly, look good, and stand as proof that Bartleby produces good-looking sites.
@@ -77,6 +97,18 @@ Tools the `bpe:validator` agent should consult when reviewing diffs in `/bpe:goa
    Bartleby generates the site; where it gets hosted is the user's responsibility.
 4. A plugin marketplace or registry.
    Plugins stay simple local `hooks/*.py` files and entry-point packages; there is no curated ecosystem to maintain.
+   The same holds for themes: `theme.package` is a plain entry point, and there is no theme registry.
+
+## Roadmap / phase log
+
+**Shipped:**
+- none yet
+
+**Deferred:**
+- `bartleby migrate mkdocs`: a one-shot command that reads `mkdocs.yml`, writes `bartleby.yml`, and reports what did not map. The chosen answer for migrators instead of a config alias layer (decided 2026-10-09).
+- Additional bundled themes beyond `base`, `material`, and `scrivener` (for example a blog-first theme).
+- fountain-py integration (Goal 7).
+- Any 0.2.0 feature work.
 
 ## Component boundaries
 
@@ -120,8 +152,9 @@ Agent surface:
 - `export.py`: serialize published pages as JSONL, JSON, or CSV.
 
 Theme:
-- `theme_compile.py`: resolve the Tailwind standalone binary and compile the theme CSS.
-- The `theme/` package: templates, partials, static assets, and icons.
+- `theme_compile.py`: resolve the Tailwind standalone binary and compile the resolved theme's CSS, emitting `theme.tokens` as CSS custom properties.
+- `theme_loader.py` (planned this cycle): manifest parsing, name/path/package resolution, the `extends` chain, and the eject and inspect operations.
+- The `themes/` package (planned this cycle, replacing `theme/`): the bundled `base`, `material`, and `scrivener` themes, each a complete theme directory.
 
 Quality and plugins:
 - `linting.py`: content quality checks (broken links, missing descriptions, orphans).
@@ -137,7 +170,8 @@ Orchestration and surfaces:
 
 The stabilization is complete, and 0.2.0 work may begin, when all of the following hold.
 
-- The default theme renders a polished, professional-looking site out of the box, verified in a browser across home, listing, post, taxonomy, and 404 pages, with no custom CSS.
+- The theme system works end to end: `theme.name`, `theme.path`, and `theme.package` select a theme; `extends` composes; `eject` and `inspect` expose the whole resolved system; the bundled themes resolve through the same loader as a path theme.
+- Both `material` and `scrivener` render a polished, professional-looking site out of the box, verified in a browser across home, listing, post, docs page (sidebar and table of contents), taxonomy, and 404 pages, with no custom CSS, and switching between them from config changes the look and nothing else.
 - The docs site builds and renders cleanly, looks good, and is fit to be the public showcase for the project.
 - A newcomer can go install, scaffold a site, add content, build, serve, and see a good-looking result without hitting rough edges; errors are clear and actionable.
 - The agent surface is complete and consistent: every published page has a valid Markdown variant and JSON-LD; `llms.txt`, `schema.json`, and `content-index.json` are correct and documented; generated skills reflect the site's real shape.

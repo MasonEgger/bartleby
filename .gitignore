@@ -1,5 +1,6 @@
 # Bartleby
 commit-msg.md
+.claude/bpe.local.md
 site/
 !tests/fixtures/site/
 
@@ -223,6 +224,8 @@ __marimo__/
 .streamlit/secrets.toml
 goal.md
 
-# AI development session artifacts (session summaries, lessons, scratch notes).
-# Kept locally but never tracked in the repo.
-.ai-sessions/
+# AI development session artifacts. Session summaries and lessons.md are
+# tracked (the BPE goal loop requires a summary in every commit); only the
+# executor's scratch files stay local.
+.ai-sessions/implementation-notes.md
+.ai-sessions/handoffs/

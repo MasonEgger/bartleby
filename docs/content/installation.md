@@ -48,6 +48,20 @@ uv run bartleby --help
 `uv sync` installs the dev dependencies (`ruff`, `mypy`, `pytest`).
 The `just check` target runs the linter, the strict type check, the test suite, and an end-to-end smoke test.
 
+## Your First Run
+
+A scaffold builds with no extra setup and renders on the `scrivener` theme:
+
+```bash
+bartleby new site mysite
+cd mysite
+bartleby build
+```
+
+Bartleby prints `Created site at mysite/`, then `Built 7 pages (5 static files) into site/`.
+Open `site/index.html` through any static file server, or run `bartleby serve`, to see the home page, the blog listing, and a sample post.
+To see the Material look instead, set `theme.name: material` in `bartleby.yml`.
+
 ## Next Step
 
-With Bartleby installed, follow the [Quickstart](quickstart.md) to scaffold and build your first site.
+With Bartleby installed, follow the [Quickstart](quickstart.md) to go through that first run step by step.

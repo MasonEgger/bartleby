@@ -476,6 +476,9 @@ def _cmd_new_site(args: argparse.Namespace) -> NewSiteOutput:
     (target / "bartleby.yml").write_text(_DEFAULT_CONFIG.format(name=args.name), encoding="utf-8")
     (target / ".authors.yml").write_text(_DEFAULT_AUTHORS, encoding="utf-8")
     (target / "content" / "index.md").write_text(_DEFAULT_INDEX, encoding="utf-8")
+    (target / "content" / "blog" / "posts" / "welcome.md").write_text(
+        _DEFAULT_POST.format(today=datetime.date.today().isoformat()), encoding="utf-8"
+    )
     return NewSiteOutput(path=f"{args.name}/", config=f"{args.name}/bartleby.yml")
 
 
@@ -952,6 +955,21 @@ _DEFAULT_CONFIG = """site:
   url: "https://example.com"
   description: "A Bartleby site."
 
+theme:
+  name: scrivener
+  features:
+    - search
+    - search.highlight
+    - nav.tabs
+    - nav.sidebar
+    - nav.back-to-top
+    - content.code.copy
+    - color-mode.toggle
+
+nav:
+  - Home: index.md
+  - Blog: blog/
+
 content_types:
   blog:
     path: blog/posts
@@ -976,8 +994,47 @@ _DEFAULT_AUTHORS = """authors:
 """
 
 _DEFAULT_INDEX = """---
-title: Home
+title: Welcome
+description: Start here to find your way around a new Bartleby site.
 ---
 
 Welcome to your new Bartleby site.
+Every page here is plain Markdown with YAML front matter at the top.
+
+## Where to Start
+
+- Read the [welcome post](/blog/posts/welcome/) to see a published post.
+- Browse the [blog listing](/blog/) to see how posts are collected.
+- Run `bartleby new post "My First Post"` to add a draft of your own.
+
+## Make It Yours
+
+Edit `bartleby.yml` to change the title, the navigation, or the theme.
+Set `theme.name: material` for the Material look.
+"""
+
+_DEFAULT_POST = """---
+title: "Welcome to Bartleby"
+description: A sample post that shows how front matter and Markdown become a page.
+date: {today}
+draft: false
+authors: [default]
+tags: [bartleby]
+---
+
+This is a sample post.
+It lives in `content/blog/posts/welcome.md` and shows up on the blog listing.
+
+<!-- more -->
+
+## Writing a Post
+
+Front matter sets the title, date, author, and tags.
+The body is Markdown, with code blocks, admonitions, and tables turned on by default.
+
+```python
+print("Hello from Bartleby")
+```
+
+Posts marked `draft: true` stay out of a normal build, so flip that flag when a post is ready.
 """

@@ -173,14 +173,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 8. Verify: coverage + `just check`
 
 ### Step 21: Scaffolding that builds and renders well out of the box (feature)
-- [ ] 1. RED: scaffold layout; theme.name scrivener + native features in manifest; build produces outputs with no warnings
-- [ ] 2. Document: quickstart matches scaffold
-- [ ] 3. GREEN: adjust scaffold defaults in cli.py
-- [ ] 4. RED: e2e scaffold -> build asserts scrivener classes + no UndefinedError
-- [ ] 5. GREEN: wire minimally
-- [ ] 6. REFACTOR: remove dead starter assets
-- [ ] 7. Document: refresh installation/quickstart incl. "theme.name: material" pointer
-- [ ] 8. Verify: coverage + `just check`
+- [x] 1. RED: scaffold layout; theme.name scrivener + native features in manifest; build produces outputs with no warnings
+- [x] 2. Document: quickstart matches scaffold
+- [x] 3. GREEN: adjust scaffold defaults in cli.py
+- [x] 4. RED: e2e scaffold -> build asserts scrivener classes + no UndefinedError
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: remove dead starter assets
+- [x] 7. Document: refresh installation/quickstart incl. "theme.name: material" pointer
+- [x] 8. Verify: coverage + `just check`
 
 ## Section 7: Agent surface consistency and correctness
 

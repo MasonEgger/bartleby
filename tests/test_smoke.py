@@ -9,7 +9,7 @@ import urllib.request
 from typing import TYPE_CHECKING
 
 from bartleby.cli import main
-from bartleby.server import RELOAD_SNIPPET, DevServer
+from bartleby.server import RELOAD_WS_PATH, DevServer
 
 if TYPE_CHECKING:
     import socketserver
@@ -241,4 +241,4 @@ def test_scaffold_build_and_serve_compose_output_dir_draft_and_quoted_title(
     assert not worker.is_alive()
 
     assert (output_dir / "index.html").exists()
-    assert RELOAD_SNIPPET in served_index
+    assert RELOAD_WS_PATH in served_index

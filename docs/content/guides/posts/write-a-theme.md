@@ -58,7 +58,7 @@ For a full example, here is the manifest of the bundled `scrivener` theme, uncha
 
 ```yaml
 name: scrivener
-description: Bartleby's own theme. A ruled-ledger reading layout with a margin rule, serif text, and a pale paper palette.
+description: Bartleby's own theme. A plain reading layout in the system sans, neutral colors, and one accent for the current page.
 extends: base
 features:
   - search

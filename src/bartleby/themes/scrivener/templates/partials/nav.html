@@ -1,5 +1,5 @@
 {# Scrivener top navigation. With nav.tabs each top-level entry is a tab; otherwise a plain inline list in the header. #}
-{# The current place is marked with aria-current; the stylesheet draws the double rule from it. #}
+{# The current place is marked with aria-current; the stylesheet underlines it in the accent. #}
 {% from "partials/nav_macros.html" import holds, first_url %}
 {% set tabs = feature is defined and feature('nav.tabs') %}
 {% set section_index = feature is defined and feature('nav.section-index') %}

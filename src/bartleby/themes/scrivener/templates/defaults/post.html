@@ -1,5 +1,5 @@
 {% extends "doc_layout.html" %}
-{# Scrivener post: an italic meta line under the title, tags at the foot. #}
+{# Scrivener post: a meta line under the title, tags at the foot. #}
 {% block article_head %}
 {% if page.date or page.authors or page.readtime %}
       <p class="post-meta">
@@ -11,7 +11,7 @@
 {% endblock %}
 {% block article_foot %}
     {% if page.taxonomy_links and page.taxonomy_links.tags %}
-    <footer>
+    <footer class="post-tags">
       <ul class="tag-list">
         {% for link in page.taxonomy_links.tags %}<li>{% if link.url %}<a href="{{ link.url }}">{{ link.term }}</a>{% else %}<span class="tag">{{ link.term }}</span>{% endif %}</li>{% endfor %}
       </ul>

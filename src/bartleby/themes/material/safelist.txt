@@ -24,6 +24,10 @@ site-nav
 site-footer
 site-meta
 theme-toggle
+theme-toggle-thumb
+theme-toggle-icon
+theme-toggle-sun
+theme-toggle-moon
 nav-link
 nav-section
 nav-section-title

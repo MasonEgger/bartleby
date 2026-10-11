@@ -6,25 +6,37 @@ from __future__ import annotations
 
 import json
 import shutil
+import socket
 import threading
 import time
 import urllib.request
 from typing import TYPE_CHECKING
 
 import pytest
+from watchdog.events import (
+    FileClosedEvent,
+    FileClosedNoWriteEvent,
+    FileModifiedEvent,
+    FileMovedEvent,
+    FileOpenedEvent,
+)
 
 from bartleby.server import (
-    RELOAD_SNIPPET,
+    RELOAD_WS_PATH,
     WATCHED_PATHS,
     DevServer,
+    _ProjectChangeHandler,
     classify_change,
     inject_reload_snippet,
     is_watched,
+    reload_snippet,
 )
 
 if TYPE_CHECKING:
     import socketserver
     from pathlib import Path
+
+    from watchdog.events import FileSystemEvent
 
     from bartleby.build import PageError
 
@@ -196,11 +208,47 @@ def test_failed_rebuild_keeps_last_good_build(project: Path) -> None:
     assert (project / "site" / "index.html").read_text() == good_html
 
 
+@pytest.mark.parametrize("event_class", [FileOpenedEvent, FileClosedEvent, FileClosedNoWriteEvent])
+def test_watcher_ignores_events_that_change_nothing(
+    tmp_path: Path, event_class: type[FileSystemEvent]
+) -> None:
+    """Opening or closing a file is not a change.
+
+    Regression guard: watchdog 6 on Linux reports opens and closes, and every
+    rebuild reads every file, so forwarding them kept the server rebuilding
+    (and every browser tab reloading) forever after the first edit.
+    """
+    changes: list[str] = []
+    handler = _ProjectChangeHandler(tmp_path, changes.append)
+    handler.dispatch(event_class(str(tmp_path / "content" / "index.md")))
+    assert changes == []
+
+
+def test_watcher_forwards_a_modified_file(tmp_path: Path) -> None:
+    """A write is forwarded as a project-relative path."""
+    changes: list[str] = []
+    handler = _ProjectChangeHandler(tmp_path, changes.append)
+    handler.dispatch(FileModifiedEvent(str(tmp_path / "content" / "index.md")))
+    assert changes == ["content/index.md"]
+
+
+def test_watcher_forwards_the_destination_of_a_move(tmp_path: Path) -> None:
+    """Editors that save by renaming a temp file over the original report the original."""
+    changes: list[str] = []
+    handler = _ProjectChangeHandler(tmp_path, changes.append)
+    handler.dispatch(
+        FileMovedEvent(
+            str(tmp_path / "content" / ".index.md.swp"), str(tmp_path / "content" / "index.md")
+        )
+    )
+    assert "content/index.md" in changes
+
+
 def test_reload_snippet_injected_only_in_serve_mode(project: Path) -> None:
     """The reload snippet is injected on serve but never in ``bartleby build`` output."""
     page = "<html><head></head><body><p>Hi</p></body></html>"
-    served = inject_reload_snippet(page)
-    assert RELOAD_SNIPPET in served
+    served = inject_reload_snippet(page, ws_port=35729)
+    assert reload_snippet(35729) in served
     assert "</body>" in served
 
     # A plain build must not contain the snippet anywhere in its output.
@@ -208,7 +256,7 @@ def test_reload_snippet_injected_only_in_serve_mode(project: Path) -> None:
 
     build(project / "bartleby.yml", include_drafts=True)
     rendered = (project / "site" / "index.html").read_text()
-    assert RELOAD_SNIPPET not in rendered
+    assert RELOAD_WS_PATH not in rendered
 
 
 def test_events_stream_emits_one_json_object_per_line(
@@ -409,17 +457,57 @@ def test_run_ignores_changes_outside_watched_paths(project: Path) -> None:
 def test_run_serves_html_with_reload_snippet(project: Path) -> None:
     """HTML served by ``run()`` carries the live-reload snippet (serve mode only)."""
     body = _run_and_fetch_root(project)
-    assert RELOAD_SNIPPET in body
+    assert RELOAD_WS_PATH in body
+
+
+def test_served_reload_snippet_targets_the_reload_channel(project: Path) -> None:
+    """The injected script connects to the port the WebSocket hub bound, not the HTTP port.
+
+    Regression guard: the snippet used ``location.host``, which is the HTTP
+    server, so every page load got a 404 on ``/__bartleby_reload`` and live
+    reload never fired in a real browser.
+    """
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
+    worker, port, httpd = _start_running_server(server)
+    try:
+        body = _fetch(port)
+    finally:
+        httpd.shutdown()
+        worker.join(timeout=10)
+    assert server.reload_ws_port is not None
+    assert reload_snippet(server.reload_ws_port) in body
+    assert f":{server.reload_ws_port}{RELOAD_WS_PATH}" in body
+
+
+def test_idle_connection_does_not_stall_other_requests(project: Path) -> None:
+    """A connection that never sends a request must not block pages for anyone else.
+
+    Browsers (mobile Safari especially) open speculative connections and leave
+    them idle; a single-threaded server waits on that socket and every other
+    request hangs.
+    """
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
+    worker, port, httpd = _start_running_server(server)
+    try:
+        with (
+            socket.create_connection(("127.0.0.1", port), timeout=10),
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=5) as response,
+        ):
+            assert response.status == 200
+    finally:
+        httpd.shutdown()
+        worker.join(timeout=10)
+    assert not worker.is_alive()
 
 
 def test_cli_build_output_is_snippet_free(project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """``bartleby build`` through the real CLI entry point never emits RELOAD_SNIPPET."""
+    """``bartleby build`` through the real CLI entry point never emits the reload snippet."""
     from bartleby.cli import main
 
     monkeypatch.chdir(project)
     main(["build"])
     rendered = (project / "site" / "index.html").read_text(encoding="utf-8")
-    assert RELOAD_SNIPPET not in rendered
+    assert RELOAD_WS_PATH not in rendered
 
 
 def test_run_broadcasts_reload_over_websocket_after_rebuild(project: Path) -> None:

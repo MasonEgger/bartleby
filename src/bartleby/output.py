@@ -174,7 +174,10 @@ class NewSiteOutput:
         return {"path": self.path, "config": self.config}
 
     def to_text(self) -> str:
-        return f"Created site at {self.path}"
+        return (
+            f"Created site at {self.path}\n"
+            f"Next: cd {self.path} && bartleby serve (see {self.path}README.md)"
+        )
 
 
 @dataclass(slots=True)

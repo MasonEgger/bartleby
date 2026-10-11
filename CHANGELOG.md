@@ -86,11 +86,13 @@ Incremental rebuilds are a non-goal, and the flag always ran a full rebuild.
 - Three themes ship with Bartleby.
   `base` holds the shared templates, scripts, and icons that every other theme builds on.
   `material` is an indigo header bar, navigation tabs, a section sidebar, and a table of contents, in the style of mkdocs-material.
-  `scrivener` is the default: ruled paper, a serif reading column, and a double-rule margin, with a light and a dark palette.
+  `scrivener` is the default: a plain reading layout in the system sans, neutral colors, and one accent for the current page, with a light and a dark palette.
 - Both `material` and `scrivener` ship compiled CSS, so a site builds with no Tailwind install and no custom CSS.
   Each has a section sidebar that folds behind a toggle on narrow screens, search with `?h=` result highlighting, and a color-mode toggle.
 - `bartleby theme eject` copies the active theme, flattened, into one editable directory (`themes/<name>` by default; `--to` and `--force` are available).
   Point `theme.path` at that directory and edit the templates directly.
+- The color-mode toggle in both bundled themes is a switch with a sun and a moon icon, shared from `base` as `partials/color_mode_toggle.html`.
+- `bartleby new site` writes a `README.md` with the commands and the project layout, and prints the next command to run.
 - `bartleby theme inspect` lists every theme file with the layer that provides it, so you can see which files a project, an ejected theme, or a bundled theme supplies.
 
 ### Fixed
@@ -111,6 +113,10 @@ Incremental rebuilds are a non-goal, and the flag always ran a full rebuild.
 - Posts with no date, author, or reading time no longer render an empty meta paragraph under the title.
 - Posts and listings in both bundled themes now get the section sidebar and table of contents that pages get.
   The sidebar needs the section's pages listed under it in `nav`, because `nav` keeps a content-type directory as one link.
+- `bartleby serve` handles requests on threads, so an idle or preconnected browser socket (iOS Safari does this) no longer stalls every other request.
+- Live reload works: the injected script connects to the reload channel's own port on the page's host, not the HTTP port.
+- One file edit triggers one rebuild. The watcher ignores open and close events, so the build reading its own sources no longer starts another build.
+- `bartleby serve` flushes its startup line, so the URL shows up when output is piped.
 
 ## [0.1.0] - 2026-10-05
 

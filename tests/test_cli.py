@@ -42,6 +42,27 @@ def test_new_site_creates_structure(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert (site / "hooks").is_dir()
 
 
+def test_new_site_writes_readme(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The scaffold ships a README titled with the site name that lists the everyday commands."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    readme = (tmp_path / "mysite" / "README.md").read_text(encoding="utf-8")
+    assert readme.startswith("# mysite\n")
+    for command in ("bartleby serve", "bartleby build", "bartleby new post", "bartleby validate"):
+        assert command in readme
+
+
+def test_new_site_home_page_names_the_agent_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The scaffold home page names the agent files a build writes."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    index = (tmp_path / "mysite" / "content" / "index.md").read_text(encoding="utf-8")
+    for name in ("llms.txt", "llms-full.txt", "schema.json", "content-index.json"):
+        assert name in index
+
+
 def test_new_site_valid_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The scaffolded bartleby.yml loads cleanly through the config system."""
     monkeypatch.chdir(tmp_path)

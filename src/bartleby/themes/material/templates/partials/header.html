@@ -7,12 +7,7 @@
     {# The trigger lives here; the modal comes from base.html. Dropping this include leaves the "/" and Ctrl/Cmd+K shortcuts working. #}
     {% if feature is defined and feature('search') %}{% include "partials/search_trigger.html" %}{% endif %}
     {% if feature is defined and feature('color-mode.toggle') %}
-    <button
-      type="button"
-      x-data="{ dark: document.documentElement.dataset.theme === 'dark' }"
-      x-on:click="dark = !dark; document.documentElement.dataset.theme = dark ? 'dark' : 'light'; try { localStorage.setItem('bartleby-color-mode', dark ? 'dark' : 'light') } catch (e) {}"
-      x-text="dark ? 'Light mode' : 'Dark mode'"
-      class="theme-toggle">Toggle theme</button>
+    {% include "partials/color_mode_toggle.html" %}
     {% endif %}
   </div>
 </header>

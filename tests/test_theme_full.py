@@ -280,6 +280,27 @@ def test_color_mode_toggle_follows_the_feature_alone(theme_name: str, enabled: b
         assert ("theme-toggle" in rendered) is enabled
 
 
+@pytest.mark.parametrize("theme_name", ["material", "scrivener"])
+def test_color_mode_toggle_is_an_icon_switch(theme_name: str) -> None:
+    """The toggle is a labelled switch with sun and moon icons, not a button with mode words."""
+    from bartleby.templates import make_feature_checker
+
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(
+            [str(path) for path in bundled_theme(theme_name).templates_dirs()]
+        ),
+        autoescape=True,
+    )
+    env.globals["feature"] = make_feature_checker(["color-mode.toggle"])
+    rendered = env.get_template("base.html").render(**_ctx(config={"theme": {"color_mode": {}}}))
+    assert 'role="switch"' in rendered
+    assert 'aria-label="Dark mode"' in rendered
+    assert "theme-toggle-sun" in rendered
+    assert "theme-toggle-moon" in rendered
+    assert "Light mode" not in rendered
+    assert "Toggle theme" not in rendered
+
+
 # --- theme.logo and theme.favicon -------------------------------------------
 
 

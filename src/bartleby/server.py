@@ -8,13 +8,18 @@ import contextlib
 import http.server
 import json
 import os
-import socketserver
 import sys
 import threading
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from watchdog.events import FileSystemEventHandler
+from watchdog.events import (
+    EVENT_TYPE_CREATED,
+    EVENT_TYPE_DELETED,
+    EVENT_TYPE_MODIFIED,
+    EVENT_TYPE_MOVED,
+    FileSystemEventHandler,
+)
 from watchdog.observers import Observer
 from websockets.asyncio.server import ServerConnection, broadcast
 from websockets.asyncio.server import serve as serve_websocket
@@ -24,6 +29,7 @@ from bartleby.config import load_config
 from bartleby.plugins import PluginCollection, discover_hooks, discover_plugins
 
 if TYPE_CHECKING:
+    import socketserver
     from collections.abc import Callable
 
     from watchdog.events import FileSystemEvent
@@ -58,15 +64,25 @@ WATCHED_PATHS: tuple[str, ...] = (
 # constant so the route is never hardcoded twice.
 RELOAD_WS_PATH = "/__bartleby_reload"
 
-# Injected into served pages so the browser reconnects and reloads on rebuild.
-# It is added only by :func:`inject_reload_snippet` in serve mode, never by the
-# build pipeline, so ``bartleby build`` output stays free of dev-only markup.
-RELOAD_SNIPPET = (
-    "<script>(function(){"
-    "var ws=new WebSocket('ws://'+location.host+'" + RELOAD_WS_PATH + "');"
-    "ws.onmessage=function(){location.reload();};"
-    "})();</script>"
-)
+
+def reload_snippet(ws_port: int) -> str:
+    """Return the script that reloads the page when the reload channel signals.
+
+    The WebSocket hub listens on its own port, so the script keeps the page's
+    hostname (which works from another machine on the network) and swaps in
+    that port. It is added only by :func:`inject_reload_snippet` in serve
+    mode, never by the build pipeline, so ``bartleby build`` output stays free
+    of dev-only markup.
+
+    :param ws_port: The port the reload WebSocket channel is bound to.
+    :returns: A ``<script>`` element as a string.
+    """
+    return (
+        "<script>(function(){"
+        f"var ws=new WebSocket('ws://'+location.hostname+':{ws_port}{RELOAD_WS_PATH}');"
+        "ws.onmessage=function(){location.reload();};"
+        "})();</script>"
+    )
 
 
 def is_watched(rel_path: str) -> bool:
@@ -102,25 +118,35 @@ def classify_change(rel_path: str) -> str:
     return "other"
 
 
-def inject_reload_snippet(html: str) -> str:
+def inject_reload_snippet(html: str, *, ws_port: int) -> str:
     """Insert the live-reload snippet just before ``</body>`` (or append it).
 
     :param html: The rendered page HTML served by the dev server.
+    :param ws_port: The port the reload WebSocket channel is bound to.
     :returns: The HTML with the reload snippet added. Serve-mode only.
     """
+    snippet = reload_snippet(ws_port)
     marker = "</body>"
     if marker in html:
-        return html.replace(marker, RELOAD_SNIPPET + marker, 1)
-    return html + RELOAD_SNIPPET
+        return html.replace(marker, snippet + marker, 1)
+    return html + snippet
+
+
+# Watchdog event types that mean a file's contents or existence changed.
+_CHANGE_EVENT_TYPES = frozenset(
+    {EVENT_TYPE_CREATED, EVENT_TYPE_MODIFIED, EVENT_TYPE_MOVED, EVENT_TYPE_DELETED}
+)
 
 
 class _ProjectChangeHandler(FileSystemEventHandler):
     """Translate watchdog filesystem events into project-relative change paths.
 
-    Every non-directory event (create, modify, move, delete) under the
-    watched root is forwarded to ``on_change``. This handler makes no
-    decision about whether a path matters; :meth:`DevServer.dispatch_change`
-    (via :func:`is_watched`) is the single place that decides.
+    Every non-directory create, modify, move, or delete under the watched
+    root is forwarded to ``on_change``; a move forwards both of its paths.
+    Opens and closes are dropped, since a rebuild reads every file and would
+    otherwise trigger the next rebuild. This handler makes no decision about
+    whether a path matters; :meth:`DevServer.dispatch_change` (via
+    :func:`is_watched`) is the single place that decides.
     """
 
     def __init__(self, project_dir: Path, on_change: Callable[[str], None]) -> None:
@@ -129,15 +155,18 @@ class _ProjectChangeHandler(FileSystemEventHandler):
         self._on_change = on_change
 
     def on_any_event(self, event: FileSystemEvent) -> None:
-        """Forward one non-directory event as a project-relative POSIX path."""
-        if event.is_directory:
+        """Forward the paths of one content-changing event as project-relative POSIX paths."""
+        if event.is_directory or event.event_type not in _CHANGE_EVENT_TYPES:
             return
-        changed_path = Path(os.fsdecode(event.src_path))
-        try:
-            rel_path = changed_path.relative_to(self._project_dir).as_posix()
-        except ValueError:
-            return
-        self._on_change(rel_path)
+        for raw_path in (event.src_path, event.dest_path):
+            if not raw_path:
+                continue
+            changed_path = Path(os.fsdecode(raw_path))
+            try:
+                rel_path = changed_path.relative_to(self._project_dir).as_posix()
+            except ValueError:
+                continue
+            self._on_change(rel_path)
 
 
 def _start_watcher(project_dir: Path, on_change: Callable[[str], None]) -> BaseObserver:
@@ -176,10 +205,11 @@ class _ReloadHub:
         self._clients: set[ServerConnection] = set()
         self._bind_error: BaseException | None = None
 
-    def start(self, host: str) -> None:
+    def start(self, host: str) -> int:
         """Start the WebSocket server on an ephemeral port and block until bound.
 
         :param host: The interface to bind, matching the HTTP server's host.
+        :returns: The bound port.
         :raises RuntimeError: The bind never completed within the timeout, or
             :func:`~websockets.asyncio.server.serve` raised while binding
             (for example the port was already in use). Raising here, instead
@@ -205,10 +235,12 @@ class _ReloadHub:
 
         self._thread = threading.Thread(target=run_loop, daemon=True)
         self._thread.start()
-        if not bound.wait(timeout=10):
-            raise RuntimeError("reload WebSocket channel did not bind within 10s")
+        bound.wait(timeout=10)
         if self._bind_error is not None:
             raise RuntimeError("reload WebSocket channel failed to bind") from self._bind_error
+        if self.port is None:
+            raise RuntimeError("reload WebSocket channel did not bind within 10s")
+        return self.port
 
     async def _bind(self, host: str, bound: threading.Event) -> None:
         self._server = await serve_websocket(self._handle_client, host, 0)
@@ -468,16 +500,17 @@ class DevServer:
         config = load_config(self.config_path)
         project_dir = self.config_path.parent
         site_dir = project_dir / config.output_dir
-        handler = _site_request_handler(site_dir, inject_reload=True)
         reload_hub = _ReloadHub()
-        reload_hub.start(self.host)
+        self.reload_ws_port = reload_hub.start(self.host)
         self._reload_hub = reload_hub
-        self.reload_ws_port = reload_hub.port
+        handler = _site_request_handler(site_dir, reload_ws_port=self.reload_ws_port)
         observer = _start_watcher(project_dir, self._on_watched_change)
         try:
-            with socketserver.TCPServer((self.host, self.port), handler) as httpd:
+            # Threaded, so an idle connection a browser opened ahead of time
+            # cannot hold up every other request.
+            with http.server.ThreadingHTTPServer((self.host, self.port), handler) as httpd:
                 self.dispatch_on_serve(httpd, config=config)
-                print(f"Serving at http://{self.host}:{httpd.server_address[1]}/")
+                print(f"Serving at http://{self.host}:{httpd.server_address[1]}/", flush=True)
                 if ready is not None:
                     ready(httpd)
                 with contextlib.suppress(KeyboardInterrupt):
@@ -490,14 +523,13 @@ class DevServer:
 
 
 def _site_request_handler(
-    site_dir: Path, *, inject_reload: bool = False
+    site_dir: Path, *, reload_ws_port: int
 ) -> type[http.server.SimpleHTTPRequestHandler]:
     """Return a request handler class serving files from ``site_dir``.
 
     :param site_dir: The built output directory to serve.
-    :param inject_reload: When ``True`` (serve mode only), HTML responses are
-        rewritten through :func:`inject_reload_snippet` before being sent.
-        ``bartleby build`` never sets this, so build output stays snippet-free.
+    :param reload_ws_port: The reload channel's port; HTML responses are
+        rewritten through :func:`inject_reload_snippet` to connect to it.
     """
 
     class Handler(http.server.SimpleHTTPRequestHandler):
@@ -505,7 +537,7 @@ def _site_request_handler(
             super().__init__(*args, directory=str(site_dir), **kwargs)  # type: ignore[arg-type]
 
         def do_GET(self) -> None:
-            if inject_reload and self._serve_html_with_reload_snippet():
+            if self._serve_html_with_reload_snippet():
                 return
             super().do_GET()
 
@@ -523,7 +555,7 @@ def _site_request_handler(
             if fs_path.suffix != ".html" or not fs_path.is_file():
                 return False
             html = fs_path.read_text(encoding="utf-8")
-            body = inject_reload_snippet(html).encode("utf-8")
+            body = inject_reload_snippet(html, ws_port=reload_ws_port).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))

@@ -10,6 +10,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from string import Template
 from typing import TYPE_CHECKING
 
 from jinja2 import TemplateNotFound
@@ -458,8 +459,13 @@ def _unknown_content_type(name: str, config: BartlebyConfig) -> UsageError:
     )
 
 
+# The starter files `new site` copies, laid out as they land in the new project.
+# ${name} and ${today} are filled in with string.Template.
+_SCAFFOLD_ROOT = Path(__file__).parent / "scaffold"
+
+
 def _cmd_new_site(args: argparse.Namespace) -> NewSiteOutput:
-    """Scaffold a fresh project under ``./{args.name}/``."""
+    """Scaffold a fresh project under ``./{args.name}/`` from the files in ``scaffold/``."""
     target = Path.cwd() / args.name
     if target.exists():
         raise UsageError(
@@ -469,17 +475,20 @@ def _cmd_new_site(args: argparse.Namespace) -> NewSiteOutput:
         )
 
     target.mkdir(parents=True)
-    (target / "content" / "blog" / "posts").mkdir(parents=True)
     (target / "templates").mkdir()
     (target / "static").mkdir()
     (target / "hooks").mkdir()
 
-    (target / "bartleby.yml").write_text(_DEFAULT_CONFIG.format(name=args.name), encoding="utf-8")
-    (target / ".authors.yml").write_text(_DEFAULT_AUTHORS, encoding="utf-8")
-    (target / "content" / "index.md").write_text(_DEFAULT_INDEX, encoding="utf-8")
-    (target / "content" / "blog" / "posts" / "welcome.md").write_text(
-        _DEFAULT_POST.format(today=datetime.date.today().isoformat()), encoding="utf-8"
-    )
+    # Copy the starter tree, filling in the site name and today's date.
+    values = {"name": args.name, "today": datetime.date.today().isoformat()}
+    for source in _SCAFFOLD_ROOT.rglob("*"):
+        if source.is_dir():
+            continue
+        destination = target / source.relative_to(_SCAFFOLD_ROOT)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        starter_text = Template(source.read_text(encoding="utf-8")).substitute(values)
+        destination.write_text(starter_text, encoding="utf-8")
+
     return NewSiteOutput(path=f"{args.name}/", config=f"{args.name}/bartleby.yml")
 
 
@@ -955,93 +964,3 @@ def _cmd_serve(args: argparse.Namespace) -> None:
     host = args.host or config.dev_server.host
     port = args.port if args.port is not None else config.dev_server.port
     DevServer(config_path, host=host, port=port, events=args.events).run()
-
-
-_DEFAULT_CONFIG = """site:
-  title: "{name}"
-  url: "https://example.com"
-  description: "A Bartleby site."
-
-theme:
-  name: scrivener
-  features:
-    - search
-    - search.highlight
-    - nav.tabs
-    - nav.sidebar
-    - nav.back-to-top
-    - content.code.copy
-    - color-mode.toggle
-
-nav:
-  - Home: index.md
-  - Blog: blog/
-
-content_types:
-  blog:
-    path: blog/posts
-    readtime: true
-    excerpt_separator: "<!-- more -->"
-    taxonomies:
-      - tags
-
-taxonomies:
-  tags:
-    slug_format: "{{slug}}"
-
-exclude_patterns:
-  - "_drafts/**"
-  - "_*.md"
-  - ".git/**"
-"""
-
-_DEFAULT_AUTHORS = """authors:
-  default:
-    name: Site Author
-"""
-
-_DEFAULT_INDEX = """---
-title: Welcome
-description: Start here to find your way around a new Bartleby site.
----
-
-Welcome to your new Bartleby site.
-Every page here is plain Markdown with YAML front matter at the top.
-
-## Where to Start
-
-- Read the [welcome post](/blog/posts/welcome/) to see a published post.
-- Browse the [blog listing](/blog/) to see how posts are collected.
-- Run `bartleby new post "My First Post"` to add a draft of your own.
-
-## Make It Yours
-
-Edit `bartleby.yml` to change the title, the navigation, or the theme.
-Set `theme.name: material` for the Material look.
-"""
-
-_DEFAULT_POST = """---
-title: "Welcome to Bartleby"
-description: A sample post that shows how front matter and Markdown become a page.
-date: {today}
-draft: false
-authors: [default]
-tags: [bartleby]
----
-
-This is a sample post.
-It lives in `content/blog/posts/welcome.md` and shows up on the blog listing.
-
-<!-- more -->
-
-## Writing a Post
-
-Front matter sets the title, date, author, and tags.
-The body is Markdown, with code blocks, admonitions, and tables turned on by default.
-
-```python
-print("Hello from Bartleby")
-```
-
-Posts marked `draft: true` stay out of a normal build, so flip that flag when a post is ready.
-"""

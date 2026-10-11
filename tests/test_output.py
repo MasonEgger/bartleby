@@ -149,6 +149,13 @@ def test_new_site_output_json_shape() -> None:
     assert payload == {"path": "mysite/", "config": "mysite/bartleby.yml"}
 
 
+def test_new_site_output_text_names_the_next_step() -> None:
+    """new site tells a first-time user how to see the site and where the instructions are."""
+    text = render(NewSiteOutput(path="mysite/", config="mysite/bartleby.yml"), "text")
+    assert "cd mysite/ && bartleby serve" in text
+    assert "mysite/README.md" in text
+
+
 def test_new_post_output_json_shape() -> None:
     """new post renders the created file path."""
     result = NewPostOutput(path="content/blog/posts/hello.md")

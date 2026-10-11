@@ -25,6 +25,10 @@ site-nav
 site-footer
 site-meta
 theme-toggle
+theme-toggle-thumb
+theme-toggle-icon
+theme-toggle-sun
+theme-toggle-moon
 nav-link
 nav-section
 nav-section-title
@@ -58,6 +62,7 @@ not-found-code
 not-found-actions
 not-found-hint
 not-found-label
+post-tags
 tag-list
 tag
 post-meta

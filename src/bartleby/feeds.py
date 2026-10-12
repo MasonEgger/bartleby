@@ -1,5 +1,5 @@
 # ABOUTME: RSS 2.0 and Atom 1.0 feed generation per content type and site-wide.
-# Emits per-type feeds plus the homepage aggregate firehose from bartleby.yml.
+# Each enabled type with feeds gets its own pair; one combined site feed merges them.
 
 from __future__ import annotations
 
@@ -133,6 +133,13 @@ def generate_feeds(pages: list[Page], config: BartlebyConfig, output_dir: Path) 
     Per-content-type feeds land under ``{type}/feed.xml`` and ``{type}/atom.xml``.
     The site-wide aggregate, when enabled, lands at the output root as
     ``feed.xml`` and ``atom.xml`` per ``site.feed.formats``.
+
+    Only enabled content types publish feeds, and only published (non-draft)
+    pages become entries. An enabled type whose ``feeds`` is empty (the
+    opt-out) writes no files. An enabled type with ``feeds`` set but no
+    published pages still writes a valid feed with zero entries, so the
+    alternate link in page heads never 404s. ``site.feed.enabled: false``
+    suppresses only the combined feed; per-type feeds remain.
     """
     publishable = [page for page in select_published(pages) if page.content_type_name is not None]
     by_type: dict[str, list[Page]] = {}

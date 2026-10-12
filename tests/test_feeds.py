@@ -7,6 +7,7 @@ import datetime
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from bartleby.build import build
 from bartleby.config import (
     AIConfig,
     BartlebyConfig,
@@ -401,3 +402,158 @@ def test_feed_links_omitted_when_aggregate_disabled() -> None:
     home = _post(source="index.md", title="Home", date=datetime.date(2026, 1, 1))
     home.content_type_name = None
     assert feed_links_for_page(home, config) == []
+
+
+_ATOM = "{http://www.w3.org/2005/Atom}"
+
+
+def _rss_entries(xml: str) -> list[tuple[str | None, str | None]]:
+    """The (title, link) pair of every RSS item, in document order."""
+    return [
+        (item.findtext("title"), item.findtext("link"))
+        for item in ET.fromstring(xml).findall("channel/item")
+    ]
+
+
+def _atom_entries(xml: str) -> list[tuple[str | None, str | None]]:
+    """The (title, alternate href) pair of every Atom entry, in document order."""
+    return [
+        (entry.findtext(f"{_ATOM}title"), entry.findall(f"{_ATOM}link")[0].get("href"))
+        for entry in ET.fromstring(xml).findall(f"{_ATOM}entry")
+    ]
+
+
+def _three_type_config(*, feed: FeedConfig | None = None) -> BartlebyConfig:
+    """``blog`` and ``news`` have feeds, ``notes`` opts out, ``old`` is disabled."""
+    config = _multi_config(feed=feed)
+    config.content_types["notes"] = ContentTypeConfig(
+        name="notes", path="notes/posts", pagination=PaginationConfig(), feeds=[]
+    )
+    config.content_types["old"] = ContentTypeConfig(
+        name="old",
+        path="old/posts",
+        pagination=PaginationConfig(),
+        feeds=["rss", "atom"],
+        enabled=False,
+    )
+    return config
+
+
+def _three_type_pages() -> list[Page]:
+    return [
+        _post(source="blog/posts/b.md", title="Blog post", date=datetime.date(2026, 3, 1)),
+        _post(
+            source="news/posts/n.md",
+            title="News post",
+            date=datetime.date(2026, 4, 1),
+            content_type="news",
+        ),
+        _post(
+            source="notes/posts/o.md",
+            title="Note post",
+            date=datetime.date(2026, 5, 1),
+            content_type="notes",
+        ),
+        _post(
+            source="old/posts/d.md",
+            title="Old post",
+            date=datetime.date(2026, 6, 1),
+            content_type="old",
+        ),
+    ]
+
+
+def test_type_feeds_carry_exactly_the_published_posts(tmp_path: Path) -> None:
+    """RSS and Atom each hold the two published posts and skip the draft."""
+    config = _config()
+    draft = _post(source="blog/posts/d.md", title="Draft", date=datetime.date(2026, 3, 3))
+    draft.draft = True
+    pages = [
+        _post(source="blog/posts/a.md", title="First", date=datetime.date(2026, 3, 1)),
+        _post(source="blog/posts/b.md", title="Second", date=datetime.date(2026, 3, 2)),
+        draft,
+    ]
+    generate_feeds(pages, config, tmp_path)
+    expected = [
+        ("Second", "https://example.com/blog/posts/b/"),
+        ("First", "https://example.com/blog/posts/a/"),
+    ]
+    assert _rss_entries((tmp_path / "blog" / "feed.xml").read_text(encoding="utf-8")) == expected
+    assert _atom_entries((tmp_path / "blog" / "atom.xml").read_text(encoding="utf-8")) == expected
+
+
+def test_type_with_no_published_posts_writes_a_valid_empty_feed(tmp_path: Path) -> None:
+    """A missing file would 404 from the alternate link, so the feed is empty but valid."""
+    generate_feeds([], _config(), tmp_path)
+    assert _rss_entries((tmp_path / "blog" / "feed.xml").read_text(encoding="utf-8")) == []
+    assert _atom_entries((tmp_path / "blog" / "atom.xml").read_text(encoding="utf-8")) == []
+
+
+def test_combined_feed_merges_feed_enabled_types_only(tmp_path: Path) -> None:
+    """Opt-out (empty ``feeds``) and disabled types are absent from both combined feeds."""
+    generate_feeds(_three_type_pages(), _three_type_config(), tmp_path)
+    expected = [
+        ("News post", "https://example.com/news/posts/n/"),
+        ("Blog post", "https://example.com/blog/posts/b/"),
+    ]
+    assert _rss_entries((tmp_path / "feed.xml").read_text(encoding="utf-8")) == expected
+    assert _atom_entries((tmp_path / "atom.xml").read_text(encoding="utf-8")) == expected
+    assert not (tmp_path / "notes").exists()
+    assert not (tmp_path / "old").exists()
+
+
+def test_combined_feed_off_keeps_type_feeds(tmp_path: Path) -> None:
+    """``site.feed.enabled: false`` removes only the root feeds."""
+    config = _three_type_config(feed=FeedConfig(enabled=False))
+    generate_feeds(_three_type_pages(), config, tmp_path)
+    assert not (tmp_path / "feed.xml").exists()
+    assert not (tmp_path / "atom.xml").exists()
+    assert _rss_entries((tmp_path / "blog" / "feed.xml").read_text(encoding="utf-8")) == [
+        ("Blog post", "https://example.com/blog/posts/b/")
+    ]
+    assert _atom_entries((tmp_path / "news" / "atom.xml").read_text(encoding="utf-8")) == [
+        ("News post", "https://example.com/news/posts/n/")
+    ]
+
+
+def test_built_site_feeds_carry_entries_for_enabled_types_only(tmp_path: Path) -> None:
+    """Two enabled blog-shaped types and one disabled, built end to end."""
+    config_text = (
+        "site:\n  title: Sample\n  url: https://example.com\n"
+        "content_types:\n"
+        "  tutorials:\n    path: tutorials/posts\n    feeds: [rss, atom]\n"
+        "  speaking:\n    path: speaking/posts\n    feeds: [rss, atom]\n"
+        "  archive:\n    path: archive/posts\n    feeds: [rss, atom]\n    enabled: false\n"
+    )
+    (tmp_path / "bartleby.yml").write_text(config_text, encoding="utf-8")
+    posts = {
+        "index.md": ("Home", "2026-01-01"),
+        "tutorials/posts/one.md": ("Tutorial One", "2026-03-01"),
+        "tutorials/posts/two.md": ("Tutorial Two", "2026-03-02"),
+        "speaking/posts/talk.md": ("A Talk", "2026-03-03"),
+        "archive/posts/gone.md": ("Gone Post", "2026-03-04"),
+    }
+    for relative, (title, date) in posts.items():
+        path = tmp_path / "content" / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"---\ntitle: {title}\ndate: {date}\n---\n\nBody.\n", encoding="utf-8")
+
+    build(tmp_path / "bartleby.yml")
+
+    site = tmp_path / "site"
+    base = "https://example.com"
+    tutorials = [
+        ("Tutorial Two", f"{base}/tutorials/posts/two/"),
+        ("Tutorial One", f"{base}/tutorials/posts/one/"),
+    ]
+    talk = [("A Talk", f"{base}/speaking/posts/talk/")]
+    assert _rss_entries((site / "tutorials" / "feed.xml").read_text(encoding="utf-8")) == tutorials
+    assert (
+        _atom_entries((site / "tutorials" / "atom.xml").read_text(encoding="utf-8")) == tutorials
+    )
+    assert _rss_entries((site / "speaking" / "feed.xml").read_text(encoding="utf-8")) == talk
+    assert _atom_entries((site / "speaking" / "atom.xml").read_text(encoding="utf-8")) == talk
+    combined = talk + tutorials
+    assert _rss_entries((site / "feed.xml").read_text(encoding="utf-8")) == combined
+    assert _atom_entries((site / "atom.xml").read_text(encoding="utf-8")) == combined
+    assert not (site / "archive").exists()

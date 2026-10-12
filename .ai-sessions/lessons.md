@@ -2,6 +2,7 @@
 
 ## Recent
 <!-- 10 most recent lessons, newest first -->
+- A "prove it works" step whose code is already correct still earns its tests, and the way to know they carry weight is to mutate the implementation in a scratch copy and watch each test fail. Step 8's feed tests parse the XML and compare exact ordered (title, link) lists; seven mutations (dropped newest item, draft let through, disabled type in the aggregate, combined feed written while disabled, empty type suppressed, disabled type in the per-type loop, opt-out in the aggregate) were each caught, which a passing suite alone cannot show (2026-10-12)
 - A new filter over content types (here `enabled_content_types`) must be applied by grepping every consumer of the collection in `src/`, not the ones in mind: Step 7's first pass covered listings, feeds, and discovery, and missed `schema.json`, the generated skills, and taxonomies, three of them agent-facing (2026-10-12)
 - A value handed to a ruamel round-trip writer must itself be a ruamel type: a plain dict stops the comment-transfer walk at its boundary, so the comment above the next key was displaced. `set_key` now converts dict and list values first (2026-10-12)
 - A drift test whose two sides read the same source cannot be mutation-checked by editing that source, because both sides shrink together. Mutate the consumer's call instead (Step 6 rendered a schema without `site.description` in the CLI), confirm the test fails, then restore (2026-10-12)
@@ -11,7 +12,6 @@
 - Refuse a function-local import used to dodge a module cycle. Put the function that combines two modules in the module that already imports both: `resolve_with_sources` lives in `config_schema.py` (which imports `config`), on top of a public `config.source_tags`, so `config.py` never imports `config_schema` (2026-10-12)
 - Adding a CLI flag also costs a docs edit in the same step: `tests/test_docs_reference.py` pins each command's flags to `docs/content/reference/pages/cli.md`, so Step 3's `--set` failed the suite until a one-line entry landed, even though the plan deferred docs to Step 16. Budget a one-line docs entry for any step that touches argparse (2026-10-12)
 - An error-source heuristic that labels by "an override sits under the error's key" mislabels section-level file errors: a bad `dev_server` block in the file was blamed on `--set dev_server.port=...`. Label an error with the override only when the error key equals the override key or sits under it, and label everything else with the file (2026-10-12)
-- ruamel attaches the blank line and comment that precede the NEXT top-level key to the LAST key of the preceding mapping, so a plain assignment that appends a key drags that comment under the new key. `set_key` moves the trailing comment token onto the new key. A comment-preservation test must assert line position (the comment still sits directly above its original key), not substring presence, or it passes while the comment migrates (2026-10-12)
 
 ## Architecture
 - A schema that mirrors parsing code must take its defaults from the parser, not from literals in the test: pin each `ConfigField.default` against what `config.py` returns for an empty config. Copied literals pass while the code drifts, and the Step 1 validator found four list defaults that disagreed (2026-10-12)
@@ -121,3 +121,6 @@
 
 ## Debugging
 - A dev server that "doesn't load on my phone" is a concurrency bug until proven otherwise: iOS Safari opens an idle preconnect socket, and a single-threaded `http.server.HTTPServer` serves it first and stalls every real request. A test that holds an idle socket open and then fetches in parallel fails on `HTTPServer` and passes on `ThreadingHTTPServer`. Also filter watchdog events to created, modified, moved, and deleted, or the build's own file reads (opened and closed events) trigger another build forever (2026-10-11)
+
+## Tooling
+- ruamel attaches the blank line and comment that precede the NEXT top-level key to the LAST key of the preceding mapping, so a plain assignment that appends a key drags that comment under the new key. `set_key` moves the trailing comment token onto the new key. A comment-preservation test must assert line position (the comment still sits directly above its original key), not substring presence, or it passes while the comment migrates (2026-10-12)

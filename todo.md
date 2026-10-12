@@ -79,14 +79,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 8. Verify: skip path + idempotency coverage + `just check`
 
 ### Step 8: An enabled type's feeds carry entries, plus the combined feed (feature)
-- [ ] 1. RED: per-type RSS + Atom carry exactly the published items; combined feed merges enabled-with-feeds types, excludes opt-out and disabled; site.feed.enabled false suppresses combined only
-- [ ] 2. Document: per-type-plus-combined guarantee in feeds.py docstring
-- [ ] 3. GREEN: feeds.py/build.py fix gaps (disabled exclusion, empty-feed suppression)
-- [ ] 4. RED: integration (two enabled types + one disabled; per-type feeds carry entries; combined merges enabled only)
-- [ ] 5. GREEN: wire minimally
-- [ ] 6. REFACTOR: reuse shared published-page selection
-- [ ] 7. Document: none here
-- [ ] 8. Verify: feeds carry real entries (item count + titles) + `just check`
+- [x] 1. RED: per-type RSS + Atom carry exactly the published items; combined feed merges enabled-with-feeds types, excludes opt-out and disabled; site.feed.enabled false suppresses combined only
+- [x] 2. Document: per-type-plus-combined guarantee in feeds.py docstring
+- [x] 3. GREEN: feeds.py/build.py fix gaps (disabled exclusion, empty-feed suppression)
+- [x] 4. RED: integration (two enabled types + one disabled; per-type feeds carry entries; combined merges enabled only)
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: reuse shared published-page selection
+- [x] 7. Document: none here
+- [x] 8. Verify: feeds carry real entries (item count + titles) + `just check`
 
 ## Section 4: markwright integration
 

@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from bartleby.build import BuildResult
     from bartleby.config_schema import ConfigField
 
 # Meaningful exit codes (spec.md "Global Flags"): 0 success, 1 error, 2 usage error.
@@ -75,6 +76,16 @@ class BuildOutput:
     output_dir: str
     warnings: list[Warning] = field(default_factory=list)
     errors: list[Warning] = field(default_factory=list)
+
+    @classmethod
+    def from_result(cls, result: BuildResult) -> BuildOutput:
+        """Summarize a finished build the way ``build`` and ``serve`` both report it."""
+        return cls(
+            pages=result.page_count,
+            static_files=result.static_file_count,
+            duration_ms=round(result.duration_seconds * 1000),
+            output_dir=result.output_dir,
+        )
 
     @property
     def exit_code(self) -> int:
@@ -164,23 +175,82 @@ class ValidateOutput:
 
 @dataclass(slots=True)
 class NewSiteOutput:
-    """Result of ``bartleby new site`` (spec.md JSON output)."""
+    """Result of ``bartleby new site`` (spec.md JSON output).
+
+    :ivar path: The new project directory, with a trailing slash.
+    :ivar config: The path of the written ``bartleby.yml``.
+    :ivar created: The top-level entries the scaffold wrote, directories with a trailing slash.
+    :ivar next_command: The shell command that serves the new site, from the directory the
+        author typed.
+    :ivar blog: ``True`` when ``--blog`` added the blog content type.
+    :ivar full_config: ``True`` when ``--full-config`` wrote the complete annotated config.
+    """
 
     path: str
     config: str
+    created: list[str]
+    next_command: str
+    blog: bool = False
+    full_config: bool = False
 
     @property
     def exit_code(self) -> int:
         return EXIT_SUCCESS
 
     def to_dict(self) -> dict[str, object]:
-        return {"path": self.path, "config": self.config}
+        return {
+            "path": self.path,
+            "config": self.config,
+            "created": self.created,
+            "next_command": self.next_command,
+            "blog": self.blog,
+            "full_config": self.full_config,
+        }
 
     def to_text(self) -> str:
-        return (
-            f"Created site at {self.path}\n"
-            f"Next: cd {self.path} && bartleby serve (see {self.path}README.md)"
-        )
+        notes = {}
+        if self.full_config:
+            notes["bartleby.yml"] = "every option, from --full-config"
+        if self.blog:
+            notes["content/"] = "with a blog in content/blog/"
+        lines = [f"Created site at {self.path}"]
+        for entry in self.created:
+            note = f" ({notes[entry]})" if entry in notes else ""
+            lines.append(f"  {entry}{note}")
+        lines.append(f"Next: {self.next_command}")
+        return "\n".join(lines)
+
+
+STOP_HINT = "Press Ctrl+C to stop"
+
+
+@dataclass(slots=True)
+class ServeStartOutput:
+    """What ``bartleby serve`` prints once it is listening.
+
+    :ivar url: The address the server is bound to, with the real port.
+    :ivar build: The initial build's summary, shown in the build command's own words.
+    """
+
+    url: str
+    build: BuildOutput
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_SUCCESS
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "type": "ready",
+            "url": self.url,
+            "pages": self.build.pages,
+            "static_files": self.build.static_files,
+            "output_dir": self.build.output_dir,
+            "stop_hint": STOP_HINT,
+        }
+
+    def to_text(self) -> str:
+        return "\n".join([self.build.to_text(), f"Serving at {self.url}", STOP_HINT])
 
 
 @dataclass(slots=True)

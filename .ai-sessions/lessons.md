@@ -2,6 +2,8 @@
 
 ## Recent
 <!-- 10 most recent lessons, newest first -->
+- A printed "next command" is a claim the user will paste, so build it with `shlex.quote` and test a site name with a space and one with a trailing slash. Step 15's first draft printed an unquoted path that broke on a space (2026-10-12)
+- A startup URL must print after the socket binds, because port 0 only resolves then. Build the serve summary where the bound port is known (`DevServer._serve`), not in the CLI from config (2026-10-12)
 - A feature tour is a test of the themes and the pipeline, not only of content. Step 14's tour exposed three features that rendered broken for every user who wrote them (content tabs in a shape neither theme styled, the critic source block processed itself, emoji as 64px blocks), so render every tour section in both themes before calling it done (2026-10-12)
 - A "source beside result" page must guard its source blocks from preprocessors that run before fences are protected. `pymdownx.critic` rewrote its own example, so the source is a raw HTML pre with entity-escaped markers (2026-10-12)
 - A tour's hook list in its test must map one to one onto the tour's claims. A loose hook (`data-prefix` covering three features) passes while any one of them breaks (2026-10-12)
@@ -10,8 +12,6 @@
 - A docs count that a test pins with a literal word ("all eight") goes stale the moment the set grows. Derive the word from the collection (`len(THEME_FEATURES)`) in the test, then mutate one docs row to confirm the test fails (2026-10-12)
 - A transport rewrite's acceptance test is a real end-to-end probe: scaffold a site, serve it, curl a page, open the WebSocket, hold an idle socket, make a bad edit, make a fixed edit, bind a busy port. Step 12's probe found two robustness defects that predated the rewrite (a labeled build error killed the watchdog thread silently; a busy port printed a raw traceback after a full build) and the unit suite had caught neither (2026-10-12)
 - A server's catch list for author-facing errors must be the same tuple the CLI's error map is built from (`cli.LABELED_ERRORS`, derived from `_ERROR_CODES`), not a hand-copied list. A labeled error outside the list kills the watcher thread with no message (2026-10-12)
-- A test that polls a live server during a rebuild must tolerate the rebuild window (HTTPError, URLError until a deadline), or it flakes. The flake is also evidence: `rebuild()` rewrites the output directory in place, so a request mid-rebuild sees a 404, and an atomic output swap is the fix (2026-10-12)
-- To style "every class hook" a library emits, enumerate the hooks from the library's extension sources and a probe build that exercises every extension, not from its docs or a prefix assumption. Step 11 expected an `mw-` prefix on markwright's markup, but only the click-to-load wrapper has one; the other seven extensions emit unprefixed hooks like `code-label` and `slideshow` (2026-10-12)
 
 ## Architecture
 - Refuse a function-local import used to dodge a module cycle. Put the function that combines two modules in the module that already imports both: `resolve_with_sources` lives in `config_schema.py` (which imports `config`), on top of a public `config.source_tags`, so `config.py` never imports `config_schema` (2026-10-12)
@@ -25,6 +25,8 @@
 - Before refreshing a README "Status"/test-count section, pull live facts (`git log --reverse` for the first-commit date, `pytest --co | tail -1` for the test count) and cross-check the "deferred items" list against plan.md "Out of scope" rather than copying the stale original forward; the v1 hardening had already closed half the originally-listed deferrals (2026-06-23)
 
 ## Workflow
+- A test that polls a live server during a rebuild must tolerate the rebuild window (HTTPError, URLError until a deadline), or it flakes. The flake is also evidence: `rebuild()` rewrites the output directory in place, so a request mid-rebuild sees a 404, and an atomic output swap is the fix (2026-10-12)
+- To style "every class hook" a library emits, enumerate the hooks from the library's extension sources and a probe build that exercises every extension, not from its docs or a prefix assumption. Step 11 expected an `mw-` prefix on markwright's markup, but only the click-to-load wrapper has one; the other seven extensions emit unprefixed hooks like `code-label` and `slideshow` (2026-10-12)
 - A plan Verify line that says "screenshot every page type" is only met by reading each PNG, so budget for the reads or hand the unread combinations to the validator by name. Step 11's validator read twelve screenshots across both themes, both color modes, and both viewports (2026-10-12)
 - A template flag that reads `page.custom_metadata` must type-guard every key it reads: on an ordinary page that dict is the user's front matter, so `posts`, `intro_content`, or `paginator` can hold any YAML type. Step 10's click-to-load flag type-guards all three, and a twenty-shape front-matter build found no traceback (2026-10-12)
 - When a page-level decision depends on fragments that listing templates print (excerpts, intros), read those templates first to enumerate the fragments instead of checking `page.content` alone. Step 10's asset flag missed click-embed excerpts on listing and tag pages until the validator widened it (2026-10-12)

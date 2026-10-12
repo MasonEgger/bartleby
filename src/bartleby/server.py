@@ -53,6 +53,7 @@ from bartleby.build import BuildError, PageError, build, format_page_error
 from bartleby.cli import LABELED_ERRORS
 from bartleby.config import ConfigError, load_config
 from bartleby.content import ContentError
+from bartleby.output import BuildOutput, ServeStartOutput, render
 from bartleby.plugins import PluginCollection, discover_hooks, discover_plugins
 from bartleby.theme_loader import ThemeError
 
@@ -65,6 +66,7 @@ if TYPE_CHECKING:
     from watchdog.events import FileSystemEvent
     from watchdog.observers.api import BaseObserver
 
+    from bartleby.build import BuildResult
     from bartleby.config import BartlebyConfig
 
 
@@ -347,9 +349,12 @@ class DevServer:
         self._channel: _ReloadChannel | None = None
         self._uvicorn: uvicorn.Server | None = None
 
-    def build_once(self) -> None:
-        """Run a full build with drafts included."""
-        build(self.config_path, include_drafts=True, overrides=self.overrides)
+    def build_once(self) -> BuildResult:
+        """Run a full build with drafts included.
+
+        :returns: The finished build's summary.
+        """
+        return build(self.config_path, include_drafts=True, overrides=self.overrides)
 
     def rebuild(self) -> list[PageError]:
         """Run a full rebuild, retaining the last good output on failure.
@@ -553,7 +558,7 @@ class DevServer:
             except OSError as exc:
                 raise ServeBindError(self.host, self.port, exc.strerror or str(exc)) from exc
             with listener, contextlib.suppress(KeyboardInterrupt):
-                self.build_once()
+                built = self.build_once()
                 config = load_config(self.config_path, self.overrides)
                 site_dir = self.config_path.parent / config.output_dir
                 uvicorn_server = uvicorn.Server(
@@ -563,7 +568,7 @@ class DevServer:
                 )
                 self._channel = channel
                 self._uvicorn = uvicorn_server
-                asyncio.run(self._serve(uvicorn_server, channel, listener, config, ready))
+                asyncio.run(self._serve(uvicorn_server, channel, listener, config, built, ready))
         finally:
             self._channel = None
             self._uvicorn = None
@@ -579,15 +584,27 @@ class DevServer:
         channel: _ReloadChannel,
         listener: socket.socket,
         config: BartlebyConfig,
+        built: BuildResult,
         ready: Callable[[int], None] | None,
     ) -> None:
-        """Run uvicorn on ``listener`` with the project watcher alive around it."""
+        """Run uvicorn on ``listener`` with the project watcher alive around it.
+
+        Once the watcher is running, prints the startup summary (build counts, the
+        bound URL, how to stop): one ``ready`` JSON object line under ``--events``,
+        text otherwise.
+        """
         channel.loop = asyncio.get_running_loop()
         observer = _start_watcher(self.config_path.parent, self._on_watched_change)
         try:
             self.dispatch_on_serve(uvicorn_server, config=config)
             port = listener.getsockname()[1]
-            print(f"Serving at http://{self.host}:{port}/", flush=True)
+            startup = ServeStartOutput(
+                url=f"http://{self.host}:{port}/", build=BuildOutput.from_result(built)
+            )
+            if self.events:
+                self.emit_event(startup.to_dict())
+            else:
+                print(render(startup, "text"), flush=True)
             if ready is not None:
                 ready(port)
             await uvicorn_server.serve(sockets=[listener])

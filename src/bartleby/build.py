@@ -14,7 +14,7 @@ import tomllib
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 from jinja2 import TemplateError
 
@@ -202,6 +202,30 @@ def format_page_error(error: PageError) -> str:
     :returns: ``"<file_path>: <message>"``.
     """
     return f"{error.file_path}: {error.message}"
+
+
+@overload
+def build(
+    config_path: Path,
+    *,
+    include_drafts: bool = False,
+    strict: bool = False,
+    dry_run: Literal[False] = False,
+    theme: ResolvedTheme | None = None,
+    overrides: list[str] | None = None,
+) -> BuildResult: ...
+
+
+@overload
+def build(
+    config_path: Path,
+    *,
+    include_drafts: bool = False,
+    strict: bool = False,
+    dry_run: Literal[True],
+    theme: ResolvedTheme | None = None,
+    overrides: list[str] | None = None,
+) -> DryRunResult: ...
 
 
 def build(

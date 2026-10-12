@@ -9,6 +9,7 @@ import datetime
 import json
 import logging
 import os
+import shlex
 import sys
 from pathlib import Path
 from string import Template
@@ -616,7 +617,8 @@ def _cmd_new_site(args: argparse.Namespace) -> NewSiteOutput:
     ``--blog`` the blog files from ``scaffold_blog/`` are added and the blog block is merged
     into whichever config was written, so the two flags combine.
     """
-    target = Path.cwd() / args.name
+    name = args.name.rstrip("/") or args.name
+    target = Path.cwd() / name
     if target.exists():
         raise UsageError(
             format_error(
@@ -629,7 +631,7 @@ def _cmd_new_site(args: argparse.Namespace) -> NewSiteOutput:
     (target / "static").mkdir()
     (target / "hooks").mkdir()
 
-    values = {"name": args.name, "today": datetime.date.today().isoformat()}
+    values = {"name": name, "today": datetime.date.today().isoformat()}
     _copy_starter_tree(_SCAFFOLD_ROOT, target, values)
     starter_nav = load_config(target / "bartleby.yml").nav or []
 
@@ -646,7 +648,17 @@ def _cmd_new_site(args: argparse.Namespace) -> NewSiteOutput:
         validate_config_text(edited, config_path)
         config_path.write_text(edited, encoding="utf-8")
 
-    return NewSiteOutput(path=f"{args.name}/", config=f"{args.name}/bartleby.yml")
+    created = sorted(
+        f"{entry.name}/" if entry.is_dir() else entry.name for entry in target.iterdir()
+    )
+    return NewSiteOutput(
+        path=f"{name}/",
+        config=f"{name}/bartleby.yml",
+        created=created,
+        next_command=f"cd {shlex.quote(name)} && bartleby serve",
+        blog=args.blog,
+        full_config=args.full_config,
+    )
 
 
 def _cmd_new_post(args: argparse.Namespace) -> NewPostOutput:
@@ -707,12 +719,7 @@ def _cmd_build(args: argparse.Namespace) -> BuildOutput | DryRunOutput:
     )
     if result.config.ai.skills.regenerate_on_build:
         _write_skills(config_path, result.config)
-    return BuildOutput(
-        pages=result.page_count,
-        static_files=result.static_file_count,
-        duration_ms=round(result.duration_seconds * 1000),
-        output_dir=result.output_dir,
-    )
+    return BuildOutput.from_result(result)
 
 
 def _cmd_validate(args: argparse.Namespace) -> ValidateOutput:

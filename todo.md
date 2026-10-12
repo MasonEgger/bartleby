@@ -145,14 +145,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 5. Document: scaffold README quickstart; add scaffold pages to nav
 
 ### Step 15: Hugo-style first-run output for `new site` and `serve` (feature)
-- [ ] 1. RED: new site result lists created entries + next command (cd <dir> && bartleby serve), json carries same; serve startup summary has page count + bound URL + stop hint (formatter unit-tested)
-- [ ] 2. Document: new/updated output dataclass docstrings
-- [ ] 3. GREEN: output.py extend NewSiteOutput + serve-startup result (to_text/to_dict); cli.py populate both
-- [ ] 4. RED: integration (new site prints created entries + exact next command)
-- [ ] 5. GREEN: wire minimally
-- [ ] 6. REFACTOR: reuse resolved host/port from Step 4
-- [ ] 7. Document: none here
-- [ ] 8. Verify: summaries carry real values (page count + URL from build) + `just check`
+- [x] 1. RED: new site result lists created entries + next command (cd <dir> && bartleby serve), json carries same; serve startup summary has page count + bound URL + stop hint (formatter unit-tested)
+- [x] 2. Document: new/updated output dataclass docstrings
+- [x] 3. GREEN: output.py extend NewSiteOutput + serve-startup result (to_text/to_dict); cli.py populate both
+- [x] 4. RED: integration (new site prints created entries + exact next command)
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: reuse resolved host/port from Step 4
+- [x] 7. Document: none here
+- [x] 8. Verify: summaries carry real values (page count + URL from build) + `just check`
 
 ## Section 8: Docs, acknowledgments, correctness, and the final gate
 

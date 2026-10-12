@@ -37,14 +37,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 8. Verify: value typing + error labeling coverage + `just check`
 
 ### Step 4: `--base-url` and resolved-config provenance (feature)
-- [ ] 1. RED: resolve_with_sources tests (default/file/set per key; --base-url maps to site.url override, provenance set); CLI --base-url renders canonical URLs, accepted on build/serve/validate
-- [ ] 2. Document: resolve_with_sources docstring (three sources, --set/--base-url mapping)
-- [ ] 3. GREEN: config.py resolve_with_sources; cli.py --base-url -> site.url override
-- [ ] 4. RED: integration (resolve_with_sources agrees with load_config on final values)
-- [ ] 5. GREEN: wire minimally
-- [ ] 6. REFACTOR: provenance tagging beside apply_overrides
-- [ ] 7. Document: none here
-- [ ] 8. Verify: all three sources + --base-url mapping coverage + `just check`
+- [x] 1. RED: resolve_with_sources tests (default/file/set per key; --base-url maps to site.url override, provenance set); CLI --base-url renders canonical URLs, accepted on build/serve/validate
+- [x] 2. Document: resolve_with_sources docstring (three sources, --set/--base-url mapping)
+- [x] 3. GREEN: config.py resolve_with_sources; cli.py --base-url -> site.url override
+- [x] 4. RED: integration (resolve_with_sources agrees with load_config on final values)
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: provenance tagging beside apply_overrides
+- [x] 7. Document: none here
+- [x] 8. Verify: all three sources + --base-url mapping coverage + `just check`
 
 ### Step 5: The `config` command group (feature)
 - [ ] 1. RED: command tests (show lists values + sources, json stable; get prints value, unknown key non-zero; set writes keeping comments, idempotent; set rejects invalid without writing; schema json one object per field)

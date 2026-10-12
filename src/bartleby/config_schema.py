@@ -21,9 +21,13 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from bartleby import config
 from bartleby.theme_loader import THEME_FEATURES
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _FEED_FORMATS: tuple[str, ...] = ("rss", "atom")
 _COLOR_MODES: tuple[str, ...] = ("light", "dark")
@@ -483,3 +487,30 @@ def schema_field(path: str) -> ConfigField:
         if entry.path == path:
             return entry
     raise KeyError(path)
+
+
+def resolve_with_sources(
+    config_path: Path, overrides: list[str] | None = None
+) -> dict[str, tuple[Any, str]]:
+    """Resolve every config value together with where it came from.
+
+    This lives beside :data:`CONFIG_SCHEMA`, which already imports :mod:`bartleby.config`,
+    so the dependency stays one-directional. File and ``--set`` tags come from
+    :func:`bartleby.config.source_tags`; a key neither supplied is filled from the
+    schema and tagged :data:`bartleby.config.SOURCE_DEFAULT`. Keys under a user-chosen
+    name (``content_types.<name>...``) get no default entry.
+
+    :param config_path: Path to the ``bartleby.yml`` file.
+    :param overrides: ``key.path=value`` strings, as for :func:`bartleby.config.load_config`.
+    :returns: Dotted path to ``(value, source)``, sorted by path.
+    :raises FileNotFoundError: If ``config_path`` does not exist.
+    :raises ConfigError: If the file or an override fails validation.
+    """
+    resolved = config.source_tags(config_path, overrides)
+
+    for entry in CONFIG_SCHEMA:
+        if entry.repeatable:
+            continue
+        if not any(config.same_branch(path, entry.path) for path in resolved):
+            resolved[entry.path] = (entry.default, config.SOURCE_DEFAULT)
+    return dict(sorted(resolved.items()))

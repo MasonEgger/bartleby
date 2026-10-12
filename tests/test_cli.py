@@ -1589,3 +1589,50 @@ def test_serve_passes_set_overrides_to_devserver(
     assert isinstance(kwargs, dict)
     assert kwargs["port"] == 9123
     assert kwargs["overrides"] == ["dev_server.port=9123"]
+
+
+def test_build_base_url_renders_canonical_urls_against_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``build --base-url`` makes the canonical link absolute against that base."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["build", "--base-url", "https://x.test"])
+    html = (tmp_path / "mysite" / "site" / "index.html").read_text(encoding="utf-8")
+    assert 'rel="canonical" href="https://x.test/' in html
+
+
+def test_validate_accepts_base_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``validate --base-url`` is accepted and the override reaches the validator."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["validate", "--base-url", "https://x.test"])
+
+
+def test_serve_passes_base_url_as_a_site_url_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``serve --base-url`` is accepted and reaches the DevServer as a ``site.url`` override."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    captured: dict[str, object] = {}
+
+    class FakeDevServer:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            captured["kwargs"] = kwargs
+
+        def run(self) -> None:
+            captured["ran"] = True
+
+    monkeypatch.setattr("bartleby.server.DevServer", FakeDevServer)
+    main(["serve", "--base-url", "https://x.test"])
+    kwargs = captured["kwargs"]
+    assert isinstance(kwargs, dict)
+    assert kwargs["overrides"] == ['site.url="https://x.test"']
+
+
+def test_base_url_wins_over_a_set_of_site_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--base-url`` is applied after ``--set``, so it wins on ``site.url``."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["build", "--set", "site.url=https://set.test", "--base-url", "https://x.test"])
+    html = (tmp_path / "mysite" / "site" / "index.html").read_text(encoding="utf-8")
+    assert 'rel="canonical" href="https://x.test/' in html

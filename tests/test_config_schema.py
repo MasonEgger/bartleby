@@ -1,18 +1,18 @@
 # ABOUTME: Tests for the config schema object and its drift against config.py.
-# Pins field shape, allowed values, dataclass defaults, and top-level key coverage.
+# Pins field shape, allowed values, dataclass defaults, top-level key coverage, and provenance.
 
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
 
 from bartleby import config, theme_loader
-from bartleby.config_schema import CONFIG_SCHEMA, ConfigField, schema_field
+from bartleby.config import OVERRIDE_SOURCE, ConfigError, load_config
+from bartleby.config_schema import CONFIG_SCHEMA, ConfigField, resolve_with_sources, schema_field
 
-if TYPE_CHECKING:
-    from pathlib import Path
+FIXTURES = Path(__file__).parent / "fixtures" / "configs"
 
 # Schema path -> (dataclass, attribute) for every field that has a dataclass default.
 DATACLASS_DEFAULTS: dict[str, tuple[type, str]] = {
@@ -178,3 +178,59 @@ class TestDrift:
         monkeypatch.setattr(config, "_TOP_LEVEL_KEYS", (*config._TOP_LEVEL_KEYS, "fake_key"))
         covered = {entry.path.split(".")[0] for entry in CONFIG_SCHEMA}
         assert set(config._TOP_LEVEL_KEYS) - covered == {"fake_key"}
+
+
+def test_resolve_with_sources_tags_default_file_and_set() -> None:
+    """An absent key reads default, a file key reads file, an override reads ``--set``."""
+    resolved = resolve_with_sources(FIXTURES / "minimal.yml", overrides=["dev_server.port=9100"])
+    assert resolved["dev_server.host"] == ("127.0.0.1", "default")
+    assert resolved["site.title"] == ("Test Site", "file")
+    assert resolved["dev_server.port"] == (9100, OVERRIDE_SOURCE)
+
+
+def test_resolve_with_sources_default_for_a_mapping_absent_from_the_file() -> None:
+    """A whole mapping the file omits resolves every child as a default."""
+    resolved = resolve_with_sources(FIXTURES / "minimal.yml")
+    assert resolved["dev_server.host"] == ("127.0.0.1", "default")
+    assert resolved["site.feed.limit"] == (50, "default")
+
+
+def test_resolve_with_sources_override_wins_over_file_key() -> None:
+    """A key present in the file and in ``--set`` reads ``--set`` with the override value."""
+    resolved = resolve_with_sources(FIXTURES / "minimal.yml", overrides=["site.title=Over"])
+    assert resolved["site.title"] == ("Over", OVERRIDE_SOURCE)
+    assert resolved["site.url"] == ("https://example.com", "file")
+
+
+def test_resolve_with_sources_base_url_override_reads_set() -> None:
+    """``--base-url`` reaches the config as a ``site.url`` override tagged ``--set``."""
+    resolved = resolve_with_sources(
+        FIXTURES / "minimal.yml", overrides=['site.url="https://x.test"']
+    )
+    assert resolved["site.url"] == ("https://x.test", OVERRIDE_SOURCE)
+
+
+def test_resolve_with_sources_reports_file_children_not_their_parent_mapping() -> None:
+    """A schema mapping with children in the file is not also reported as a default."""
+    resolved = resolve_with_sources(FIXTURES / "full.yml")
+    assert resolved["site.feed.limit"] == (25, "file")
+    assert "site.feed" not in resolved
+    assert resolved["ai.agent_surface"] == (True, "default")
+
+
+def test_resolve_with_sources_agrees_with_load_config() -> None:
+    """Final values match :func:`load_config` for one file key, one default, one ``--set``."""
+    overrides = ["site.title=Over"]
+    config = load_config(FIXTURES / "minimal.yml", overrides=overrides)
+    resolved = resolve_with_sources(FIXTURES / "minimal.yml", overrides=overrides)
+    assert resolved["site.title"] == (config.site.title, OVERRIDE_SOURCE)
+    assert resolved["site.url"] == (config.site.url, "file")
+    assert resolved["dev_server.port"] == (config.dev_server.port, "default")
+    assert resolved["theme.name"] == (config.theme.name, "default")
+
+
+def test_resolve_with_sources_validates_like_load_config() -> None:
+    """A rejected override raises the same ``--set``-labeled error."""
+    with pytest.raises(ConfigError) as exc_info:
+        resolve_with_sources(FIXTURES / "minimal.yml", overrides=["dev_server.port=notaport"])
+    assert str(exc_info.value).startswith("--set: dev_server.port")

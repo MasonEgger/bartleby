@@ -25,6 +25,7 @@ from bartleby.errors import format_error
 from bartleby.theme_loader import DEFAULT_THEME_NAME, THEME_FEATURES
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
 
 
@@ -371,6 +372,58 @@ def apply_overrides(raw: dict[str, Any], sets: list[str]) -> dict[str, Any]:
     return raw
 
 
+SOURCE_DEFAULT = "default"
+"""The provenance label for a value no file key or override supplied; set by ``config_schema``."""
+
+SOURCE_FILE = "file"
+"""The provenance label for a value read from ``bartleby.yml``."""
+
+
+def _flatten(node: Any, prefix: str) -> Iterator[tuple[str, Any]]:
+    """Yield ``(dotted path, value)`` for each leaf of a raw config mapping.
+
+    A leaf is any non-mapping value (lists included) or an empty mapping.
+    """
+    if isinstance(node, dict) and node:
+        for key, child in node.items():
+            yield from _flatten(child, f"{prefix}.{key}" if prefix else str(key))
+    else:
+        yield prefix, node
+
+
+def source_tags(
+    config_path: Path, overrides: list[str] | None = None
+) -> dict[str, tuple[Any, str]]:
+    """Tag each key the file or an override supplies with where it came from.
+
+    :data:`SOURCE_FILE` marks a key written in ``bartleby.yml``. :data:`OVERRIDE_SOURCE`
+    (``--set``) marks a key given by an override, which wins over the file;
+    ``--base-url`` is a ``site.url=<url>`` override, so it reads ``--set`` too. Keys
+    neither supplied are absent; ``bartleby.config_schema.resolve_with_sources`` adds
+    them as :data:`SOURCE_DEFAULT`.
+
+    Provenance is tagged from the same merged mapping :func:`load_config` validates, so
+    the two cannot disagree about a final value. Values are the raw YAML values, before
+    the validator normalizes them.
+
+    :param config_path: Path to the ``bartleby.yml`` file.
+    :param overrides: ``key.path=value`` strings, as for :func:`load_config`.
+    :returns: Dotted leaf path to ``(value, source)``, in file order.
+    :raises FileNotFoundError: If ``config_path`` does not exist.
+    :raises ConfigError: If the file or an override fails validation.
+    """
+    sets = overrides or []
+    load_config(config_path, sets)
+    merged = apply_overrides(_read_raw_config(config_path), sets)
+    override_paths = [token.partition("=")[0] for token in sets]
+
+    tagged: dict[str, tuple[Any, str]] = {}
+    for path, value in _flatten(merged, ""):
+        overridden = any(same_branch(path, override_path) for override_path in override_paths)
+        tagged[path] = (value, OVERRIDE_SOURCE if overridden else SOURCE_FILE)
+    return tagged
+
+
 def load_config(config_path: Path, overrides: list[str] | None = None) -> BartlebyConfig:
     """Load and validate a ``bartleby.yml`` configuration file.
 
@@ -393,21 +446,21 @@ def load_config(config_path: Path, overrides: list[str] | None = None) -> Bartle
             overridden = (token.partition("=")[0] for token in overrides or [])
             exc.source = (
                 OVERRIDE_SOURCE
-                if any(_same_branch(exc.key_path, path) for path in overridden)
+                if any(same_branch(exc.key_path, path) for path in overridden)
                 else config_path
             )
         raise
 
 
-def _same_branch(key_path: str | None, override_path: str) -> bool:
+def same_branch(key_path: str | None, override_path: str) -> bool:
     """Whether ``key_path`` equals ``override_path`` or sits under it."""
     if not key_path:
         return False
     return key_path == override_path or key_path.startswith(f"{override_path}.")
 
 
-def _load_config_text(config_path: Path, overrides: list[str]) -> BartlebyConfig:
-    """Parse and validate the file at ``config_path``; the caller attaches the source."""
+def _read_raw_config(config_path: Path) -> dict[str, Any]:
+    """Read ``config_path`` as a YAML mapping; the caller attaches the source."""
     raw_text = config_path.read_text(encoding="utf-8")
     try:
         parsed: Any = yaml.safe_load(raw_text)
@@ -427,7 +480,12 @@ def _load_config_text(config_path: Path, overrides: list[str]) -> BartlebyConfig
             "config root must be a YAML mapping",
             hint="start with top-level keys such as `site:`, one per line",
         )
+    return parsed
 
+
+def _load_config_text(config_path: Path, overrides: list[str]) -> BartlebyConfig:
+    """Parse and validate the file at ``config_path``; the caller attaches the source."""
+    parsed = _read_raw_config(config_path)
     apply_overrides(parsed, overrides)
     _reject_unknown_top_level_keys(parsed)
     config = _parse_config(parsed, config_path.parent)

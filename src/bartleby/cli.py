@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime
+import json
 import logging
 import os
 import sys
@@ -274,6 +275,27 @@ def _add_set_flag(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_base_url_flag(parser: argparse.ArgumentParser) -> None:
+    """Add ``--base-url``, a one-run override of ``site.url``, to ``parser``."""
+    parser.add_argument(
+        "--base-url",
+        default=None,
+        metavar="URL",
+        help="Override site.url for this run (canonical and absolute URLs use it)",
+    )
+
+
+def _config_overrides(args: argparse.Namespace) -> list[str]:
+    """Return the ``--set`` overrides plus ``--base-url`` as a ``site.url`` override.
+
+    ``--base-url`` is appended last, so it wins over a ``--set site.url=...``.
+    """
+    overrides: list[str] = list(args.set)
+    if args.base_url is not None:
+        overrides.append(f"site.url={json.dumps(args.base_url)}")
+    return overrides
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """Construct the argparse tree for every ``bartleby`` subcommand."""
     flags = _global_flags()
@@ -307,12 +329,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Report what would change without writing to disk",
     )
     _add_set_flag(build_parser)
+    _add_base_url_flag(build_parser)
     build_parser.set_defaults(_handler=_cmd_build)
 
     validate_parser = subparsers.add_parser(
         "validate", help="Validate config + metadata", parents=[flags]
     )
     _add_set_flag(validate_parser)
+    _add_base_url_flag(validate_parser)
     validate_parser.set_defaults(_handler=_cmd_validate)
 
     serve_parser = subparsers.add_parser(
@@ -328,6 +352,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Emit structured JSON events (one object per line) for changes and rebuilds",
     )
     _add_set_flag(serve_parser)
+    _add_base_url_flag(serve_parser)
     serve_parser.set_defaults(_handler=_cmd_serve)
 
     schema_parser = subparsers.add_parser(
@@ -546,7 +571,7 @@ def _cmd_build(args: argparse.Namespace) -> BuildOutput | DryRunOutput:
             config_path,
             include_drafts=args.include_drafts,
             strict=args.strict,
-            overrides=args.set,
+            overrides=_config_overrides(args),
         )
         return DryRunOutput(
             added=diff.added,
@@ -559,7 +584,7 @@ def _cmd_build(args: argparse.Namespace) -> BuildOutput | DryRunOutput:
             config_path,
             include_drafts=args.include_drafts,
             strict=args.strict,
-            overrides=args.set,
+            overrides=_config_overrides(args),
         )
     )
     if result.config.ai.skills.regenerate_on_build:
@@ -581,7 +606,7 @@ def _cmd_validate(args: argparse.Namespace) -> ValidateOutput:
     """
     config_path = _resolve_config_path(args)
     project_dir = config_path.parent
-    config = load_config(config_path, args.set)
+    config = load_config(config_path, _config_overrides(args))
     content_dir = project_dir / "content"
     authors = load_authors(config.config_dir / config.authors_file)
     pages, _assets = discover_content(config, content_dir)
@@ -984,7 +1009,13 @@ def _cmd_serve(args: argparse.Namespace) -> None:
     config_path = _resolve_config_path(args)
     from bartleby.server import DevServer
 
-    config = load_config(config_path, args.set)
+    config = load_config(config_path, _config_overrides(args))
     host = args.host or config.dev_server.host
     port = args.port if args.port is not None else config.dev_server.port
-    DevServer(config_path, host=host, port=port, events=args.events, overrides=args.set).run()
+    DevServer(
+        config_path,
+        host=host,
+        port=port,
+        events=args.events,
+        overrides=_config_overrides(args),
+    ).run()

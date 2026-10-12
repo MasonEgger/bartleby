@@ -1516,3 +1516,76 @@ def test_serve_dirty_flag_is_gone(
         main(["serve", "--dirty"])
     assert exc.value.code == 2
     assert "--dirty" in capsys.readouterr().err
+
+
+def test_build_set_overrides_the_site_title(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``build --set site.title=...`` renders the overridden title."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["build", "--set", "site.title=Overridden Title Zed"])
+    html = (tmp_path / "mysite" / "site" / "index.html").read_text(encoding="utf-8")
+    assert "Overridden Title Zed" in html
+
+
+def test_build_set_is_repeatable_and_last_wins(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Repeated ``--set`` flags accumulate and a repeated key keeps the last value."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["build", "--set", "site.title=Stale Name", "--set", "site.title=Second Title"])
+    html = (tmp_path / "mysite" / "site" / "index.html").read_text(encoding="utf-8")
+    assert "Second Title" in html
+    assert "Stale Name" not in html
+
+
+def test_build_set_without_equals_exits_nonzero_naming_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A ``--set`` token with no ``=`` fails with a ``--set``-labeled message."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    with pytest.raises(SystemExit) as exc:
+        main(["build", "--set", "site.title"])
+    assert exc.value.code != 0
+    err = capsys.readouterr().err
+    assert "--set" in err
+    assert "site.title" in err
+
+
+def test_validate_set_failure_is_labeled_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``validate --set`` runs the override through the validator and labels the failure."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    with pytest.raises(SystemExit) as exc:
+        main(["validate", "--set", "dev_server.port=notaport"])
+    assert exc.value.code != 0
+    assert "--set: dev_server.port" in capsys.readouterr().err
+
+
+def test_validate_accepts_valid_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``validate --set`` with a legal override passes."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["validate", "--set", "dev_server.port=9100"])
+
+
+def test_serve_passes_set_overrides_to_devserver(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``serve --set`` applies to the host/port lookup and reaches the DevServer."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    captured: dict[str, object] = {}
+
+    class FakeDevServer:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            captured["kwargs"] = kwargs
+
+        def run(self) -> None:
+            captured["ran"] = True
+
+    monkeypatch.setattr("bartleby.server.DevServer", FakeDevServer)
+    main(["serve", "--set", "dev_server.port=9123"])
+    kwargs = captured["kwargs"]
+    assert isinstance(kwargs, dict)
+    assert kwargs["port"] == 9123
+    assert kwargs["overrides"] == ["dev_server.port=9123"]

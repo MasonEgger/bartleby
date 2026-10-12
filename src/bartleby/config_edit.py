@@ -12,8 +12,8 @@ Two entry points:
 Both go through one :class:`ruamel.yaml.YAML` round-trip instance, so comments, key
 order, and indentation in a file a person wrote survive an edit. This module is the
 one writer shared by ``config set``, ``enable``, and ``--full-config``; nothing else
-serializes ``bartleby.yml``. :func:`split_path` and :func:`ensure_parent_mapping` are the
-shared dotted-path walk that ``config get`` and the override layer reuse.
+serializes ``bartleby.yml``. The dotted-path walk (``split_path`` and ``existing_prefix``)
+lives in :mod:`bartleby.config`, shared with the ``--set`` override layer.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.tokens import CommentToken
 
-from bartleby.config import ConfigError
+from bartleby.config import ConfigError, existing_prefix, split_path
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -62,45 +62,6 @@ _YAML.indent(mapping=2, sequence=4, offset=2)
 _YAML.width = 4096
 
 
-def split_path(dotted_path: str) -> list[str]:
-    """Split a dotted key path into its segments.
-
-    :param dotted_path: A path such as ``site.feed.limit``.
-    :returns: The segments, in order.
-    :raises ConfigError: If the path is empty or has an empty segment.
-    """
-    segments = dotted_path.split(".")
-    if not all(segments):
-        raise ConfigError(
-            f"invalid key path {dotted_path!r}",
-            key_path=dotted_path,
-            hint="use dotted names such as site.title",
-        )
-    return segments
-
-
-def _existing_prefix(root: CommentedMap, segments: list[str]) -> tuple[CommentedMap, int]:
-    """Walk the parent segments that already hold mappings.
-
-    :returns: The deepest existing mapping and how many parent segments lead to it.
-    :raises ConfigError: If a parent key holds something other than a mapping or null.
-    """
-    node = root
-    for depth, segment in enumerate(segments[:-1], start=1):
-        child = node.get(segment)
-        if child is None:
-            return node, depth - 1
-        if not isinstance(child, CommentedMap):
-            walked = ".".join(segments[:depth])
-            raise ConfigError(
-                f"{walked} is not a mapping, so it cannot hold {segments[depth]!r}",
-                key_path=walked,
-                hint=f"replace the value of {walked} with a mapping first",
-            )
-        node = child
-    return node, len(segments) - 1
-
-
 def ensure_parent_mapping(root: CommentedMap, segments: list[str]) -> CommentedMap:
     """Walk to the mapping that holds the last segment, building missing ones.
 
@@ -109,7 +70,7 @@ def ensure_parent_mapping(root: CommentedMap, segments: list[str]) -> CommentedM
     :returns: The mapping that holds ``segments[-1]``.
     :raises ConfigError: If an intermediate key holds something other than a mapping.
     """
-    node, depth = _existing_prefix(root, segments)
+    node, depth = existing_prefix(root, segments)
     for segment in segments[depth:-1]:
         child = CommentedMap()
         node[segment] = child
@@ -201,7 +162,7 @@ def set_key(text: str, dotted_path: str, value: object) -> str:
         )
 
     # Missing parents become one nested value so the new branch is added in a single step.
-    holder, depth = _existing_prefix(root, segments)
+    holder, depth = existing_prefix(root, segments)
     key = segments[depth]
     for segment in reversed(segments[depth + 1 :]):
         value = CommentedMap({segment: value})

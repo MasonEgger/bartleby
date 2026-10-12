@@ -210,6 +210,7 @@ def build(
     strict: bool = False,
     dry_run: bool = False,
     theme: ResolvedTheme | None = None,
+    overrides: list[str] | None = None,
 ) -> BuildResult | DryRunResult:
     """Run the full Bartleby build pipeline against ``config_path``.
 
@@ -224,6 +225,8 @@ def build(
         is written to disk and the previous ``site/`` is left untouched.
     :param theme: The resolved theme chain to render with. Defaults to the
         default theme until config selects one.
+    :param overrides: ``key.path=value`` config overrides from ``--set``; see
+        :func:`bartleby.config.load_config`.
     :returns: A :class:`BuildResult` for a normal build, or a
         :class:`DryRunResult` when ``dry_run`` is set.
     :raises BuildError: When metadata validation fails, or when ``strict``
@@ -235,7 +238,7 @@ def build(
     """
     started = time.perf_counter()
 
-    state = _load_inputs(config_path, theme)
+    state = _load_inputs(config_path, theme, overrides=overrides)
     _LOGGER.debug("loaded %s with theme %r", config_path, state.theme.chain[0].name)
     try:
         with _pair_failure_hooks(state.plugins):
@@ -295,7 +298,11 @@ def render_content(config_path: Path) -> RenderedContent:
 
 
 def _load_inputs(
-    config_path: Path, theme: ResolvedTheme | None, *, command: str = "build"
+    config_path: Path,
+    theme: ResolvedTheme | None,
+    *,
+    command: str = "build",
+    overrides: list[str] | None = None,
 ) -> _BuildState:
     """Phase 1: load config, discover plugins/hooks, and read authors + content.
 
@@ -304,7 +311,7 @@ def _load_inputs(
     config, plugin collection, authors, and the discovered pages/assets.
     """
     plugins = PluginCollection()
-    config = load_config(config_path)
+    config = load_config(config_path, overrides)
     project_dir = config.config_dir
     # Registration order at equal priority: internal handlers (already on
     # `plugins`), then installed plugins (alphabetical), then project hooks last.
@@ -813,7 +820,11 @@ def _template_sources(project_dir: Path, theme: ResolvedTheme) -> list[str]:
 
 
 async def async_build(
-    config_path: Path, *, include_drafts: bool = False, strict: bool = False
+    config_path: Path,
+    *,
+    include_drafts: bool = False,
+    strict: bool = False,
+    overrides: list[str] | None = None,
 ) -> BuildResult:
     """Async wrapper around :func:`build` for use with ``asyncio.run``.
 
@@ -827,7 +838,7 @@ async def async_build(
     import asyncio
 
     result = await asyncio.to_thread(
-        build, config_path, include_drafts=include_drafts, strict=strict
+        build, config_path, include_drafts=include_drafts, strict=strict, overrides=overrides
     )
     # async_build never requests a dry run, so the result is always a BuildResult.
     assert isinstance(result, BuildResult)
@@ -863,7 +874,11 @@ def calculate_readtime(text: str) -> int:
 
 
 def build_dry_run(
-    config_path: Path, *, include_drafts: bool = False, strict: bool = False
+    config_path: Path,
+    *,
+    include_drafts: bool = False,
+    strict: bool = False,
+    overrides: list[str] | None = None,
 ) -> DryRunResult:
     """Run the build pipeline in dry-run mode and return what would change.
 
@@ -873,9 +888,16 @@ def build_dry_run(
     :param config_path: Path to ``bartleby.yml``.
     :param include_drafts: Forwarded to :func:`build`.
     :param strict: Forwarded to :func:`build`.
+    :param overrides: Forwarded to :func:`build`.
     :returns: The :class:`DryRunResult` describing added/modified/unchanged/deleted output.
     """
-    result = build(config_path, include_drafts=include_drafts, strict=strict, dry_run=True)
+    result = build(
+        config_path,
+        include_drafts=include_drafts,
+        strict=strict,
+        dry_run=True,
+        overrides=overrides,
+    )
     assert isinstance(result, DryRunResult)
     return result
 

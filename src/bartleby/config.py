@@ -68,7 +68,8 @@ class ConfigError(Exception):
     :ivar key_path: The dotted key path identifying the offending field,
         or ``None`` when the problem is not tied to a specific field.
     :ivar hint: A concrete fix, or ``None`` when there is nothing more to say.
-    :ivar source: The config file the error came from, once known.
+    :ivar source: The config file, or ``--set`` for a command-line override, the error
+        came from, once known.
     """
 
     def __init__(
@@ -77,7 +78,7 @@ class ConfigError(Exception):
         key_path: str | None = None,
         *,
         hint: str | None = None,
-        source: Path | None = None,
+        source: Path | str | None = None,
     ) -> None:
         super().__init__(message)
         self.message = message
@@ -276,10 +277,108 @@ class BartlebyConfig:
     disabled_plugins: set[str] = field(default_factory=set)
 
 
-def load_config(config_path: Path) -> BartlebyConfig:
+OVERRIDE_SOURCE = "--set"
+"""The error source label for a value that came from a ``--set`` override."""
+
+
+def split_path(dotted_path: str) -> list[str]:
+    """Split a dotted key path into its segments.
+
+    :param dotted_path: A path such as ``site.feed.limit``.
+    :returns: The segments, in order.
+    :raises ConfigError: If the path is empty or has an empty segment.
+    """
+    segments = dotted_path.split(".")
+    if not all(segments):
+        raise ConfigError(
+            f"invalid key path {dotted_path!r}",
+            key_path=dotted_path,
+            hint="use dotted names such as site.title",
+        )
+    return segments
+
+
+def existing_prefix[Mapping: dict[str, Any]](
+    root: Mapping, segments: list[str]
+) -> tuple[Mapping, int]:
+    """Walk the parent segments of a dotted path that already hold mappings.
+
+    Shared by ``--set`` overrides (plain dicts) and the comment-preserving writer
+    (ruamel maps): the children are expected to be the same mapping type as ``root``.
+
+    :param root: The top-level mapping.
+    :param segments: A path from :func:`split_path`.
+    :returns: The deepest existing mapping and how many parent segments lead to it.
+    :raises ConfigError: If a parent key holds something other than a mapping or null.
+    """
+    node = root
+    for depth, segment in enumerate(segments[:-1], start=1):
+        child = node.get(segment)
+        if child is None:
+            return node, depth - 1
+        if not isinstance(child, type(root)):
+            walked = ".".join(segments[:depth])
+            raise ConfigError(
+                f"{walked} is not a mapping, so it cannot hold {segments[depth]!r}",
+                key_path=walked,
+                hint=f"replace the value of {walked} with a mapping first",
+            )
+        node = child
+    return node, len(segments) - 1
+
+
+def apply_overrides(raw: dict[str, Any], sets: list[str]) -> dict[str, Any]:
+    """Apply ``key.path=value`` overrides to a raw config mapping, in order.
+
+    Each value is parsed as YAML, so ``42`` is an int, ``true`` a bool, ``[a, b]`` a
+    list, and an empty value null. A dotted path creates the mappings it passes
+    through, and a key set twice keeps the last value. The result still goes through
+    the normal validator; :func:`load_config` labels any error it raises for an
+    overridden key with ``--set`` as its source.
+
+    :param raw: The parsed config mapping; mutated in place.
+    :param sets: Overrides written ``key.path=value``.
+    :returns: ``raw``.
+    :raises ConfigError: If an override has no ``=``, a malformed path or YAML value,
+        or passes through a key that holds a non-mapping.
+    """
+    for token in sets:
+        dotted_path, separator, text = token.partition("=")
+        if not separator:
+            raise ConfigError(
+                f"override {token!r} has no '='",
+                hint="write --set key.path=value, such as --set site.title=Hello",
+                source=OVERRIDE_SOURCE,
+            )
+        try:
+            value: Any = yaml.safe_load(text)
+        except yaml.YAMLError as exc:
+            raise ConfigError(
+                f"value {text!r} is not valid YAML{_yaml_location(exc)}",
+                key_path=dotted_path,
+                hint="quote the value, such as --set site.title='\"Hello: World\"'",
+                source=OVERRIDE_SOURCE,
+            ) from exc
+        try:
+            segments = split_path(dotted_path)
+            holder, depth = existing_prefix(raw, segments)
+        except ConfigError as exc:
+            exc.source = OVERRIDE_SOURCE
+            raise
+        for segment in reversed(segments[depth + 1 :]):
+            value = {segment: value}
+        holder[segments[depth]] = value
+    return raw
+
+
+def load_config(config_path: Path, overrides: list[str] | None = None) -> BartlebyConfig:
     """Load and validate a ``bartleby.yml`` configuration file.
 
     :param config_path: Path to the ``bartleby.yml`` file.
+    :param overrides: ``key.path=value`` strings from ``--set``, applied by
+        :func:`apply_overrides` to the parsed file before validation, so they face the
+        same rules as file values. A validation error on an overridden key (or on a
+        key beneath it) names ``--set`` as its source instead of the file.
     :returns: A fully parsed and validated :class:`BartlebyConfig`.
     :raises FileNotFoundError: If ``config_path`` does not exist.
     :raises ConfigError: If the file is empty, malformed, or fails validation.
@@ -288,13 +387,26 @@ def load_config(config_path: Path) -> BartlebyConfig:
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
     try:
-        return _load_config_text(config_path)
+        return _load_config_text(config_path, overrides or [])
     except ConfigError as exc:
-        exc.source = config_path
+        if exc.source is None:
+            overridden = (token.partition("=")[0] for token in overrides or [])
+            exc.source = (
+                OVERRIDE_SOURCE
+                if any(_same_branch(exc.key_path, path) for path in overridden)
+                else config_path
+            )
         raise
 
 
-def _load_config_text(config_path: Path) -> BartlebyConfig:
+def _same_branch(key_path: str | None, override_path: str) -> bool:
+    """Whether ``key_path`` equals ``override_path`` or sits under it."""
+    if not key_path:
+        return False
+    return key_path == override_path or key_path.startswith(f"{override_path}.")
+
+
+def _load_config_text(config_path: Path, overrides: list[str]) -> BartlebyConfig:
     """Parse and validate the file at ``config_path``; the caller attaches the source."""
     raw_text = config_path.read_text(encoding="utf-8")
     try:
@@ -316,6 +428,7 @@ def _load_config_text(config_path: Path) -> BartlebyConfig:
             hint="start with top-level keys such as `site:`, one per line",
         )
 
+    apply_overrides(parsed, overrides)
     _reject_unknown_top_level_keys(parsed)
     config = _parse_config(parsed, config_path.parent)
     _validate_config(config)
@@ -424,7 +537,7 @@ def _parse_site(raw: Any) -> SiteConfig:
             hint="add `site:` with `title:` and `url:` lines under it",
         )
     for required in ("title", "url"):
-        if required not in raw:
+        if raw.get(required) is None:
             raise ConfigError(
                 "required field is missing",
                 key_path=f"site.{required}",
@@ -762,10 +875,13 @@ def _parse_dev_server(raw: Any) -> DevServerConfig:
         return DevServerConfig()
     if not isinstance(raw, dict):
         raise _expected("dev_server", "mapping", "`dev_server:` followed by `host:` and `port:`")
-    return DevServerConfig(
-        host=str(raw.get("host", "127.0.0.1")),
-        port=int(raw.get("port", 8000)),
-    )
+    try:
+        port = int(raw.get("port", 8000))
+    except (TypeError, ValueError) as exc:
+        raise ConfigError(
+            "must be an integer", key_path="dev_server.port", hint="write `port: 8000`"
+        ) from exc
+    return DevServerConfig(host=str(raw.get("host", "127.0.0.1")), port=port)
 
 
 def _validate_config(config: BartlebyConfig) -> None:

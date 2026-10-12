@@ -2,10 +2,11 @@
 # Covers schema parsing, defaults, validation errors, and edge cases.
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from bartleby.config import BartlebyConfig, ConfigError, load_config
+from bartleby.config import BartlebyConfig, ConfigError, apply_overrides, load_config
 from bartleby.theme_loader import DEFAULT_THEME_NAME
 
 FIXTURES = Path(__file__).parent / "fixtures" / "configs"
@@ -609,3 +610,106 @@ def test_color_mode_default_left_blank_means_no_preference(tmp_path: Path) -> No
     config = load_config(_write_config(tmp_path, body))
 
     assert config.theme.color_mode == {}
+
+
+def test_apply_overrides_parses_values_as_yaml() -> None:
+    """Each value is YAML-typed: text stays a string, digits become an int, and so on."""
+    raw: dict[str, Any] = {"site": {"title": "Old"}}
+    result = apply_overrides(
+        raw,
+        ["site.title=Hi", "dev_server.port=9000", "ai.llms_txt=false", "extra_css=[a.css, b.css]"],
+    )
+    assert result is raw
+    assert result["site"]["title"] == "Hi"
+    assert result["dev_server"]["port"] == 9000
+    assert result["ai"]["llms_txt"] is False
+    assert result["extra_css"] == ["a.css", "b.css"]
+
+
+def test_apply_overrides_creates_intermediate_mappings() -> None:
+    """A dotted path builds the mappings it passes through, and the last repeat wins."""
+    raw: dict[str, Any] = {}
+    apply_overrides(raw, ["ai.skills.style_guide=one.md", "ai.skills.style_guide=two.md"])
+    assert raw == {"ai": {"skills": {"style_guide": "two.md"}}}
+
+
+def test_apply_overrides_keeps_sibling_keys() -> None:
+    """Setting one key leaves the keys beside it alone."""
+    raw: dict[str, Any] = {"site": {"title": "T", "url": "https://x.test"}}
+    apply_overrides(raw, ["site.title=New"])
+    assert raw["site"] == {"title": "New", "url": "https://x.test"}
+
+
+def test_apply_overrides_missing_equals_names_set_and_token() -> None:
+    """A token with no ``=`` fails and the message names ``--set`` and the token."""
+    with pytest.raises(ConfigError) as exc_info:
+        apply_overrides({}, ["site.title"])
+    message = str(exc_info.value)
+    assert message.startswith("--set")
+    assert "site.title" in message
+    assert "key.path=value" in message
+
+
+def test_apply_overrides_rejects_non_mapping_parent() -> None:
+    """A path through a scalar fails instead of replacing the scalar."""
+    with pytest.raises(ConfigError, match="site.title is not a mapping"):
+        apply_overrides({"site": {"title": "T"}}, ["site.title.deep=1"])
+
+
+def test_load_config_applies_overrides_before_validation() -> None:
+    """Overrides land in the loaded config."""
+    config = load_config(
+        FIXTURES / "minimal.yml", overrides=["site.title=Over", "dev_server.port=9100"]
+    )
+    assert config.site.title == "Over"
+    assert config.dev_server.port == 9100
+
+
+def test_load_config_override_failure_is_labeled_set() -> None:
+    """An override the validator rejects reports ``--set`` as its source, not the file."""
+    with pytest.raises(ConfigError) as exc_info:
+        load_config(FIXTURES / "minimal.yml", overrides=["dev_server.port=notaport"])
+    message = str(exc_info.value)
+    assert message.startswith("--set: dev_server.port")
+    assert "minimal.yml" not in message
+
+
+def test_load_config_empty_override_value_is_labeled_set() -> None:
+    """``site.url=`` parses as null and the validator's complaint names ``--set``."""
+    with pytest.raises(ConfigError) as exc_info:
+        load_config(FIXTURES / "minimal.yml", overrides=["site.url="])
+    assert str(exc_info.value).startswith("--set: site.url")
+
+
+def test_load_config_file_failure_keeps_file_source_when_overrides_given() -> None:
+    """A bad file value unrelated to any override still names the file."""
+    with pytest.raises(ConfigError) as exc_info:
+        load_config(FIXTURES / "invalid_missing_url.yml", overrides=["site.title=Fine"])
+    assert "invalid_missing_url.yml" in str(exc_info.value)
+
+
+def test_quoted_port_string_still_loads_as_int(tmp_path: Path) -> None:
+    """A quoted port in the file keeps its pre-override int() coercion."""
+    config_path = tmp_path / "port.yml"
+    config_path.write_text(
+        'site:\n  title: Site\n  url: https://example.com\ndev_server:\n  port: "8000"\n',
+        encoding="utf-8",
+    )
+    assert load_config(config_path).dev_server.port == 8000
+
+
+def test_file_section_error_stays_file_sourced_when_override_is_beneath(
+    tmp_path: Path,
+) -> None:
+    """A file-only theme error is not relabeled ``--set`` by an override under it."""
+    config_path = tmp_path / "theme-clash.yml"
+    config_path.write_text(
+        "site:\n  title: Site\n  url: https://example.com\n"
+        "theme:\n  name: material\n  path: ./mine\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError) as exc_info:
+        load_config(config_path, overrides=["theme.color_mode.default=dark"])
+    message = str(exc_info.value)
+    assert "theme-clash.yml" in message
+    assert not message.startswith("--set")

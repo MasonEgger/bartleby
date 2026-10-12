@@ -310,8 +310,10 @@ class DevServer:
         host: str,
         port: int,
         events: bool = False,
+        overrides: list[str] | None = None,
     ) -> None:
         self.config_path = config_path
+        self.overrides = overrides
         self.host = host
         self.port = port
         self.events = events
@@ -323,7 +325,7 @@ class DevServer:
 
     def build_once(self) -> None:
         """Run a full build with drafts included."""
-        build(self.config_path, include_drafts=True)
+        build(self.config_path, include_drafts=True, overrides=self.overrides)
 
     def rebuild(self) -> list[PageError]:
         """Run a full rebuild, retaining the last good output on failure.
@@ -338,7 +340,7 @@ class DevServer:
         :returns: The collected page errors, or an empty list on success.
         """
         try:
-            build(self.config_path, include_drafts=True)
+            build(self.config_path, include_drafts=True, overrides=self.overrides)
         except BuildError as exc:
             return list(exc.errors)
         except ValueError as exc:
@@ -376,7 +378,7 @@ class DevServer:
             )
             return "hint"
 
-        config = load_config(self.config_path)
+        config = load_config(self.config_path, self.overrides)
         theme = select_theme(config.theme, project_dir)
         compile_theme_css(project_dir, theme, config.theme.tokens, cache_dir=cache_dir)
         return "recompiled"
@@ -402,7 +404,7 @@ class DevServer:
             ``bartleby.yml`` is loaded fresh.
         """
         if config is None:
-            config = load_config(self.config_path)
+            config = load_config(self.config_path, self.overrides)
         plugins = PluginCollection()
         plugins.merge(discover_plugins(config.disabled_plugins))
         plugins.merge(discover_hooks(config.config_dir))
@@ -497,7 +499,7 @@ class DevServer:
             from another thread; in normal CLI use it is ``None``.
         """
         self.build_once()
-        config = load_config(self.config_path)
+        config = load_config(self.config_path, self.overrides)
         project_dir = self.config_path.parent
         site_dir = project_dir / config.output_dir
         reload_hub = _ReloadHub()

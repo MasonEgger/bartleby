@@ -27,14 +27,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 ## Section 2: CLI configuration surface
 
 ### Step 3: The `--set key.path=value` override layer (feature)
-- [ ] 1. RED: apply_overrides tests (string + int YAML-typed; missing `=` error names --set; validator failure labeled --set source; dotted path creates maps, last wins; load_config overrides apply then validate)
-- [ ] 2. Document: apply_overrides + load_config overrides param docstring
-- [ ] 3. GREEN: config.py apply_overrides + overrides param threaded through load_config
-- [ ] 4. RED: CLI integration (--set append on build/serve/validate; overridden build; bad --set non-zero)
-- [ ] 5. GREEN: wire --set into three subparsers
-- [ ] 6. REFACTOR: share dotted-path walk with config_edit.py
-- [ ] 7. Document: none here
-- [ ] 8. Verify: value typing + error labeling coverage + `just check`
+- [x] 1. RED: apply_overrides tests (string + int YAML-typed; missing `=` error names --set; validator failure labeled --set source; dotted path creates maps, last wins; load_config overrides apply then validate)
+- [x] 2. Document: apply_overrides + load_config overrides param docstring
+- [x] 3. GREEN: config.py apply_overrides + overrides param threaded through load_config
+- [x] 4. RED: CLI integration (--set append on build/serve/validate; overridden build; bad --set non-zero)
+- [x] 5. GREEN: wire --set into three subparsers
+- [x] 6. REFACTOR: share dotted-path walk with config_edit.py
+- [x] 7. Document: none here
+- [x] 8. Verify: value typing + error labeling coverage + `just check`
 
 ### Step 4: `--base-url` and resolved-config provenance (feature)
 - [ ] 1. RED: resolve_with_sources tests (default/file/set per key; --base-url maps to site.url override, provenance set); CLI --base-url renders canonical URLs, accepted on build/serve/validate

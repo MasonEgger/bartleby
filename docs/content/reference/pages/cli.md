@@ -57,13 +57,15 @@ Fails if the content type is not declared in `bartleby.yml`, or if the file alre
 Render the site.
 
 ```
-bartleby build [--include-drafts] [--strict] [--dry-run]
+bartleby build [--include-drafts] [--strict] [--dry-run] [--set KEY.PATH=VALUE]
 ```
 
 - `--include-drafts` includes pages with `draft: true`.
 - `--strict` fails the build on any unresolved cross-reference.
 - `--dry-run` renders into a temporary directory, compares the result with the existing `site/`, and reports what would change.
   It writes nothing.
+- `--set KEY.PATH=VALUE` overrides one config value for this run.
+  The value parses as YAML, and the flag repeats.
 
 Output goes to `site/` next to `bartleby.yml`, or to the directory named by `output_dir`.
 The new output replaces the old one only when the whole build succeeds.
@@ -75,10 +77,11 @@ A dry run prints `dry run: A added, M modified, U unchanged, D deleted`, followe
 Check the config and content without rendering the site.
 
 ```
-bartleby validate
+bartleby validate [--set KEY.PATH=VALUE]
 ```
 
 The command checks metadata against each content type's schema, author references, URL generation, `template:` overrides in front matter, and cross-references.
+`--set KEY.PATH=VALUE` validates the config with one value overridden.
 On success, it prints `validation passed (N files checked)`.
 On failure, it prints `validation failed`, then one line per error in the form `<file>:<line> [<code>] <field>: <message>`.
 
@@ -107,13 +110,14 @@ The command exits 1 only when it finds errors.
 Run the development server.
 
 ```
-bartleby serve [--host HOST] [--port PORT] [--events]
+bartleby serve [--host HOST] [--port PORT] [--events] [--set KEY.PATH=VALUE]
 ```
 
 - `--host` defaults to `dev_server.host` from the config, which defaults to `127.0.0.1`.
 - `--port` defaults to `dev_server.port`, which defaults to `8000`.
 - `--events` prints one JSON object per line on stdout for each change and rebuild.
   The `type` key is `change`, `rebuild`, or `error`.
+- `--set KEY.PATH=VALUE` overrides one config value for the whole session, rebuilds included.
 
 The server always includes drafts.
 Every change triggers a full rebuild, because Bartleby has no incremental build.

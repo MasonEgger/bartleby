@@ -5,14 +5,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 ## Section 1: The config schema and the annotated writer
 
 ### Step 1: The config schema object and its drift test (feature)
-- [ ] 1. RED: config_schema tests (flat ordered fields with path/type/default/choices/repeatable/description; every top-level key covered; closed sets carry real allowed values; defaults equal config.py dataclass defaults; schema_field lookup + KeyError)
-- [ ] 2. Document: config_schema.py module docstring (single source for full-config, config schema, reference docs)
-- [ ] 3. GREEN: config_schema.py with ConfigField + CONFIG_SCHEMA + schema_field, referencing config.py defaults and THEME_FEATURES
-- [ ] 4. RED: drift-direction test (new accepted top-level key with no schema entry fails; mutation-check it)
-- [ ] 5. GREEN: close gaps
-- [ ] 6. REFACTOR: per-section field helpers mirroring config.py grouping
-- [ ] 7. Document: none beyond docstring
-- [ ] 8. Verify: coverage of schema + both drift directions + `just check`
+- [x] 1. RED: config_schema tests (flat ordered fields with path/type/default/choices/repeatable/description; every top-level key covered; closed sets carry real allowed values; defaults equal config.py dataclass defaults; schema_field lookup + KeyError)
+- [x] 2. Document: config_schema.py module docstring (single source for full-config, config schema, reference docs)
+- [x] 3. GREEN: config_schema.py with ConfigField + CONFIG_SCHEMA + schema_field, referencing config.py defaults and THEME_FEATURES
+- [x] 4. RED: drift-direction test (new accepted top-level key with no schema entry fails; mutation-check it)
+- [x] 5. GREEN: close gaps
+- [x] 6. REFACTOR: per-section field helpers mirroring config.py grouping
+- [x] 7. Document: none beyond docstring
+- [x] 8. Verify: coverage of schema + both drift directions + `just check`
 
 ### Step 2: The comment-preserving YAML writer and the full-config renderer (feature)
 - [ ] 1. RED: config_edit tests (set_key keeps comment; creates intermediate maps; siblings untouched; render_full_config emits every field at default with description comment and re-parses; scalar types correct)

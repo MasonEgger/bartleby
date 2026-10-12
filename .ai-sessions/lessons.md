@@ -3,6 +3,7 @@
 ## Recent
 <!-- 10 most recent lessons, newest first -->
 
+- A schema that mirrors parsing code must take its defaults from the parser, not from literals in the test: pin each `ConfigField.default` against what `config.py` returns for an empty config. Copied literals pass while the code drifts, and the Step 1 validator found four list defaults that disagreed (2026-10-12)
 - In the commit sequence, run the /init check before /bpe:commit-message, not after the commit: the one-summary-per-commit hook turns a one-line CLAUDE.md fix found afterward into a second commit with its own summary file (2026-10-12)
 - Before drafting a plan step, grep for the machinery it assumes is missing: the Goal 8 draft nearly scoped a "build feeds" step until `feeds.py` showed per-type and aggregate feeds already shipped, so the step became wiring plus a carry-entries correctness test. Run the archive routine on whatever model is active and switch models only before the judgment-heavy drafting; the bpe profile check names the mismatch, and the staged archive survives the switch (2026-10-12)
 - Before writing a spec claim about a current default ("X is opt-in", "key Y exists"), grep the code and cite the file: the Goal 8 draft said markwright was opt-in, invented a feed key, and said skills regenerate by default, and a fresh-context reviewer caught all three. For a dependency bump, prove "no output change" by rendering every docs page in a venv with the old pins and diffing; markwright 0.3.0 with pymdown-extensions 12.2 differed only in quote entity escaping (2026-10-12)

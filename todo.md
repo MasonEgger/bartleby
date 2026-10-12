@@ -171,14 +171,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 5. Document: ACKNOWLEDGMENTS.md; link from README + docs
 
 ### Step 18: Correctness sweep for first-run claims (feature)
-- [ ] 1. RED: new site --blog feed carries sample post (RSS + Atom); feature tour HTML has output class for every claimed feature; highlighted code references highlight CSS (HTML + compiled theme CSS); docs feeds carry entries per enabled type
-- [ ] 2. Document: none beyond tests
-- [ ] 3. GREEN: fix any false claim (missing feed entry, unstyled highlight, non-rendering tour feature)
-- [ ] 4. RED: integration (scaffold + build: home links resolve, tour renders every feature, feeds carry entries)
-- [ ] 5. GREEN: wire minimally
-- [ ] 6. REFACTOR: reuse Step 8 feed-content assertions
-- [ ] 7. Document: none
-- [ ] 8. Verify: every first-run claim has a failing-if-broken test + `just check`
+- [x] 1. RED: new site --blog feed carries sample post (RSS + Atom); feature tour HTML has output class for every claimed feature; highlighted code references highlight CSS (HTML + compiled theme CSS); docs feeds carry entries per enabled type
+- [x] 2. Document: none beyond tests
+- [x] 3. GREEN: fix any false claim (missing feed entry, unstyled highlight, non-rendering tour feature)
+- [x] 4. RED: integration (scaffold + build: home links resolve, tour renders every feature, feeds carry entries)
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: reuse Step 8 feed-content assertions
+- [x] 7. Document: none
+- [x] 8. Verify: every first-run claim has a failing-if-broken test + `just check`
 
 ### Step 19: Final gate for Goal 8 (task)
 - [ ] 1. Scope: CHANGELOG (finalize Unreleased), README (first-run if drifted); no version bump

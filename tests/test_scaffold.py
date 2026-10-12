@@ -13,6 +13,7 @@ import pytest
 from bartleby.cli import main
 from bartleby.config import load_config
 from bartleby.theme_loader import select_theme
+from tests.feed_helpers import atom_entries, rss_entries
 
 # Every claim the tour makes, one hook per claim: a regex its built HTML must match. The
 # sections that show several claims (prompts, superscript, subscript) get one hook each.
@@ -70,6 +71,28 @@ BANNED_WORDS = (
     "|realm|holistic|transformative|showcase|fostering|boasts|bolstered|crucial|pivotal"
     "|landscape|meticulous|testament|underscore|intricate|interplay|enduring"
 )
+
+
+def _missing_tour_hooks(html: str) -> list[str]:
+    """The names of the TOUR_HOOKS the tour page's HTML fails to match."""
+    decoded = html_lib.unescape(html)
+    return [
+        name
+        for name, hook in TOUR_HOOKS.items()
+        if re.search(hook, decoded if name in UNESCAPED_HOOKS else html) is None
+    ]
+
+
+def _unresolved_links(site: Path, html: str) -> list[str]:
+    """Root-relative href and src values in ``html`` that name no file under ``site``."""
+    unresolved: list[str] = []
+    for target in re.findall(r'(?:href|src)="(/[^"#?]*)', html):
+        if target.startswith("//"):
+            continue
+        built = site / target.lstrip("/")
+        if not (built.is_file() or (built / "index.html").is_file()):
+            unresolved.append(target)
+    return unresolved
 
 
 @pytest.fixture
@@ -159,13 +182,7 @@ def test_tour_html_carries_the_output_of_every_feature_it_claims(scaffold: Path)
     """Each feature the tour shows renders to its own output hook, not as literal source."""
     main(["build"])
     html = (scaffold / "site" / "tour" / "index.html").read_text(encoding="utf-8")
-    decoded = html_lib.unescape(html)
-    missing = [
-        name
-        for name, hook in TOUR_HOOKS.items()
-        if re.search(hook, decoded if name in UNESCAPED_HOOKS else html) is None
-    ]
-    assert missing == []
+    assert _missing_tour_hooks(html) == []
 
 
 def test_tour_critic_source_prints_the_literal_markers_inside_a_pre(scaffold: Path) -> None:
@@ -277,8 +294,11 @@ def test_blog_flag_site_builds_with_the_post_in_listing_and_feeds(
     site = blog_scaffold / "site"
     assert "/blog/posts/welcome/" in (site / "blog" / "index.html").read_text(encoding="utf-8")
     assert (site / "blog" / "posts" / "welcome" / "index.html").is_file()
-    for feed in ("blog/feed.xml", "blog/atom.xml", "feed.xml", "atom.xml"):
-        assert "Welcome to Bartleby" in (site / feed).read_text(encoding="utf-8"), feed
+    welcome = [("Welcome to Bartleby", "https://example.com/blog/posts/welcome/")]
+    for feed in ("blog/feed.xml", "feed.xml"):
+        assert rss_entries((site / feed).read_text(encoding="utf-8")) == welcome, feed
+    for feed in ("blog/atom.xml", "atom.xml"):
+        assert atom_entries((site / feed).read_text(encoding="utf-8")) == welcome, feed
     tour = (site / "tour" / "index.html").read_text(encoding="utf-8")
     assert 'href="/blog/"' in tour
 
@@ -322,3 +342,18 @@ def test_new_post_fits_the_blog_the_flag_adds(blog_scaffold: Path) -> None:
     main(["new", "post", "Second Post", "--type", "blog"])
     assert (blog_scaffold / "content" / "blog" / "posts" / "second-post.md").is_file()
     main(["build"])
+
+
+def test_first_run_site_holds_every_claim_end_to_end(blog_scaffold: Path) -> None:
+    """Scaffold with a blog, build strictly, then check links, the tour, and the feeds."""
+    main(["build", "--strict"])
+    site = blog_scaffold / "site"
+    home = (site / "index.html").read_text(encoding="utf-8")
+    assert _unresolved_links(site, home) == []
+    tour = (site / "tour" / "index.html").read_text(encoding="utf-8")
+    assert _missing_tour_hooks(tour) == []
+    base = load_config(blog_scaffold / "bartleby.yml").site.url
+    assert base == "https://example.com"
+    welcome = [("Welcome to Bartleby", f"{base}/blog/posts/welcome/")]
+    assert rss_entries((site / "feed.xml").read_text(encoding="utf-8")) == welcome
+    assert atom_entries((site / "atom.xml").read_text(encoding="utf-8")) == welcome

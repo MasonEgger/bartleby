@@ -166,6 +166,26 @@ Incremental rebuilds are a non-goal, and the flag always ran a full rebuild.
 - Live reload works: the injected script connects to the reload channel's own port on the page's host, not the HTTP port.
 - One file edit triggers one rebuild. The watcher ignores open and close events, so the build reading its own sources no longer starts another build.
 - `bartleby serve` flushes its startup line, so the URL shows up when output is piped.
+- Highlighted code is colored in both bundled themes, in light and dark mode.
+  The Pygments token classes under `.highlight` had no CSS, so every block rendered in one color.
+  `scrivener` uses a quiet palette with one blue for keywords, and `material` uses its violet, green, orange, blue, and teal code colors.
+  Every color holds a 4.5:1 contrast ratio on the code background.
+- A non-integer `site.feed.limit`, `content_types.<name>.pagination.per_page`, or `dev_server.port` is a labeled error with a fix hint, from the file, `--set`, and `config set`.
+  Before, `--set site.feed.limit=oops` printed a Python traceback.
+- A boolean key set to anything but `true` or `false` is a labeled error.
+  Before, `maybe` was read as true.
+- A scalar where a list belongs is a labeled error that says a list is expected.
+  This covers `theme.features`, `exclude_patterns`, `plugins`, `extra_css`, `extra_js`, `markdown_extensions`, `nav`, `content_types.<name>.taxonomies`, `content_types.<name>.feeds`, `ai.robots`, and `ai.agent_context.constraints`.
+  Before, `--set theme.features=bogus` reported an unknown feature `b`, and several of these keys ignored the value without a word.
+- `theme.color_mode.default` accepts only `light` or `dark`, and `site.feed.formats` and a content type's `feeds` accept only `rss` and `atom`.
+  The allowed values come from the same list `config schema` prints.
+- `taxonomies.<name>.slug_format` must be a string.
+  `config set taxonomies.tags.slug_format '{slug}'` used to store a YAML mapping, so quote the pattern: `config set taxonomies.tags.slug_format '"{slug}"'`.
+- `bartleby build` and `serve` report an output directory they cannot write as a labeled error that names the directory and suggests `chmod` or `output_dir`, instead of a traceback.
+- A key left blank now reads as its default, the same as leaving the key out.
+  This covers a bare `enabled:` on a content type, `site.feed.enabled:`, and the `ai.*` flags that default to true, which used to read as false.
+  Write `false` to turn a flag off.
+- The docs site enables `feeds` for guides, so its feed links lead to feeds with entries.
 
 ## [0.1.0] - 2026-10-05
 

@@ -269,7 +269,7 @@ def test_serve_on_a_busy_port_fails_fast_with_a_labeled_error(
 def test_serve_build_time_oserror_is_not_labeled_a_port_problem(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """An OSError from the initial build propagates as it does under build, not as a bind error."""
+    """A write failure in the initial build reports as a build error, not as a bind error."""
     monkeypatch.chdir(tmp_path)
     main(["new", "site", "mysite", "--blog"])
     project = tmp_path / "mysite"
@@ -279,12 +279,14 @@ def test_serve_build_time_oserror_is_not_labeled_a_port_problem(
     site.mkdir()
     site.chmod(0o000)
     try:
-        with pytest.raises(OSError):
+        with pytest.raises(SystemExit) as exc_info:
             main(["serve", "--host", "127.0.0.1", "--port", "0"])
     finally:
         site.chmod(0o755)
 
+    assert exc_info.value.code == 1
     stderr = capsys.readouterr().err
+    assert "cannot replace" in stderr
     assert "--port" not in stderr
     assert "cannot serve on" not in stderr
 

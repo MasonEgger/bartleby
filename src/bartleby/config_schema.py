@@ -29,8 +29,8 @@ from bartleby.theme_loader import THEME_FEATURES
 if TYPE_CHECKING:
     from pathlib import Path
 
-_FEED_FORMATS: tuple[str, ...] = ("rss", "atom")
-_COLOR_MODES: tuple[str, ...] = ("light", "dark")
+_FEED_FORMATS = config.FEED_FORMATS
+_COLOR_MODES = config.COLOR_MODES
 
 
 @dataclass(slots=True, frozen=True)

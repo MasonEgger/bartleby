@@ -29,6 +29,7 @@ from bartleby.feeds import (
     generate_feeds,
     generate_rss,
 )
+from tests.feed_helpers import atom_entries, rss_entries
 
 
 def _post(
@@ -404,25 +405,6 @@ def test_feed_links_omitted_when_aggregate_disabled() -> None:
     assert feed_links_for_page(home, config) == []
 
 
-_ATOM = "{http://www.w3.org/2005/Atom}"
-
-
-def _rss_entries(xml: str) -> list[tuple[str | None, str | None]]:
-    """The (title, link) pair of every RSS item, in document order."""
-    return [
-        (item.findtext("title"), item.findtext("link"))
-        for item in ET.fromstring(xml).findall("channel/item")
-    ]
-
-
-def _atom_entries(xml: str) -> list[tuple[str | None, str | None]]:
-    """The (title, alternate href) pair of every Atom entry, in document order."""
-    return [
-        (entry.findtext(f"{_ATOM}title"), entry.findall(f"{_ATOM}link")[0].get("href"))
-        for entry in ET.fromstring(xml).findall(f"{_ATOM}entry")
-    ]
-
-
 def _three_type_config(*, feed: FeedConfig | None = None) -> BartlebyConfig:
     """``blog`` and ``news`` have feeds, ``notes`` opts out, ``old`` is disabled."""
     config = _multi_config(feed=feed)
@@ -478,15 +460,15 @@ def test_type_feeds_carry_exactly_the_published_posts(tmp_path: Path) -> None:
         ("Second", "https://example.com/blog/posts/b/"),
         ("First", "https://example.com/blog/posts/a/"),
     ]
-    assert _rss_entries((tmp_path / "blog" / "feed.xml").read_text(encoding="utf-8")) == expected
-    assert _atom_entries((tmp_path / "blog" / "atom.xml").read_text(encoding="utf-8")) == expected
+    assert rss_entries((tmp_path / "blog" / "feed.xml").read_text(encoding="utf-8")) == expected
+    assert atom_entries((tmp_path / "blog" / "atom.xml").read_text(encoding="utf-8")) == expected
 
 
 def test_type_with_no_published_posts_writes_a_valid_empty_feed(tmp_path: Path) -> None:
     """A missing file would 404 from the alternate link, so the feed is empty but valid."""
     generate_feeds([], _config(), tmp_path)
-    assert _rss_entries((tmp_path / "blog" / "feed.xml").read_text(encoding="utf-8")) == []
-    assert _atom_entries((tmp_path / "blog" / "atom.xml").read_text(encoding="utf-8")) == []
+    assert rss_entries((tmp_path / "blog" / "feed.xml").read_text(encoding="utf-8")) == []
+    assert atom_entries((tmp_path / "blog" / "atom.xml").read_text(encoding="utf-8")) == []
 
 
 def test_combined_feed_merges_feed_enabled_types_only(tmp_path: Path) -> None:
@@ -496,8 +478,8 @@ def test_combined_feed_merges_feed_enabled_types_only(tmp_path: Path) -> None:
         ("News post", "https://example.com/news/posts/n/"),
         ("Blog post", "https://example.com/blog/posts/b/"),
     ]
-    assert _rss_entries((tmp_path / "feed.xml").read_text(encoding="utf-8")) == expected
-    assert _atom_entries((tmp_path / "atom.xml").read_text(encoding="utf-8")) == expected
+    assert rss_entries((tmp_path / "feed.xml").read_text(encoding="utf-8")) == expected
+    assert atom_entries((tmp_path / "atom.xml").read_text(encoding="utf-8")) == expected
     assert not (tmp_path / "notes").exists()
     assert not (tmp_path / "old").exists()
 
@@ -508,10 +490,10 @@ def test_combined_feed_off_keeps_type_feeds(tmp_path: Path) -> None:
     generate_feeds(_three_type_pages(), config, tmp_path)
     assert not (tmp_path / "feed.xml").exists()
     assert not (tmp_path / "atom.xml").exists()
-    assert _rss_entries((tmp_path / "blog" / "feed.xml").read_text(encoding="utf-8")) == [
+    assert rss_entries((tmp_path / "blog" / "feed.xml").read_text(encoding="utf-8")) == [
         ("Blog post", "https://example.com/blog/posts/b/")
     ]
-    assert _atom_entries((tmp_path / "news" / "atom.xml").read_text(encoding="utf-8")) == [
+    assert atom_entries((tmp_path / "news" / "atom.xml").read_text(encoding="utf-8")) == [
         ("News post", "https://example.com/news/posts/n/")
     ]
 
@@ -547,13 +529,11 @@ def test_built_site_feeds_carry_entries_for_enabled_types_only(tmp_path: Path) -
         ("Tutorial One", f"{base}/tutorials/posts/one/"),
     ]
     talk = [("A Talk", f"{base}/speaking/posts/talk/")]
-    assert _rss_entries((site / "tutorials" / "feed.xml").read_text(encoding="utf-8")) == tutorials
-    assert (
-        _atom_entries((site / "tutorials" / "atom.xml").read_text(encoding="utf-8")) == tutorials
-    )
-    assert _rss_entries((site / "speaking" / "feed.xml").read_text(encoding="utf-8")) == talk
-    assert _atom_entries((site / "speaking" / "atom.xml").read_text(encoding="utf-8")) == talk
+    assert rss_entries((site / "tutorials" / "feed.xml").read_text(encoding="utf-8")) == tutorials
+    assert atom_entries((site / "tutorials" / "atom.xml").read_text(encoding="utf-8")) == tutorials
+    assert rss_entries((site / "speaking" / "feed.xml").read_text(encoding="utf-8")) == talk
+    assert atom_entries((site / "speaking" / "atom.xml").read_text(encoding="utf-8")) == talk
     combined = talk + tutorials
-    assert _rss_entries((site / "feed.xml").read_text(encoding="utf-8")) == combined
-    assert _atom_entries((site / "atom.xml").read_text(encoding="utf-8")) == combined
+    assert rss_entries((site / "feed.xml").read_text(encoding="utf-8")) == combined
+    assert atom_entries((site / "atom.xml").read_text(encoding="utf-8")) == combined
     assert not (site / "archive").exists()

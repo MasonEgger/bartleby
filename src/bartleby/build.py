@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import datetime
 import logging
-import os
 import re
 import shutil
 import tempfile
@@ -489,7 +488,15 @@ def _filter_and_validate(state: _BuildState, *, include_drafts: bool) -> None:
     state.final_output_dir = state.project_dir / config.output_dir
     # Render into a sibling temp directory and swap it into place only on full
     # success, so a failed build never touches the previous good output dir.
-    state.output_dir = Path(tempfile.mkdtemp(prefix=".bartleby-build-", dir=state.project_dir))
+    try:
+        state.output_dir = Path(tempfile.mkdtemp(prefix=".bartleby-build-", dir=state.project_dir))
+    except PermissionError as exc:
+        raise _unwritable_output(
+            state.project_dir,
+            "write the build in",
+            f"make {state.project_dir} writable (chmod u+w); the build is staged inside it",
+            exc,
+        ) from exc
 
 
 def _render_page_bodies(state: _BuildState, *, strict: bool) -> None:
@@ -1005,9 +1012,31 @@ def _swap_output_into_place(build_dir: Path, final_output_dir: Path) -> None:
     :param build_dir: The temp directory holding the completed build output.
     :param final_output_dir: The destination ``site/`` directory to swap in.
     """
-    if final_output_dir.exists():
-        shutil.rmtree(final_output_dir)
-    os.replace(build_dir, final_output_dir)
+    try:
+        if final_output_dir.exists():
+            shutil.rmtree(final_output_dir)
+        shutil.move(build_dir, final_output_dir)
+    except PermissionError as exc:
+        hint = (
+            f"make {final_output_dir} writable (chmod u+w), "
+            "or set output_dir in bartleby.yml elsewhere"
+        )
+        raise _unwritable_output(final_output_dir, "replace", hint, exc) from exc
+
+
+def _unwritable_output(path: Path, action: str, hint: str, exc: PermissionError) -> BuildError:
+    """Build the labeled error for an output location the build is not allowed to change.
+
+    :param path: The directory the build could not write to.
+    :param action: What the build was doing, completing "cannot ... <path>".
+    :param hint: The concrete fix, which differs by what the build was doing.
+    :param exc: The operating-system error, whose reason is quoted.
+    """
+    message = format_error(
+        f"cannot {action} {path.name}: {exc.strerror}",
+        hint=hint,
+    )
+    return BuildError([PageError(file_path=str(path), message=message)])
 
 
 def _write_page(output_dir: Path, page: Page, html: str) -> None:

@@ -2,6 +2,9 @@
 
 ## Recent
 <!-- 10 most recent lessons, newest first -->
+- Start a correctness sweep from a grep for every bare coercion (`int(`, bool reads, list iteration) on raw config values. One unguarded `int()` was reported in Step 16 and fourteen more sites of the same shape sat beside it (2026-10-12)
+- A fix hint is itself a claim and must be true for its case. Two hints in Step 18 named fixes that could not work (an output_dir clause for a failure inside the project dir; shell quoting missing from a slug hint), so test that the hinted fix works (2026-10-12)
+- A theme that ships code highlighting must ship the token CSS. Two cycles of screenshot review missed it because monochrome code still looks like code; pin every token pair with a contrast test (2026-10-12)
 - Start a license audit from `find` over the shipped tree, not from the plan's list. Step 17's plan named one icon and three libraries; the tree held 24 more icons and an htmx notice mislabeled BSD-2 (it is Zero-Clause BSD) (2026-10-12)
 - Compare a reproduced license notice whitespace-normalized against the fetched upstream text. A dropped copyright holder (modern-normalize has three) or a stale year (Octicons) is invisible to a reader and still fails the license (2026-10-12)
 - Apache-2.0 material bundled inside an MIT package needs the license text shipped in the notices file, not a link to it (2026-10-12)
@@ -9,9 +12,6 @@
 - Writing honest docs is a correctness pass. Stating exactly what an error does turned up a bare `ValueError` traceback from `int()` on `site.feed.limit` that the suite never caught, so write the docs claim before deciding the behavior is fine (2026-10-12)
 - A printed "next command" is a claim the user will paste, so build it with `shlex.quote` and test a site name with a space and one with a trailing slash. Step 15's first draft printed an unquoted path that broke on a space (2026-10-12)
 - A startup URL must print after the socket binds, because port 0 only resolves then. Build the serve summary where the bound port is known (`DevServer._serve`), not in the CLI from config (2026-10-12)
-- A feature tour is a test of the themes and the pipeline, not only of content. Step 14's tour exposed three features that rendered broken for every user who wrote them (content tabs in a shape neither theme styled, the critic source block processed itself, emoji as 64px blocks), so render every tour section in both themes before calling it done (2026-10-12)
-- A "source beside result" page must guard its source blocks from preprocessors that run before fences are protected. `pymdownx.critic` rewrote its own example, so the source is a raw HTML pre with entity-escaped markers (2026-10-12)
-- A tour's hook list in its test must map one to one onto the tour's claims. A loose hook (`data-prefix` covering three features) passes while any one of them breaks (2026-10-12)
 
 ## Architecture
 - A server's catch list for author-facing errors must be the same tuple the CLI's error map is built from (`cli.LABELED_ERRORS`, derived from `_ERROR_CODES`), not a hand-copied list. A labeled error outside the list kills the watcher thread with no message (2026-10-12)
@@ -26,6 +26,9 @@
 - Before refreshing a README "Status"/test-count section, pull live facts (`git log --reverse` for the first-commit date, `pytest --co | tail -1` for the test count) and cross-check the "deferred items" list against plan.md "Out of scope" rather than copying the stale original forward; the v1 hardening had already closed half the originally-listed deferrals (2026-06-23)
 
 ## Workflow
+- A feature tour is a test of the themes and the pipeline, not only of content. Step 14's tour exposed three features that rendered broken for every user who wrote them (content tabs in a shape neither theme styled, the critic source block processed itself, emoji as 64px blocks), so render every tour section in both themes before calling it done (2026-10-12)
+- A "source beside result" page must guard its source blocks from preprocessors that run before fences are protected. `pymdownx.critic` rewrote its own example, so the source is a raw HTML pre with entity-escaped markers (2026-10-12)
+- A tour's hook list in its test must map one to one onto the tour's claims. A loose hook (`data-prefix` covering three features) passes while any one of them breaks (2026-10-12)
 - A plan can name two feature flags for behavior one existing flag already covers. Step 13 planned a header-tabs flag, but `nav.tabs` already renders top-level sections as tabs, so check the current `THEME_FEATURES` vocabulary before adding a name (2026-10-12)
 - A "responsive" claim is only proven by a scripted overflow probe (scrollWidth versus clientWidth at phone width) across the real pages. Step 13's probe on 24 docs URLs found a 635px sideways scroll on the configuration reference page that predated the step and that no screenshot review had caught (2026-10-12)
 - A docs count that a test pins with a literal word ("all eight") goes stale the moment the set grows. Derive the word from the collection (`len(THEME_FEATURES)`) in the test, then mutate one docs row to confirm the test fails (2026-10-12)

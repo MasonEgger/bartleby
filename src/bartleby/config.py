@@ -59,6 +59,12 @@ _TOP_LEVEL_KEYS: tuple[str, ...] = (
 METADATA_FIELD_TYPES: tuple[str, ...] = ("string", "integer", "boolean", "date", "list")
 """The ``type`` values a content type's ``metadata`` schema accepts."""
 
+FEED_FORMATS: tuple[str, ...] = ("rss", "atom")
+"""The feed formats ``site.feed.formats`` and a content type's ``feeds`` accept."""
+
+COLOR_MODES: tuple[str, ...] = ("light", "dark")
+"""The values ``theme.color_mode.default`` accepts."""
+
 
 class ConfigError(Exception):
     """Raised when ``bartleby.yml`` is malformed or fails validation.
@@ -97,6 +103,78 @@ class ConfigError(Exception):
 def _expected(key_path: str, kind: str, example: str) -> ConfigError:
     """Build the error for a value of the wrong shape (``mapping`` or ``list``)."""
     return ConfigError(f"must be a {kind}", key_path=key_path, hint=f"write {example}")
+
+
+def _string_list(
+    raw: Any, key_path: str, example: str, default: list[str] | None = None
+) -> list[str]:
+    """Read a list-typed field as strings; a scalar or mapping is an error, not iterated.
+
+    :param raw: The raw value; ``None`` means the key is absent.
+    :param key_path: The dotted path named in the error.
+    :param example: A literal showing a valid list, for the fix hint.
+    :param default: What an absent key yields; a new empty list when omitted.
+    :raises ConfigError: If the value is present and not a list.
+    """
+    if raw is None:
+        return [] if default is None else list(default)
+    if not isinstance(raw, list):
+        raise _expected(key_path, "list", example)
+    return [str(item) for item in raw]
+
+
+def _check_choices(values: list[str], choices: tuple[str, ...], key_path: str) -> None:
+    """Raise for the first of ``values`` that is not one of ``choices``."""
+    for value in values:
+        if value not in choices:
+            raise ConfigError(
+                f"unknown value {value!r}",
+                key_path=key_path,
+                hint=f"use one of {', '.join(choices)}",
+            )
+
+
+def _bool_field(raw: dict[str, Any], key: str, default: bool, parent_key: str) -> bool:
+    """Read a boolean key; anything but ``true`` or ``false`` is an error.
+
+    :param raw: The mapping that holds the key.
+    :param key: The key to read; ``None`` or absent yields ``default``.
+    :param default: The value for an absent key.
+    :param parent_key: The dotted path of ``raw``, or empty for the file root.
+    :raises ConfigError: If the value is not a boolean.
+    """
+    value = raw.get(key)
+    if value is None:
+        return default
+    if not isinstance(value, bool):
+        key_path = f"{parent_key}.{key}" if parent_key else key
+        raise ConfigError(
+            "must be true or false",
+            key_path=key_path,
+            hint=f"write `{key}: true` or `{key}: false`",
+        )
+    return value
+
+
+def _int_field(raw: dict[str, Any], key: str, default: int, parent_key: str) -> int:
+    """Read an integer key; a numeric string such as ``"8000"`` is coerced, anything else errors.
+
+    :param raw: The mapping that holds the key.
+    :param key: The key to read; ``None`` or absent yields ``default``.
+    :param default: The value for an absent key.
+    :param parent_key: The dotted path of ``raw``.
+    :raises ConfigError: If the value is not an integer or a string of digits.
+    """
+    value = raw.get(key)
+    if value is None:
+        return default
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value.isdecimal():
+        return int(value)
+    raise ConfigError(
+        "must be an integer", key_path=f"{parent_key}.{key}", hint=f"write `{key}: {default}`"
+    )
 
 
 @dataclass(slots=True)
@@ -574,32 +652,26 @@ def _reject_unknown_top_level_keys(parsed: dict[str, Any]) -> None:
 def _parse_config(raw: dict[str, Any], config_dir: Path) -> BartlebyConfig:
     """Convert a raw YAML mapping into a :class:`BartlebyConfig` with defaults."""
     nav_raw = raw.get("nav")
-    nav: list[dict[str, object]] | None = nav_raw if isinstance(nav_raw, list) else None
+    if nav_raw is not None and not isinstance(nav_raw, list):
+        raise _expected("nav", "list", "one `- Title: path.md` line per entry")
+    nav: list[dict[str, object]] | None = nav_raw
 
-    exclude_raw = raw.get("exclude_patterns")
-    exclude_patterns: list[str] = (
-        [str(pattern) for pattern in exclude_raw]
-        if isinstance(exclude_raw, list)
-        else list(DEFAULT_EXCLUDE_PATTERNS)
+    exclude_patterns = _string_list(
+        raw.get("exclude_patterns"),
+        "exclude_patterns",
+        '`exclude_patterns: ["_drafts/**"]`',
+        DEFAULT_EXCLUDE_PATTERNS,
     )
 
     extensions_raw = raw.get("markdown_extensions")
-    markdown_extensions: list[dict[str, object] | str] = (
-        list(extensions_raw) if isinstance(extensions_raw, list) else []
-    )
+    if extensions_raw is not None and not isinstance(extensions_raw, list):
+        raise _expected("markdown_extensions", "list", "`markdown_extensions: [tables]`")
+    markdown_extensions: list[dict[str, object] | str] = list(extensions_raw or [])
 
-    plugins_raw = raw.get("plugins")
-    plugins, disabled_plugins = _parse_plugins(plugins_raw)
+    plugins, disabled_plugins = _parse_plugins(raw.get("plugins"))
 
-    extra_css_raw = raw.get("extra_css")
-    extra_css: list[str] = (
-        [str(path) for path in extra_css_raw] if isinstance(extra_css_raw, list) else []
-    )
-
-    extra_js_raw = raw.get("extra_js")
-    extra_js: list[str] = (
-        [str(path) for path in extra_js_raw] if isinstance(extra_js_raw, list) else []
-    )
+    extra_css = _string_list(raw.get("extra_css"), "extra_css", "`extra_css: [css/extra.css]`")
+    extra_js = _string_list(raw.get("extra_js"), "extra_js", "`extra_js: [js/extra.js]`")
 
     return BartlebyConfig(
         site=_parse_site(raw.get("site")),
@@ -649,14 +721,13 @@ def _parse_plugins(raw: Any) -> tuple[list[str], set[str]]:
     :returns: A ``(enabled, disabled)`` tuple. ``enabled`` lists names mapped
         to a truthy value (or every item of the list form); ``disabled`` holds
         names mapped to ``false``.
+    :raises ConfigError: If the value is neither a list nor a mapping.
     """
     if isinstance(raw, dict):
         enabled = [str(name) for name, value in raw.items() if value]
         disabled = {str(name) for name, value in raw.items() if not value}
         return enabled, disabled
-    if isinstance(raw, list):
-        return [str(name) for name in raw], set()
-    return [], set()
+    return _string_list(raw, "plugins", "`plugins: [search]` or `plugins: {search: false}`"), set()
 
 
 def _parse_site(raw: Any) -> SiteConfig:
@@ -691,17 +762,15 @@ def _parse_feed(raw: Any) -> FeedConfig:
         return FeedConfig()
     if not isinstance(raw, dict):
         raise _expected("site.feed", "mapping", "`feed:` followed by indented `key: value` lines")
-    formats_raw = raw.get("formats", ["rss", "atom"])
-    if not isinstance(formats_raw, list):
-        raise _expected("site.feed.formats", "list", "`formats: [rss, atom]`")
-    include_raw = raw.get("include", [])
-    if not isinstance(include_raw, list):
-        raise _expected("site.feed.include", "list", "`include: [blog]`")
+    formats = _string_list(
+        raw.get("formats"), "site.feed.formats", "`formats: [rss, atom]`", list(FEED_FORMATS)
+    )
+    _check_choices(formats, FEED_FORMATS, "site.feed.formats")
     return FeedConfig(
-        enabled=bool(raw.get("enabled", True)),
-        formats=[str(fmt) for fmt in formats_raw],
-        include=[str(name) for name in include_raw],
-        limit=int(raw.get("limit", 50)),
+        enabled=_bool_field(raw, "enabled", True, "site.feed"),
+        formats=formats,
+        include=_string_list(raw.get("include"), "site.feed.include", "`include: [blog]`"),
+        limit=_int_field(raw, "limit", 50, "site.feed"),
         title=_optional_str(raw.get("title")),
     )
 
@@ -730,10 +799,19 @@ def _parse_theme(raw: Any) -> ThemeConfig:
         features=_parse_theme_features(raw.get("features")),
         tokens=_parse_theme_tokens(raw.get("tokens")),
         color_mode=_parse_color_mode(raw.get("color_mode")),
-        icon_packs={str(key): bool(value) for key, value in (raw.get("icon_packs") or {}).items()},
+        icon_packs=_parse_icon_packs(raw.get("icon_packs")),
         logo=_site_url(raw.get("logo")),
         favicon=_site_url(raw.get("favicon")),
     )
+
+
+def _parse_icon_packs(raw: Any) -> dict[str, bool]:
+    """Parse ``theme.icon_packs`` as a map of pack name to enabled flag."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise _expected("theme.icon_packs", "mapping", "`icon_packs:` followed by `lucide: true`")
+    return {str(pack): _bool_field(raw, str(pack), False, "theme.icon_packs") for pack in raw}
 
 
 def _parse_color_mode(raw: Any) -> dict[str, str]:
@@ -752,7 +830,10 @@ def _parse_color_mode(raw: Any) -> dict[str, str]:
             key_path="theme.color_mode.toggle",
             hint="enable the toggle with the `color-mode.toggle` feature under theme.features",
         )
-    return {str(key): str(value) for key, value in raw.items() if value is not None}
+    color_mode = {str(key): str(value) for key, value in raw.items() if value is not None}
+    if "default" in color_mode:
+        _check_choices([color_mode["default"]], COLOR_MODES, "theme.color_mode.default")
+    return color_mode
 
 
 def _reject_removed_theme_keys(raw: dict[str, Any]) -> None:
@@ -768,7 +849,7 @@ def _reject_removed_theme_keys(raw: dict[str, Any]) -> None:
 
 def _parse_theme_features(raw: Any) -> list[str]:
     """Parse ``theme.features``, rejecting names outside the native vocabulary."""
-    features = [str(feature) for feature in (raw or [])]
+    features = _string_list(raw, "theme.features", "`features: [search, nav.tabs]`")
     for feature_name in features:
         if feature_name in THEME_FEATURES:
             continue
@@ -837,16 +918,20 @@ def _parse_content_type(type_name: str, raw: Any) -> ContentTypeConfig:
             key_path=f"{key_path}.path",
             hint=f"add `path:` under `{type_name}:`, the directory under content/ for this type",
         )
+    feeds = _string_list(raw.get("feeds"), f"{key_path}.feeds", "`feeds: [rss, atom]`")
+    _check_choices(feeds, FEED_FORMATS, f"{key_path}.feeds")
     return ContentTypeConfig(
         name=type_name,
         path=str(raw["path"]),
-        enabled=bool(raw.get("enabled", True)),
+        enabled=_bool_field(raw, "enabled", True, key_path),
         url_base=_optional_str(raw.get("url_base")),
         url_format=_optional_str(raw.get("url_format")),
         pagination=_parse_pagination(raw.get("pagination"), key_path),
-        taxonomies=[str(taxonomy) for taxonomy in (raw.get("taxonomies") or [])],
-        feeds=[str(feed) for feed in (raw.get("feeds") or [])],
-        readtime=bool(raw.get("readtime", False)),
+        taxonomies=_string_list(
+            raw.get("taxonomies"), f"{key_path}.taxonomies", "`taxonomies: [tags]`"
+        ),
+        feeds=feeds,
+        readtime=_bool_field(raw, "readtime", False, key_path),
         excerpt_separator=_optional_str(raw.get("excerpt_separator")),
         metadata=_parse_metadata_schema(raw.get("metadata"), key_path),
     )
@@ -860,9 +945,10 @@ def _parse_pagination(raw: Any, parent_key: str) -> PaginationConfig:
         raise _expected(
             f"{parent_key}.pagination", "mapping", "`pagination:` followed by `enabled: true`"
         )
+    pagination_key = f"{parent_key}.pagination"
     return PaginationConfig(
-        enabled=bool(raw.get("enabled", False)),
-        per_page=int(raw.get("per_page", 10)),
+        enabled=_bool_field(raw, "enabled", False, pagination_key),
+        per_page=_int_field(raw, "per_page", 10, pagination_key),
         url_format=str(raw.get("url_format", "page/{page}")),
     )
 
@@ -894,13 +980,14 @@ def _parse_metadata_schema(raw: Any, parent_key: str) -> dict[str, MetadataField
                 key_path=f"{field_key}.type",
                 hint=f"use one of {valid_types}",
             )
-        choices_raw = definition.get("choices")
-        if choices_raw is not None and not isinstance(choices_raw, list):
-            raise _expected(f"{field_key}.choices", "list", "`choices: [easy, hard]`")
-        choices = [str(choice) for choice in choices_raw] if choices_raw is not None else None
+        choices = (
+            _string_list(definition["choices"], f"{field_key}.choices", "`choices: [easy, hard]`")
+            if definition.get("choices") is not None
+            else None
+        )
         result[str(field_name)] = MetadataFieldSchema(
             field_type=field_type,
-            required=bool(definition.get("required", False)),
+            required=_bool_field(definition, "required", False, field_key),
             choices=choices,
         )
     return result
@@ -921,9 +1008,19 @@ def _parse_taxonomies(raw: Any) -> dict[str, TaxonomyConfig]:
             raise _expected(
                 key_path, "mapping", 'the taxonomy name followed by `slug_format: "{slug}"`'
             )
+        slug_format = definition.get("slug_format", "{slug}")
+        if not isinstance(slug_format, str):
+            raise ConfigError(
+                "must be a string",
+                key_path=f"{key_path}.slug_format",
+                hint=(
+                    "quote the pattern so YAML reads it as text: "
+                    '`slug_format: "{slug}"` in the file, or '
+                    "`config set taxonomies.<name>.slug_format '\"{slug}\"'` from the shell"
+                ),
+            )
         result[str(taxonomy_name)] = TaxonomyConfig(
-            name=str(taxonomy_name),
-            slug_format=str(definition.get("slug_format", "{slug}")),
+            name=str(taxonomy_name), slug_format=slug_format
         )
     return result
 
@@ -942,14 +1039,16 @@ def _parse_ai(raw: Any) -> AIConfig:
             "ai.robots", "mapping", "`robots:` followed by lines like `disallow: [GPTBot]`"
         )
     robots: dict[str, list[str]] = {
-        str(directive): [str(crawler) for crawler in (crawlers or [])]
+        str(directive): _string_list(
+            crawlers, f"ai.robots.{directive}", f"`{directive}: [GPTBot]`"
+        )
         for directive, crawlers in robots_raw.items()
     }
     return AIConfig(
-        llms_txt=bool(raw.get("llms_txt", True)),
-        llms_full_txt=bool(raw.get("llms_full_txt", True)),
-        markdown_variants=bool(raw.get("markdown_variants", True)),
-        agent_surface=bool(raw.get("agent_surface", True)),
+        llms_txt=_bool_field(raw, "llms_txt", True, "ai"),
+        llms_full_txt=_bool_field(raw, "llms_full_txt", True, "ai"),
+        markdown_variants=_bool_field(raw, "markdown_variants", True, "ai"),
+        agent_surface=_bool_field(raw, "agent_surface", True, "ai"),
         robots=robots,
         skills=_parse_skills(raw.get("skills")),
         agent_context=_parse_agent_context(raw.get("agent_context")),
@@ -979,7 +1078,7 @@ def _parse_skills(raw: Any) -> SkillsConfig:
     return SkillsConfig(
         output_dir=str(raw.get("output_dir", ".claude/skills")),
         style_guide=_optional_str(raw.get("style_guide")),
-        regenerate_on_build=bool(raw.get("regenerate_on_build", False)),
+        regenerate_on_build=_bool_field(raw, "regenerate_on_build", False, "ai.skills"),
     )
 
 
@@ -991,13 +1090,14 @@ def _parse_agent_context(raw: Any) -> AgentContext:
         raise _expected(
             "ai.agent_context", "mapping", "`agent_context:` followed by `voice:` and `audience:`"
         )
-    constraints_raw = raw.get("constraints") or []
-    if not isinstance(constraints_raw, list):
-        raise _expected("ai.agent_context.constraints", "list", "one `- constraint` line per rule")
     return AgentContext(
         voice=_optional_str(raw.get("voice")),
         audience=_optional_str(raw.get("audience")),
-        constraints=[str(item) for item in constraints_raw],
+        constraints=_string_list(
+            raw.get("constraints"),
+            "ai.agent_context.constraints",
+            "one `- constraint` line per rule",
+        ),
     )
 
 
@@ -1007,13 +1107,9 @@ def _parse_dev_server(raw: Any) -> DevServerConfig:
         return DevServerConfig()
     if not isinstance(raw, dict):
         raise _expected("dev_server", "mapping", "`dev_server:` followed by `host:` and `port:`")
-    try:
-        port = int(raw.get("port", 8000))
-    except (TypeError, ValueError) as exc:
-        raise ConfigError(
-            "must be an integer", key_path="dev_server.port", hint="write `port: 8000`"
-        ) from exc
-    return DevServerConfig(host=str(raw.get("host", "127.0.0.1")), port=port)
+    return DevServerConfig(
+        host=str(raw.get("host", "127.0.0.1")), port=_int_field(raw, "port", 8000, "dev_server")
+    )
 
 
 def _validate_config(config: BartlebyConfig) -> None:

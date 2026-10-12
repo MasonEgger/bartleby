@@ -42,6 +42,16 @@
     --sc-font-text: var(--bb-font-text, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
     --sc-font-ui: var(--bb-font-ui, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
     --sc-font-code: var(--bb-font-code, "Cascadia Code", "SF Mono", ui-monospace, Menlo, Consolas, monospace);
+    --sc-tok-comment: #5c6670;
+    --sc-tok-keyword: #1f4fa8;
+    --sc-tok-string: #2a6b36;
+    --sc-tok-number: #8a4b00;
+    --sc-tok-func: #6a3a9a;
+    --sc-tok-builtin: #0b6670;
+    --sc-tok-tag: #1f4fa8;
+    --sc-tok-var: #9a3b2e;
+    --sc-tok-err: #b3261e;
+    --sc-tok-ins: #2a6b36;
     color-scheme: light;
   }
 
@@ -60,6 +70,16 @@
     --sc-env-third: #d8a85a;
     --sc-env-fourth: #7fbf8d;
     --sc-env-fifth: #c391c7;
+    --sc-tok-comment: #9099a4;
+    --sc-tok-keyword: #8fb4f2;
+    --sc-tok-string: #9ad0a1;
+    --sc-tok-number: #e0b068;
+    --sc-tok-func: #cfa8ee;
+    --sc-tok-builtin: #7fcdd5;
+    --sc-tok-tag: #8fb4f2;
+    --sc-tok-var: #f0a090;
+    --sc-tok-err: #ff8f86;
+    --sc-tok-ins: #9ad0a1;
     color-scheme: dark;
   }
 
@@ -1091,6 +1111,114 @@
   }
   .mw-embed .mw-embed-link {
     color: var(--sc-link);
+  }
+
+  /* Syntax highlighting: Pygments emits token classes under .highlight. Scrivener keeps the
+     palette quiet: comments and punctuation recede, one blue for keywords, and a few muted
+     hues (green strings, amber numbers, violet definitions) so a block reads at a glance
+     without decoration. Every color holds 4.5:1 or better on the code surface in both modes. */
+  .highlight .c,
+  .highlight .ch,
+  .highlight .cm,
+  .highlight .c1,
+  .highlight .cs {
+    color: var(--sc-tok-comment);
+    font-style: normal;
+  }
+  .highlight .cp,
+  .highlight .cpf,
+  .highlight .nb,
+  .highlight .bp,
+  .highlight .na {
+    color: var(--sc-tok-builtin);
+  }
+  .highlight .k,
+  .highlight .kc,
+  .highlight .kd,
+  .highlight .kn,
+  .highlight .kp,
+  .highlight .kr,
+  .highlight .kt,
+  .highlight .ow {
+    color: var(--sc-tok-keyword);
+  }
+  .highlight .s,
+  .highlight .sa,
+  .highlight .sb,
+  .highlight .sc,
+  .highlight .dl,
+  .highlight .sd,
+  .highlight .s2,
+  .highlight .sh,
+  .highlight .sx,
+  .highlight .sr,
+  .highlight .s1,
+  .highlight .ss {
+    color: var(--sc-tok-string);
+  }
+  .highlight .se,
+  .highlight .si,
+  .highlight .m,
+  .highlight .mb,
+  .highlight .mf,
+  .highlight .mh,
+  .highlight .mi,
+  .highlight .mo,
+  .highlight .il,
+  .highlight .l,
+  .highlight .ld {
+    color: var(--sc-tok-number);
+  }
+  .highlight .nf,
+  .highlight .fm,
+  .highlight .nc,
+  .highlight .nd,
+  .highlight .ne,
+  .highlight .nn {
+    color: var(--sc-tok-func);
+  }
+  .highlight .nt {
+    color: var(--sc-tok-tag);
+  }
+  .highlight .nv,
+  .highlight .vc,
+  .highlight .vg,
+  .highlight .vi,
+  .highlight .vm {
+    color: var(--sc-tok-var);
+  }
+  .highlight .n,
+  .highlight .nx,
+  .highlight .o {
+    color: inherit;
+  }
+  .highlight .p {
+    color: var(--sc-muted);
+  }
+  .highlight .err,
+  .highlight .gr,
+  .highlight .gt,
+  .highlight .gd {
+    color: var(--sc-tok-err);
+  }
+  .highlight .gi {
+    color: var(--sc-tok-ins);
+  }
+  .highlight .gh,
+  .highlight .gu,
+  .highlight .gs,
+  .highlight .gp {
+    font-weight: 600;
+  }
+  .highlight .gp,
+  .highlight .go {
+    color: var(--sc-tok-comment);
+  }
+  .highlight .ge {
+    font-style: italic;
+  }
+  .highlight .hll {
+    background: var(--sc-mark);
   }
 
   /* markwright class hooks. markwright ships no CSS; these rules skin its output in

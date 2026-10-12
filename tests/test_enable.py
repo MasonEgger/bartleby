@@ -202,7 +202,7 @@ class TestDisable:
     ) -> None:
         main(["enable", "blog", "tutorials"])
         main(["config", "set", "content_types.tutorials.excerpt_separator", "<!-- cut -->"])
-        main(["config", "set", "taxonomies.series.slug_format", "{slug}"])
+        main(["config", "set", "taxonomies.series.slug_format", '"{slug}"'])
         main(["config", "set", "content_types.tutorials.taxonomies", "[tags, series]"])
         main(["disable", "blog", "tutorials"])
         capsys.readouterr()
@@ -340,7 +340,7 @@ class TestBuild:
         self, project: Path
     ) -> None:
         main(["enable", "blog", "tutorials"])
-        main(["config", "set", "taxonomies.series.slug_format", "{slug}"])
+        main(["config", "set", "taxonomies.series.slug_format", '"{slug}"'])
         main(["config", "set", "content_types.tutorials.taxonomies", "[series]"])
         main(["disable", "blog", "tutorials"])
 

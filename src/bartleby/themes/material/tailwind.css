@@ -40,6 +40,16 @@
     --bm-sidebar-width: 15rem;
     --bm-toc-width: 13rem;
     --bm-page-width: 74rem;
+    --bm-tok-comment: #5f6368;
+    --bm-tok-keyword: #5e35b1;
+    --bm-tok-string: #2e7d32;
+    --bm-tok-number: #b4400b;
+    --bm-tok-func: #1a56c4;
+    --bm-tok-builtin: #00695c;
+    --bm-tok-tag: #c2185b;
+    --bm-tok-var: #8f3a00;
+    --bm-tok-err: #c62828;
+    --bm-tok-ins: #2e7d32;
     color-scheme: light;
   }
 
@@ -57,6 +67,16 @@
     --bm-env-third: #ffa726;
     --bm-env-fourth: #66bb6a;
     --bm-env-fifth: #ba68c8;
+    --bm-tok-comment: #a0a6b4;
+    --bm-tok-keyword: #b39ddb;
+    --bm-tok-string: #a5d6a7;
+    --bm-tok-number: #ffb74d;
+    --bm-tok-func: #82aaff;
+    --bm-tok-builtin: #80cbc4;
+    --bm-tok-tag: #f48fb1;
+    --bm-tok-var: #ffab91;
+    --bm-tok-err: #ff8a80;
+    --bm-tok-ins: #a5d6a7;
     color-scheme: dark;
   }
 
@@ -992,6 +1012,113 @@
   }
   .mw-embed .mw-embed-link {
     color: var(--bm-link);
+  }
+
+  /* Syntax highlighting: Pygments emits token classes under .highlight. The palette follows
+     Material's code colors (violet keywords, green strings, orange numbers, blue definitions,
+     teal builtins, pink tags) and holds 4.5:1 or better on the code surface in both modes. */
+  .highlight .c,
+  .highlight .ch,
+  .highlight .cm,
+  .highlight .c1,
+  .highlight .cs {
+    color: var(--bm-tok-comment);
+    font-style: italic;
+  }
+  .highlight .cp,
+  .highlight .cpf,
+  .highlight .nb,
+  .highlight .bp,
+  .highlight .na {
+    color: var(--bm-tok-builtin);
+  }
+  .highlight .k,
+  .highlight .kc,
+  .highlight .kd,
+  .highlight .kn,
+  .highlight .kp,
+  .highlight .kr,
+  .highlight .kt,
+  .highlight .ow {
+    color: var(--bm-tok-keyword);
+  }
+  .highlight .s,
+  .highlight .sa,
+  .highlight .sb,
+  .highlight .sc,
+  .highlight .dl,
+  .highlight .sd,
+  .highlight .s2,
+  .highlight .sh,
+  .highlight .sx,
+  .highlight .sr,
+  .highlight .s1,
+  .highlight .ss {
+    color: var(--bm-tok-string);
+  }
+  .highlight .se,
+  .highlight .si,
+  .highlight .m,
+  .highlight .mb,
+  .highlight .mf,
+  .highlight .mh,
+  .highlight .mi,
+  .highlight .mo,
+  .highlight .il,
+  .highlight .l,
+  .highlight .ld {
+    color: var(--bm-tok-number);
+  }
+  .highlight .nf,
+  .highlight .fm,
+  .highlight .nc,
+  .highlight .nd,
+  .highlight .ne,
+  .highlight .nn {
+    color: var(--bm-tok-func);
+  }
+  .highlight .nt {
+    color: var(--bm-tok-tag);
+  }
+  .highlight .nv,
+  .highlight .vc,
+  .highlight .vg,
+  .highlight .vi,
+  .highlight .vm {
+    color: var(--bm-tok-var);
+  }
+  .highlight .n,
+  .highlight .nx,
+  .highlight .o {
+    color: inherit;
+  }
+  .highlight .p {
+    color: inherit;
+  }
+  .highlight .err,
+  .highlight .gr,
+  .highlight .gt,
+  .highlight .gd {
+    color: var(--bm-tok-err);
+  }
+  .highlight .gi {
+    color: var(--bm-tok-ins);
+  }
+  .highlight .gh,
+  .highlight .gu,
+  .highlight .gs,
+  .highlight .gp {
+    font-weight: 600;
+  }
+  .highlight .gp,
+  .highlight .go {
+    color: var(--bm-tok-comment);
+  }
+  .highlight .ge {
+    font-style: italic;
+  }
+  .highlight .hll {
+    background: var(--bm-mark);
   }
 
   /* markwright class hooks. markwright ships no CSS; these rules skin its output the way

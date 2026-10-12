@@ -70,6 +70,12 @@ _BUNDLED_EXTENSIONS: tuple[str, ...] = (
     "md_in_html",
 )
 
+# Options Bartleby sets on its own bundled pymdownx extensions. The alternate tab style
+# emits the .tabbed-labels row both bundled themes style; the legacy markup has no row.
+_BUNDLED_EXTENSION_CONFIGS: dict[str, dict[str, object]] = {
+    "pymdownx.tabbed": {"alternate_style": True},
+}
+
 
 @dataclass(slots=True)
 class RenderedContent:
@@ -100,7 +106,10 @@ def create_markdown_renderer(config: BartlebyConfig) -> markdown.Markdown:
         # markwright's extensions go first so markwright.fence precedes pymdownx.superfences
         markwright_names, markwright_configs = _markwright_extensions(config.markwright)
         extensions: list[str] = [*markwright_names, *_BUNDLED_EXTENSIONS]
-        configs: dict[str, dict[str, object]] = dict(markwright_configs)
+        configs: dict[str, dict[str, object]] = {
+            **_BUNDLED_EXTENSION_CONFIGS,
+            **markwright_configs,
+        }
         for name, override_config in _index_overrides(config.markdown_extensions).items():
             if name not in extensions:
                 extensions.append(name)

@@ -118,7 +118,7 @@ def test_set_key_round_trips_the_scaffold(tmp_path: Path) -> None:
     assert after.site.title == before.site.title
     assert after.theme == before.theme
     assert after.content_types == before.content_types
-    assert "excerpt_separator" in edited_path.read_text(encoding="utf-8")
+    assert "port: 9100" in edited_path.read_text(encoding="utf-8")
 
 
 def test_render_full_config_loads_without_error(tmp_path: Path) -> None:

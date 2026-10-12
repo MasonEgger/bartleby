@@ -1,21 +1,70 @@
 ---
 title: Welcome
-description: A new Bartleby site, with a short tour of what it builds and where to edit it.
+description: Where to go first on a new Bartleby site, and the five changes that make it yours.
 ---
 
-This is a new Bartleby site.
-Every page is a Markdown file under `content/` with YAML front matter at the top, and `README.md` in the project root has the commands you need.
+This is your new site.
+It already builds, and the [Feature Tour](tour/index.md) shows every kind of content it can render.
+Spend your first five minutes on these steps.
 
-## What You Get
+## Run the Site
 
-- Pages, a blog with tags, RSS and Atom feeds, full-text search, a sitemap, and light and dark modes, all from one `bartleby build`.
-- A plain Markdown copy of every page next to its HTML, plus `llms.txt`, `llms-full.txt`, `schema.json`, and `content-index.json`, so AI crawlers and coding agents can read the site without scraping it.
-- `bartleby validate` and `bartleby lint`, which catch bad front matter, broken links, and missing descriptions before you publish. Errors name the file, the key, and the fix.
-- `bartleby generate-skill`, which writes skills into `.claude/skills/` that teach a coding agent this site's content types, front matter, and commands.
-- No Node toolchain: Bartleby is a Python package, and the bundled themes ship with compiled CSS.
+From the project directory, start the dev server:
 
-## Where to Start
+```bash
+bartleby serve
+```
 
-- Read the [welcome post](/blog/posts/welcome/) to see a published post.
-- Run `bartleby new post "My First Post"` to start a draft.
-- Edit `bartleby.yml` to change the title, the navigation, or the theme. For the Material look, set `theme.name` to `material`.
+Open http://127.0.0.1:8000/ in a browser.
+The server rebuilds the site and reloads the page each time you save a file.
+
+## Make the First Edit
+
+This page is `content/index.md`.
+Change a sentence, save the file, and watch the browser update.
+The block between the `---` lines at the top is front matter.
+It sets the page title and the description that search engines and agents read.
+
+## Add a Page
+
+Create `content/getting-started.md` with a title and a line of text:
+
+```markdown
+---
+title: Getting Started
+description: How to get started.
+---
+
+Your first paragraph goes here.
+```
+
+Then list the page in the `nav` section of `bartleby.yml`:
+
+```yaml
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+```
+
+## Set Your Title and URL
+
+`bartleby.yml` holds the site title, the public URL, the navigation, and the theme features.
+Set `site.url` to the address where the site will live before you deploy.
+The sitemap, canonical links, and the agent files are all built from it.
+
+## Add a Blog When You Want One
+
+A blog is opt-in.
+If this site has no blog, add one with a single command:
+
+```bash
+bartleby enable blog blog
+```
+
+The command adds a `blog` content type and the `tags` taxonomy to `bartleby.yml`.
+To start a new site with the blog and a sample post already in place, run `bartleby new site my-site --blog`.
+
+## Check Your Work
+
+Run `bartleby build` to write the finished site to `site/`.
+Run `bartleby lint` to find broken links, missing descriptions, and orphan pages before you publish.

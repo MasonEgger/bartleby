@@ -31,13 +31,13 @@ def _last_json(stdout: str) -> dict[str, object]:
 
 
 def test_new_site_creates_structure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """``bartleby new site mysite`` creates the standard project skeleton."""
+    """``bartleby new site mysite`` creates the docs-shaped project skeleton."""
     monkeypatch.chdir(tmp_path)
     main(["new", "site", "mysite"])
     site = tmp_path / "mysite"
     assert (site / "bartleby.yml").exists()
-    assert (site / ".authors.yml").exists()
     assert (site / "content" / "index.md").exists()
+    assert (site / "content" / "tour" / "index.md").exists()
     assert (site / "templates").is_dir()
     assert (site / "static").is_dir()
     assert (site / "hooks").is_dir()
@@ -49,19 +49,8 @@ def test_new_site_writes_readme(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     main(["new", "site", "mysite"])
     readme = (tmp_path / "mysite" / "README.md").read_text(encoding="utf-8")
     assert readme.startswith("# mysite\n")
-    for command in ("bartleby serve", "bartleby build", "bartleby new post", "bartleby validate"):
+    for command in ("bartleby serve", "bartleby build", "bartleby validate", "bartleby lint"):
         assert command in readme
-
-
-def test_new_site_home_page_names_the_agent_files(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The scaffold home page names the agent files a build writes."""
-    monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
-    index = (tmp_path / "mysite" / "content" / "index.md").read_text(encoding="utf-8")
-    for name in ("llms.txt", "llms-full.txt", "schema.json", "content-index.json"):
-        assert name in index
 
 
 def test_new_site_valid_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -72,30 +61,18 @@ def test_new_site_valid_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     assert config.site.title
 
 
-def test_new_site_blog_opted_into_tags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The scaffolded blog content type opts into the tags taxonomy.
-
-    Without this, a fresh user writing ``tags:`` in a post's front matter
-    sees no /tags/ pages generated and has no obvious way to discover why.
-    """
-    monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
-    config = load_config(tmp_path / "mysite" / "bartleby.yml")
-    assert "tags" in config.content_types["blog"].taxonomies
-
-
 def test_new_site_directory_exists_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Re-scaffolding into an existing site directory errors out."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / "mysite").mkdir()
     with pytest.raises(SystemExit):
-        main(["new", "site", "mysite"])
+        main(["new", "site", "mysite", "--blog"])
 
 
 def test_new_post_creates_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """``bartleby new post 'Title' --type blog`` writes a slugified .md file."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
     main(["new", "post", "My Cool Post", "--type", "blog"])
     target = tmp_path / "mysite" / "content" / "blog" / "posts" / "my-cool-post.md"
@@ -105,7 +82,7 @@ def test_new_post_creates_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 def test_new_post_front_matter(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A new post has title and date front matter at minimum."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
     main(["new", "post", "Hello World", "--type", "blog"])
     body = (tmp_path / "mysite" / "content" / "blog" / "posts" / "hello-world.md").read_text()
@@ -116,7 +93,7 @@ def test_new_post_front_matter(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 def test_build_command_invokes_pipeline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """``bartleby build`` runs the full build and produces ``site/``."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
     main(["build"])
     assert (tmp_path / "mysite" / "site" / "index.html").exists()
@@ -125,7 +102,7 @@ def test_build_command_invokes_pipeline(tmp_path: Path, monkeypatch: pytest.Monk
 def test_validate_command_zero_exit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """``bartleby validate`` exits 0 on a clean config."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
     main(["validate"])
 
@@ -248,7 +225,7 @@ def test_serve_command_constructs_devserver(
 ) -> None:
     """``bartleby serve`` instantiates a DevServer with config-derived host/port."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
 
     captured: dict[str, object] = {}
@@ -271,7 +248,7 @@ def test_serve_on_a_busy_port_fails_fast_with_a_labeled_error(
 ) -> None:
     """A busy port exits non-zero with a fix hint, no traceback, and before any build."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     project = tmp_path / "mysite"
     monkeypatch.chdir(project)
     capsys.readouterr()
@@ -294,7 +271,7 @@ def test_serve_build_time_oserror_is_not_labeled_a_port_problem(
 ) -> None:
     """An OSError from the initial build propagates as it does under build, not as a bind error."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     project = tmp_path / "mysite"
     monkeypatch.chdir(project)
     capsys.readouterr()
@@ -315,7 +292,7 @@ def test_serve_build_time_oserror_is_not_labeled_a_port_problem(
 def _scaffold_and_enter(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Create a fresh site and chdir into it so build/validate can run."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
 
 
@@ -457,7 +434,7 @@ def test_new_post_missing_type_json_is_usage_error(
 ) -> None:
     """An unknown content type in JSON mode is a usage error (exit 2), never a prompt."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
 
     with pytest.raises(SystemExit) as exc:
@@ -474,7 +451,7 @@ def test_schema_content_type_json(
 ) -> None:
     """``bartleby schema blog --output json`` emits the content type's field schema."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
 
     main(["schema", "blog", "--output", "json"])
@@ -489,7 +466,7 @@ def test_schema_authors_json(
 ) -> None:
     """``bartleby schema authors --output json`` lists configured authors."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
 
     main(["schema", "authors", "--output", "json"])
@@ -504,7 +481,7 @@ def test_schema_taxonomies_json(
 ) -> None:
     """``bartleby schema taxonomies --output json`` lists taxonomies and in-use terms."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
 
     main(["schema", "taxonomies", "--output", "json"])
@@ -519,7 +496,7 @@ def test_schema_taxonomies_json_omits_draft_only_terms(
 ) -> None:
     """``bartleby schema taxonomies`` never lists a term contributed only by a draft."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     project = tmp_path / "mysite"
     monkeypatch.chdir(project)
 
@@ -549,7 +526,7 @@ def test_schema_unknown_content_type_is_usage_error(
 ) -> None:
     """``bartleby schema nope`` for an undefined content type fails as a usage error."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
 
     with pytest.raises(SystemExit) as exc:
@@ -573,7 +550,7 @@ def test_content_list_json(
 ) -> None:
     """``bartleby content list --output json`` lists published pages with curated fields."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     _write_published_post(tmp_path / "mysite")
     monkeypatch.chdir(tmp_path / "mysite")
 
@@ -589,7 +566,7 @@ def test_content_list_excludes_drafts_json(
 ) -> None:
     """``bartleby content list`` omits draft posts by default."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
     main(["new", "post", "Secret Draft", "--type", "blog"])
 
@@ -604,7 +581,7 @@ def test_content_get_json(
 ) -> None:
     """``bartleby content get <path> --output json`` returns one page's metadata and body."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     _write_published_post(tmp_path / "mysite")
     monkeypatch.chdir(tmp_path / "mysite")
 
@@ -620,7 +597,7 @@ def test_content_get_unknown_path_is_usage_error(
 ) -> None:
     """``bartleby content get`` for a missing page fails as a usage error."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
 
     with pytest.raises(SystemExit) as exc:
@@ -635,7 +612,7 @@ def test_render_command_html_json(
 ) -> None:
     """``bartleby render <path> --output json`` renders one page to HTML without a build."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     _write_published_post(tmp_path / "mysite")
     monkeypatch.chdir(tmp_path / "mysite")
 
@@ -653,7 +630,7 @@ def test_render_command_html_json(
 def test_render_command_no_full_build(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """``bartleby render`` does not write the ``site/`` output tree."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     _write_published_post(tmp_path / "mysite")
     monkeypatch.chdir(tmp_path / "mysite")
 
@@ -666,7 +643,7 @@ def test_render_command_markdown_format(
 ) -> None:
     """``--format markdown`` returns processed markdown without HTML conversion."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     _write_published_post(tmp_path / "mysite")
     monkeypatch.chdir(tmp_path / "mysite")
 
@@ -690,7 +667,7 @@ def test_render_unknown_path_is_usage_error(
 ) -> None:
     """``bartleby render`` for a missing page fails as a usage error."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
 
     with pytest.raises(SystemExit) as exc:
@@ -705,7 +682,7 @@ def test_lint_command_json_shape(
 ) -> None:
     """``bartleby lint --output json`` emits issues plus a severity summary."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
     # A post that links to a real page, so the fixture also exercises the
     # orphan check: linked.md must not be reported orphaned.
@@ -747,7 +724,7 @@ def test_lint_relative_md_link_resolves_before_orphan_check(
     every page orphaned.
     """
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     site = tmp_path / "mysite"
     (site / "content" / "blog" / "posts" / "linked.md").write_text(
         '---\ntitle: "Linked"\ndate: 2026-05-01\ndraft: false\ndescription: "d"\n---\n\nBody.\n',
@@ -771,7 +748,7 @@ def test_lint_nav_page_never_reported_orphaned(
 ) -> None:
     """A page present in navigation is never reported orphaned, inbound links or not."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     site = tmp_path / "mysite"
     (site / "content" / "blog" / "posts" / "lonely.md").write_text(
         '---\ntitle: "Lonely"\ndate: 2026-05-01\ndraft: false\ndescription: "d"\n---\n\nBody.\n',
@@ -795,7 +772,7 @@ def test_lint_check_external_off_by_default(
 ) -> None:
     """``bartleby lint`` does not check external URLs unless --check-external is given."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
     post = tmp_path / "mysite" / "content" / "blog" / "posts" / "ext.md"
     post.write_text(
@@ -834,7 +811,7 @@ def test_export_jsonl_emits_one_object_per_line(
 ) -> None:
     """``bartleby export`` defaults to JSONL with one published page per line."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
     post = tmp_path / "mysite" / "content" / "blog" / "posts" / "p.md"
     post.write_text(
@@ -855,7 +832,7 @@ def test_export_include_content_embeds_body(
 ) -> None:
     """``bartleby export --include-content`` embeds the markdown body."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
     post = tmp_path / "mysite" / "content" / "blog" / "posts" / "p.md"
     post.write_text(
@@ -874,7 +851,7 @@ def test_export_include_html_returns_the_built_page_body(
 ) -> None:
     """``bartleby export --include-html`` embeds the HTML the build puts in the page."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     site = tmp_path / "mysite"
     monkeypatch.chdir(site)
     post = site / "content" / "blog" / "posts" / "p.md"
@@ -907,7 +884,7 @@ def test_export_include_html_returns_the_built_page_body(
 def _site_with_event_recorder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Scaffold a site whose project hook appends every event it receives to fired.log."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     site = tmp_path / "mysite"
     monkeypatch.chdir(site)
     hooks_dir = site / "hooks"
@@ -1029,7 +1006,7 @@ def test_export_without_include_html_does_not_render(
 ) -> None:
     """Plain ``bartleby export`` carries no ``html`` key."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
     capsys.readouterr()
     main(["export"])
@@ -1045,7 +1022,7 @@ def test_generate_skill_writes_three_skills(
 ) -> None:
     """``bartleby generate-skill`` writes the three skills under the configured output dir."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     site = tmp_path / "mysite"
     (site / "shortcodes").mkdir()
     (site / "shortcodes" / "callout.html").write_text("{{ text }}\n", encoding="utf-8")
@@ -1185,7 +1162,7 @@ def test_generate_skill_includes_overrides_only_shortcode(
 ) -> None:
     """A shortcode defined only under ``overrides/shortcodes`` reaches the generated skill."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     site = tmp_path / "mysite"
     (site / "overrides" / "shortcodes").mkdir(parents=True)
     (site / "overrides" / "shortcodes" / "onlyoverride.html").write_text(

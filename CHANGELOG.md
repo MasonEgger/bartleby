@@ -18,6 +18,13 @@ The current page's headings appear under its own entry in the tree, and the righ
 A header nav item for a section with no URL of its own now links to the section's first page, for every site, with or without `nav.tabs`.
 On narrow screens the header nav wraps to its own scrolling row, code blocks scroll inside their box, and wide tables scroll inside theirs.
 
+`bartleby new site` now writes a docs-shaped site: a small `bartleby.yml`, a home page that says what to do next, and a feature tour.
+The config holds only the site title and URL, the nav, and the theme features, with no content types and no `markwright:` section.
+The feature tour at `content/tour/index.md` shows every markwright and pymdownx feature as its source followed by the live result, with embeds loading eagerly.
+The scaffold README shows how to opt into click-to-load with `load: click` under `markwright:`.
+`bartleby new site --blog` adds the blog content type, the `tags` taxonomy, a nav entry, and a sample post, using the same block as `bartleby enable blog blog`.
+It combines with `--full-config`.
+
 `ruamel.yaml` is a new dependency.
 Bartleby uses its round-trip loader to write `bartleby.yml` without losing the comments and key order in a file you wrote by hand.
 The new `config_edit` module is the one writer behind `config set`, `enable`, and `new site --full-config`.

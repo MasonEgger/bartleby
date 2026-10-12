@@ -93,8 +93,11 @@ from bartleby.theme_loader import (
 from bartleby.urls import generate_all_urls
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from bartleby.config import BartlebyConfig
     from bartleby.content import Page
+    from bartleby.content_shapes import ContentShape
 
 # Stable, machine-recognizable error codes per failure type. These strings are
 # part of the CLI error contract (text and JSON output) and must not change
@@ -316,6 +319,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--full-config",
         action="store_true",
         help="Write a bartleby.yml listing every option with its description as a comment",
+    )
+    new_site.add_argument(
+        "--blog",
+        action="store_true",
+        help="Also add a blog content type, the tags taxonomy, a nav entry, and a sample post",
     )
     new_site.set_defaults(_handler=_cmd_new_site)
 
@@ -565,10 +573,49 @@ def _unknown_content_type(name: str, config: BartlebyConfig) -> UsageError:
 # The starter files `new site` copies, laid out as they land in the new project.
 # ${name} and ${today} are filled in with string.Template.
 _SCAFFOLD_ROOT = Path(__file__).parent / "scaffold"
+# The files `new site --blog` adds on top of the docs-shaped starter.
+_SCAFFOLD_BLOG_ROOT = Path(__file__).parent / "scaffold_blog"
+# Copied byte for byte: the tour shows `$` math, which string.Template would reject.
+_VERBATIM_STARTER_DIRS = (Path("content") / "tour",)
+
+
+def _copy_starter_tree(root: Path, target: Path, values: dict[str, str]) -> None:
+    """Copy every file under ``root`` into ``target``, filling in ``values`` as it goes."""
+    for source in root.rglob("*"):
+        if source.is_dir():
+            continue
+        relative = source.relative_to(root)
+        destination = target / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        text = source.read_text(encoding="utf-8")
+        if not any(relative.is_relative_to(verbatim) for verbatim in _VERBATIM_STARTER_DIRS):
+            text = Template(text).substitute(values)
+        destination.write_text(text, encoding="utf-8")
+
+
+def _merge_content_shape(
+    text: str, shape: ContentShape, name: str, existing_taxonomies: Collection[str]
+) -> str:
+    """Return config ``text`` with a content type of ``shape`` named ``name`` merged in.
+
+    Taxonomies the shape refers to are added unless the site already has them. The result
+    is not validated or written; the caller does both. Shared by ``enable`` and ``new site --blog``
+    so the two paths cannot drift.
+    """
+    edited = set_key(text, f"content_types.{name}", shape.content_type(name))
+    for taxonomy, block in shape.taxonomies.items():
+        if taxonomy not in existing_taxonomies:
+            edited = set_key(edited, f"taxonomies.{taxonomy}", dict(block))
+    return edited
 
 
 def _cmd_new_site(args: argparse.Namespace) -> NewSiteOutput:
-    """Scaffold a fresh project under ``./{args.name}/`` from the files in ``scaffold/``."""
+    """Scaffold a docs-shaped project under ``./{args.name}/`` from the files in ``scaffold/``.
+
+    With ``--full-config`` the complete annotated config replaces the minimal one. With
+    ``--blog`` the blog files from ``scaffold_blog/`` are added and the blog block is merged
+    into whichever config was written, so the two flags combine.
+    """
     target = Path.cwd() / args.name
     if target.exists():
         raise UsageError(
@@ -582,18 +629,22 @@ def _cmd_new_site(args: argparse.Namespace) -> NewSiteOutput:
     (target / "static").mkdir()
     (target / "hooks").mkdir()
 
-    # Copy the starter tree, filling in the site name and today's date.
     values = {"name": args.name, "today": datetime.date.today().isoformat()}
-    for source in _SCAFFOLD_ROOT.rglob("*"):
-        if source.is_dir():
-            continue
-        destination = target / source.relative_to(_SCAFFOLD_ROOT)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        starter_text = Template(source.read_text(encoding="utf-8")).substitute(values)
-        destination.write_text(starter_text, encoding="utf-8")
+    _copy_starter_tree(_SCAFFOLD_ROOT, target, values)
+    starter_nav = load_config(target / "bartleby.yml").nav or []
 
     if args.full_config:
         (target / "bartleby.yml").write_text(render_full_config(CONFIG_SCHEMA), encoding="utf-8")
+
+    if args.blog:
+        _copy_starter_tree(_SCAFFOLD_BLOG_ROOT, target, values)
+        config_path = target / "bartleby.yml"
+        edited = _merge_content_shape(
+            config_path.read_text(encoding="utf-8"), CONTENT_SHAPES["blog"], "blog", ()
+        )
+        edited = set_key(edited, "nav", [*starter_nav, {"Blog": "blog/"}])
+        validate_config_text(edited, config_path)
+        config_path.write_text(edited, encoding="utf-8")
 
     return NewSiteOutput(path=f"{args.name}/", config=f"{args.name}/bartleby.yml")
 
@@ -1147,15 +1198,12 @@ def _cmd_enable(args: argparse.Namespace) -> ContentTypeToggleOutput:
             "enable", args.shape, args.name, True, config_path.name, True, reenabled=True
         )
 
-    shape = CONTENT_SHAPES[args.shape]
-    edited = set_key(
+    edited = _merge_content_shape(
         config_path.read_text(encoding="utf-8"),
-        f"content_types.{args.name}",
-        shape.content_type(args.name),
+        CONTENT_SHAPES[args.shape],
+        args.name,
+        config.taxonomies,
     )
-    for taxonomy, block in shape.taxonomies.items():
-        if taxonomy not in config.taxonomies:
-            edited = set_key(edited, f"taxonomies.{taxonomy}", dict(block))
     validate_config_text(edited, config_path)
 
     config_path.write_text(edited, encoding="utf-8")

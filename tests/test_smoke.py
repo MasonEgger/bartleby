@@ -47,7 +47,7 @@ def test_scaffold_post_build_renders_title_byline_and_listing(
     post is linked from the blog listing page.
     """
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
 
     project = tmp_path / "mysite"
     monkeypatch.chdir(project)
@@ -76,7 +76,7 @@ def test_scaffold_build_drops_draft_posts_from_listing(
 ) -> None:
     """A scaffolded draft post (the default) is absent from the built listing."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
 
     project = tmp_path / "mysite"
     monkeypatch.chdir(project)
@@ -156,7 +156,7 @@ def test_scaffold_build_and_serve_compose_output_dir_draft_and_quoted_title(
     to the target's output URL in the rendered HTML.
     """
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
 
     project = tmp_path / "mysite"
     config_path = project / "bartleby.yml"

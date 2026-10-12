@@ -138,11 +138,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 ## Section 7: Scaffold and first-run output
 
 ### Step 14: The docs-shaped scaffold and the feature tour (task)
-- [ ] 1. Scope: scaffold bartleby.yml (minimal, docs-shaped, no blog, no markwright section); index.md (what to do next); feature tour page (each markwright + pymdownx feature, source beside result); README quickstart with click-to-load opt-in; cli.py --blog
-- [ ] 2. Tooling: frontend-design, tutorial-writing, style-linting, python (--blog); new site/build/serve
-- [ ] 3. Do: rewrite scaffold for docs shape; author feature tour; add --blog reusing Step 7 block; README quickstart
-- [ ] 4. Verify: new site + build exits 0 no warnings, home + tour render, tour shows every feature; --blog adds blog type + builds; lint clean
-- [ ] 5. Document: scaffold README quickstart; add scaffold pages to nav
+- [x] 1. Scope: scaffold bartleby.yml (minimal, docs-shaped, no blog, no markwright section); index.md (what to do next); feature tour page (each markwright + pymdownx feature, source beside result); README quickstart with click-to-load opt-in; cli.py --blog
+- [x] 2. Tooling: frontend-design, tutorial-writing, style-linting, python (--blog); new site/build/serve
+- [x] 3. Do: rewrite scaffold for docs shape; author feature tour; add --blog reusing Step 7 block; README quickstart
+- [x] 4. Verify: new site + build exits 0 no warnings, home + tour render, tour shows every feature; --blog adds blog type + builds; lint clean
+- [x] 5. Document: scaffold README quickstart; add scaffold pages to nav
 
 ### Step 15: Hugo-style first-run output for `new site` and `serve` (feature)
 - [ ] 1. RED: new site result lists created entries + next command (cd <dir> && bartleby serve), json carries same; serve startup summary has page count + bound URL + stop hint (formatter unit-tested)

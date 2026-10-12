@@ -1111,6 +1111,37 @@
     border-radius: 0;
   }
 
+  /* Critic Markup comment: a muted note set off from the text by a margin rule. */
+  .prose .critic.comment {
+    margin-inline-start: 0.35em;
+    padding-inline-start: 0.5em;
+    border-inline-start: 2px solid var(--sc-margin);
+    /* Clone the box decoration so every wrapped line fragment keeps its rule. */
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+    color: var(--sc-muted);
+    font-family: var(--sc-font-ui);
+    font-size: 0.875em;
+  }
+
+  /* Emoji: pymdownx.emoji emits a sized image; sit it inline at the text height. */
+  .prose img.emojione {
+    display: inline;
+    height: 1.2em;
+    width: auto;
+    margin: 0 0.05em;
+    vertical-align: -0.2em;
+  }
+
+  /* Task lists: the checkbox is the marker, so the disc goes and the box takes its place. */
+  .prose .task-list-item {
+    list-style: none;
+    margin-inline-start: -1.25em;
+  }
+  .prose .task-list-item > input[type="checkbox"] {
+    margin-inline-end: 0.5em;
+  }
+
   /* Fence labels: the label is a header strip fused to the top of the block it names. */
   .code-label {
     margin: 0;

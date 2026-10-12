@@ -119,6 +119,27 @@ def test_pymdownx_tasklist() -> None:
     assert "checkbox" in html
 
 
+_TABS_SOURCE = '=== "Python"\n\n    one\n\n=== "Bash"\n\n    two\n'
+
+
+def test_tabs_render_in_the_alternate_style_the_themes_style() -> None:
+    """Tabs carry the ``tabbed-alternate`` class and a ``.tabbed-labels`` row."""
+    renderer = create_markdown_renderer(_config())
+    html = render_markdown(_TABS_SOURCE, renderer).html
+    assert 'class="tabbed-set tabbed-alternate"' in html
+    assert '<div class="tabbed-labels">' in html
+
+
+def test_tabs_option_override_wins_over_the_bundled_alternate_style() -> None:
+    """A ``markdown_extensions`` entry for ``pymdownx.tabbed`` replaces the bundled option."""
+    overrides: list[dict[str, object] | str] = [
+        {"name": "pymdownx.tabbed", "config": {"alternate_style": False}}
+    ]
+    renderer = create_markdown_renderer(_config(markdown_extensions=overrides))
+    html = render_markdown(_TABS_SOURCE, renderer).html
+    assert "tabbed-alternate" not in html
+
+
 def test_extension_ordering_fence_before_superfences() -> None:
     """A markwright fence directive survives superfences processing in the same block."""
     source = "```python\n[label script.py]\nprint('hi')\n```\n"

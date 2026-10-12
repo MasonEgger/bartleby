@@ -1012,6 +1012,38 @@
     border-radius: 0;
   }
 
+  /* Critic Markup comment: a small tinted note with an accent rule, like a margin annotation. */
+  .prose .critic.comment {
+    margin-inline-start: 0.35em;
+    padding: 0.1em 0.5em;
+    border-inline-start: 3px solid var(--bm-accent);
+    /* Clone the box decoration so every wrapped line fragment keeps its rule. */
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+    border-radius: var(--bm-radius);
+    background: color-mix(in srgb, var(--bm-text) 6%, var(--bm-bg));
+    color: var(--bm-text-muted);
+    font-size: 0.85em;
+  }
+
+  /* Emoji: pymdownx.emoji emits a sized image; sit it inline at the text height. */
+  .prose img.emojione {
+    display: inline;
+    height: 1.2em;
+    width: auto;
+    margin: 0 0.05em;
+    vertical-align: -0.2em;
+  }
+
+  /* Task lists: the checkbox is the marker, so the disc goes and the box takes its place. */
+  .prose .task-list-item {
+    list-style: none;
+    margin-inline-start: -1.25em;
+  }
+  .prose .task-list-item > input[type="checkbox"] {
+    margin-inline-end: 0.5em;
+  }
+
   /* Fence labels: a title bar on the block, like material's code title. */
   .code-label {
     margin: 1.25em 0 0;

@@ -68,6 +68,14 @@ The public reference docs (hooks, config schema, template context, CLI, theme ma
 `tests/test_docs_reference.py` compares 26 surfaces in both directions, so a change to code or docs that drifts apart fails the suite.
 The docs site builds on the Scrivener theme, with a corrected listing, excerpt, and tag display, and a new `errors.md` reference page.
 
+### Dependencies
+
+- markwright is now `>=0.3.0` (was `>=0.1.0`).
+  Rendered output is unchanged for Bartleby's docs; 0.3.0 adds the public config API and click-to-load embeds that Bartleby will use, and fixes fence directives inside list items and indented fences.
+- pymdown-extensions is now `>=11.0.1` (was `>=10.0`), the first release without PYSEC-2026-3654.
+  The lock resolves 12.2, which escapes quotes in highlighted code as `&quot;` and `&#39;`, which a browser renders as the same text.
+- pydantic arrives as a transitive dependency of markwright 0.3.0.
+
 ### Removed (Breaking)
 
 `theme.color_mode.toggle` is a `ConfigError`.

@@ -62,6 +62,7 @@ THEME_FEATURES: frozenset[str] = frozenset(
         "search.highlight",
         "nav.tabs",
         "nav.sidebar",
+        "nav.toc-fold",
         "nav.section-index",
         "nav.back-to-top",
         "content.code.copy",
@@ -78,6 +79,8 @@ the enabled subset. Each name means:
 * ``search.highlight``: highlight the search terms on the page a result opens.
 * ``nav.tabs``: top-level sections render as tabs in the header.
 * ``nav.sidebar``: the section tree renders as a sidebar.
+* ``nav.toc-fold``: the page's headings move into the sidebar, under the page's own
+  entry, and the right-hand table of contents column goes away.
 * ``nav.section-index``: a section's index page is the section's own nav entry.
 * ``nav.back-to-top``: a back-to-top button appears after scrolling.
 * ``content.code.copy``: code blocks get a copy button.

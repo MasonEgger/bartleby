@@ -195,6 +195,7 @@ A feature that the active theme chain does not declare in a manifest produces a 
 | `search.highlight` | Highlight the search terms on the page a result opens |
 | `nav.tabs` | Top-level sections render as tabs in the header |
 | `nav.sidebar` | The section tree renders as a sidebar |
+| `nav.toc-fold` | The page's headings move into the sidebar and the right-hand table of contents goes away. The fold applies when the page is in the sidebar tree, and other pages keep the right-hand table of contents. |
 | `nav.section-index` | A section's index page is the section's own nav entry |
 | `nav.back-to-top` | A back-to-top button appears after scrolling |
 | `content.code.copy` | Code blocks get a copy button |

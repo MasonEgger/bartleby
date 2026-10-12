@@ -20,8 +20,9 @@
 <nav class="site-nav" aria-label="Main">
   <ul>
     {% for item in nav %}
+    {% set href = item.url or (first_url(item) | trim) %}
     <li>
-      {% if item.url %}<a href="{{ item.url }}" class="nav-link"{% if page.url and item.url == page.url %} aria-current="page"{% endif %}>{{ item.title }}</a>
+      {% if href %}<a href="{{ href }}" class="nav-link"{% if page.url and item.url == page.url %} aria-current="page"{% endif %}>{{ item.title }}</a>
       {% else %}<span class="nav-link">{{ item.title }}</span>{% endif %}
     </li>
     {% endfor %}

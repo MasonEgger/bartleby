@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+Docs pages now read as three columns in both bundled themes: the section navigation on the left, the page in the middle, and the page table of contents on the right.
+Below 76rem the table of contents hides, and below 60rem the navigation folds behind a toggle.
+A listing has no headings, so it gets two columns instead of an empty third.
+The new `nav.toc-fold` feature folds the table of contents into the left navigation.
+The current page's headings appear under its own entry in the tree, and the right column goes away.
+`nav.tabs` already moves top-level sections into header tabs, so there is no second flag for that layout.
+A header nav item for a section with no URL of its own now links to the section's first page, for every site, with or without `nav.tabs`.
+On narrow screens the header nav wraps to its own scrolling row, code blocks scroll inside their box, and wide tables scroll inside theirs.
+
 `ruamel.yaml` is a new dependency.
 Bartleby uses its round-trip loader to write `bartleby.yml` without losing the comments and key order in a file you wrote by hand.
 The new `config_edit` module is the one writer behind `config set`, `enable`, and `new site --full-config`.
@@ -33,7 +42,7 @@ Old mkdocs-material names are a `ConfigError` that names the replacement.
 | `theme.palette` (for example `primary`, `accent`) | `theme.tokens` (for example `color.primary`, `color.accent`) |
 | `theme.font` (for example `text`, `code`) | `theme.tokens` (for example `font.text`, `font.code`) |
 
-The native feature names are `search`, `search.highlight`, `nav.tabs`, `nav.sidebar`, `nav.section-index`, `nav.back-to-top`, `content.code.copy`, and `color-mode.toggle`.
+The native feature names are `search`, `search.highlight`, `nav.tabs`, `nav.sidebar`, `nav.toc-fold`, `nav.section-index`, `nav.back-to-top`, `content.code.copy`, and `color-mode.toggle`.
 Any other mkdocs-material feature (`navigation.footer`, `navigation.tracking`, `content.code.annotate`, `content.code.select`, `content.tabs.link`, `content.tooltips`, `content.footnote.tooltips`, `content.action.edit`, `content.action.view`, `search.suggest`, `search.share`, `toc.follow`) is not a Bartleby feature and is rejected.
 
 `page.excerpt` is now plain text, and the rendered excerpt moved to `page.excerpt_html`.

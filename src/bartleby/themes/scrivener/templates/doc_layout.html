@@ -8,9 +8,10 @@
 {% set sidebar_items = section.sidebar_items %}
 {% set sidebar_title = section.sidebar_title %}
 {% set sidebar_index_url = section.sidebar_index_url %}
+{% set toc_folded = section.toc_folded %}
 {% set has_columns = sidebar_items or page.toc %}
 {% if has_columns %}
-<div class="layout-docs{% if not sidebar_items %} layout-docs--no-sidebar{% endif %}{% if not page.toc %} layout-docs--no-toc{% endif %}">
+<div class="layout-docs{% if not sidebar_items %} layout-docs--no-sidebar{% endif %}{% if not page.toc or toc_folded %} layout-docs--no-toc{% endif %}">
   {% if sidebar_items %}{% include "partials/sidebar.html" %}{% endif %}
   <article class="docs-content" data-search-highlight-root>
 {% else %}
@@ -24,7 +25,7 @@
     </div>
     {% block article_foot %}{% endblock %}
   </article>
-{% if has_columns %}
+{% if has_columns and not toc_folded %}
   {% include "partials/toc.html" %}
 {% endif %}
 </div>

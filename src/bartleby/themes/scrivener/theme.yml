@@ -6,6 +6,7 @@ features:
   - search.highlight
   - nav.tabs
   - nav.sidebar
+  - nav.toc-fold
   - nav.section-index
   - nav.back-to-top
   - content.code.copy

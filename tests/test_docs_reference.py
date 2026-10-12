@@ -423,6 +423,22 @@ def _theme_base_blocks() -> Surface:
     return code, _first_column_ticks(_table_with_header(body, "Block"))
 
 
+_COUNT_WORDS = {
+    1: "one",
+    2: "two",
+    3: "three",
+    4: "four",
+    5: "five",
+    6: "six",
+    7: "seven",
+    8: "eight",
+    9: "nine",
+    10: "ten",
+    11: "eleven",
+    12: "twelve",
+}
+
+
 def _bundled_themes() -> Surface:
     body = _sections(_read("themes.md"))["Bundled Themes"]
     table = _table_with_header(body, "Name")
@@ -435,7 +451,7 @@ def _bundled_themes() -> Surface:
         features = (
             "none"
             if not manifest.features
-            else "all eight"
+            else f"all {_COUNT_WORDS[len(THEME_FEATURES)]}"
             if set(manifest.features) == THEME_FEATURES
             else ", ".join(manifest.features)
         )

@@ -84,6 +84,11 @@
   code, kbd, pre {
     font-family: var(--bb-font-code, "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
   }
+
+  /* Long code lines scroll inside their block instead of widening the page. */
+  pre {
+    overflow-x: auto;
+  }
 }
 
 @layer components {
@@ -172,6 +177,26 @@
     border-radius: 0;
   }
 
+  /* At phone width the inline nav drops to its own row under the title and scrolls sideways. */
+  @media (max-width: 40rem) {
+    .header-inner {
+      flex-wrap: wrap;
+      height: auto;
+      min-height: var(--bm-header-height);
+      row-gap: 0;
+    }
+    .header-inner > .site-nav {
+      order: 3;
+      flex: 1 0 100%;
+    }
+    .site-nav ul,
+    .nav-tabs ul {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+  }
+
   .search-trigger {
     padding: 0.35rem 0.7rem;
     border: 1px solid color-mix(in srgb, var(--bm-on-primary) 45%, transparent);
@@ -256,6 +281,8 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .layout-docs > .docs-content { min-width: 0; }
+  /* With the right column folded away the article keeps a readable measure, left-aligned beside the sidebar. */
+  .layout-docs--no-toc > .docs-content { max-width: 40rem; }
   @media (max-width: 76rem) {
     .layout-docs,
     .layout-docs--no-toc {
@@ -282,6 +309,15 @@
     }
     .sidebar-nav.js-collapsible .sidebar-toggle { display: flex; }
     .sidebar-nav.js-collapsible:not(.is-open) .sidebar-tree { display: none; }
+  }
+  @media (max-width: 40rem) {
+    /* A wide table scrolls inside its own box rather than the page. */
+    .docs-content table,
+    .layout-prose table {
+      display: block;
+      max-width: 100%;
+      overflow-x: auto;
+    }
   }
 
   /* Left section sidebar. */
@@ -412,6 +448,19 @@
     border-left-color: var(--bm-accent);
     color: var(--bm-accent);
     font-weight: 500;
+  }
+
+  /* nav.toc-fold: the page's headings hang off its own entry in the left tree. */
+  .sidebar-nav .nav-toc {
+    font-size: 0.75rem;
+  }
+  .sidebar-nav .nav-toc a {
+    padding: 0.2rem 0;
+  }
+  .sidebar-nav .nav-toc a.active,
+  .sidebar-nav .nav-toc a[aria-current] {
+    color: var(--bm-accent);
+    font-weight: 400;
   }
 
   /* Footer and page furniture. */

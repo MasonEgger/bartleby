@@ -114,6 +114,7 @@ def test_material_theme_declares_the_features_its_templates_honor() -> None:
         "search.highlight",
         "nav.tabs",
         "nav.sidebar",
+        "nav.toc-fold",
         "nav.section-index",
         "nav.back-to-top",
         "content.code.copy",
@@ -326,3 +327,9 @@ def test_manifest_without_name_names_the_manifest_and_a_fix(tmp_path: Path) -> N
     message = str(excinfo.value)
     assert "theme.yml" in message
     assert "name:" in message
+
+
+def test_toc_fold_is_a_native_feature_both_bundled_themes_declare() -> None:
+    assert "nav.toc-fold" in theme_loader.THEME_FEATURES
+    for resolved in (theme_loader.default_theme(), material_theme()):
+        assert "nav.toc-fold" in resolved.chain[0].manifest.features

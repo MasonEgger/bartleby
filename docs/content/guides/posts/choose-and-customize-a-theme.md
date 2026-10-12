@@ -42,7 +42,7 @@ theme:
 ```
 
 `features` switches on optional behavior.
-Both `material` and `scrivener` implement all eight features.
+Both `material` and `scrivener` implement all nine features.
 The [themes reference](../../reference/pages/themes.md#features) lists them.
 Build the site to see the result:
 

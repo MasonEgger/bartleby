@@ -17,6 +17,7 @@ sidebar-nav
 nav-tabs
 toc-sidebar
 toc-nav
+nav-toc
 # Header, navigation, footer
 site-header
 header-inner

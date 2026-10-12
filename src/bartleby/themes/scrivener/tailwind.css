@@ -95,6 +95,11 @@
     font-family: var(--sc-font-code);
   }
 
+  /* Long code lines scroll inside their block instead of widening the page. */
+  pre {
+    overflow-x: auto;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       transition-duration: 0.01ms !important;
@@ -181,6 +186,26 @@
     max-width: var(--sc-page-width);
     margin: 0 auto;
     padding: var(--sc-quarter) var(--sc-ruling-unit) 0;
+  }
+
+  /* At phone width the inline nav drops to its own row under the title and scrolls sideways. */
+  @media (max-width: 40rem) {
+    .header-inner {
+      flex-wrap: wrap;
+      height: auto;
+      min-height: var(--sc-header-height);
+      row-gap: 0;
+    }
+    .header-inner > .site-nav {
+      order: 3;
+      flex: 1 0 100%;
+    }
+    .site-nav ul,
+    .nav-tabs ul {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
   }
 
   .search-trigger {
@@ -300,6 +325,13 @@
     .layout-docs > .docs-content { max-width: none; }
   }
   @media (max-width: 40rem) {
+    /* A wide table scrolls inside its own box rather than the page. */
+    .docs-content table,
+    .layout-prose table {
+      display: block;
+      max-width: 100%;
+      overflow-x: auto;
+    }
     .header-inner,
     .nav-tabs ul,
     .layout-docs,
@@ -444,6 +476,20 @@
     color: var(--sc-ink);
   }
 
+  /* nav.toc-fold: the page's headings hang off its own entry in the left tree. */
+  .sidebar-nav .nav-toc {
+    font-size: 0.8125rem;
+    line-height: 1.125rem;
+  }
+  .sidebar-nav .nav-toc a {
+    padding-top: 0.1875rem;
+    padding-bottom: 0.1875rem;
+    font-weight: 400;
+  }
+  .sidebar-nav .nav-toc a.active,
+  .sidebar-nav .nav-toc a[aria-current] {
+    font-weight: 400;
+  }
   /* Footer and page furniture. */
   .site-footer {
     max-width: var(--sc-page-width);

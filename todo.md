@@ -129,11 +129,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 ## Section 6: Three-column docs layout
 
 ### Step 13: Three-column layout with fold-TOC and tabs feature flags (task)
-- [ ] 1. Scope: theme_loader.py two new feature names + test; base + material/scrivener doc_layout + nav/toc partials for three columns and both flags; both themes tailwind + safelist; regenerated main.css
-- [ ] 2. Tooling: frontend-design (layout + responsive), python (THEME_FEATURES); mkdocs-material/Zensical for shape only; just theme-css; build docs + browser
-- [ ] 3. Do: add two features + test; implement three-column shell + fold + tabs in both themes; recompile
-- [ ] 4. Verify: default three columns, fold on, tabs on, both themes, both modes, desktop + mobile; no feature warnings; no UndefinedError; screenshots to Mason
-- [ ] 5. Document: CHANGELOG (three-column layout + fold/tabs flags)
+- [x] 1. Scope: theme_loader.py two new feature names + test; base + material/scrivener doc_layout + nav/toc partials for three columns and both flags; both themes tailwind + safelist; regenerated main.css
+- [x] 2. Tooling: frontend-design (layout + responsive), python (THEME_FEATURES); mkdocs-material/Zensical for shape only; just theme-css; build docs + browser
+- [x] 3. Do: add two features + test; implement three-column shell + fold + tabs in both themes; recompile
+- [x] 4. Verify: default three columns, fold on, tabs on, both themes, both modes, desktop + mobile; no feature warnings; no UndefinedError; screenshots to Mason
+- [x] 5. Document: CHANGELOG (three-column layout + fold/tabs flags)
 
 ## Section 7: Scaffold and first-run output
 

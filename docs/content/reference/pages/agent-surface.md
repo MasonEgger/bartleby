@@ -85,7 +85,7 @@ The `theme` block has three keys:
 
 An agent should read `active` to know what the site supports.
 A name that appears in `enabled` but not in `implemented` is a feature the build warned about and did not render.
-For the docs site, `active` equals `enabled`, because `scrivener` implements all eight features.
+For the docs site, `active` equals `enabled`, because `scrivener` implements all nine features.
 
 ### JSON-LD
 

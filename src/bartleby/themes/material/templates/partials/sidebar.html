@@ -1,8 +1,15 @@
 {# Section tree. Expects sidebar_items (NavItems) and optional sidebar_title from the including template. #}
 {# Groups are native <details> elements, so the tree opens and closes with JS off. #}
 {% from "partials/nav_macros.html" import holds %}
+{% from "partials/toc_macros.html" import entries, tracker %}
 {% set section_index = feature is defined and feature('nav.section-index') %}
-{% macro tree(items, current, parent_index) %}
+{# With nav.toc-fold the current page's headings print under its own entry, so the page has no right column. #}
+{% macro fold_toc(toc) %}
+<div class="nav-toc" {{ tracker() }}>
+  <nav aria-label="On this page">{{ entries(toc) }}</nav>
+</div>
+{% endmacro %}
+{% macro tree(items, current, parent_index, folded) %}
 <ul>
   {% for item in items %}
   {% if not (section_index and parent_index and item.url == parent_index) %}
@@ -12,12 +19,14 @@
       <summary class="nav-section-title">
         {% if section_index and item.index_url %}<a href="{{ item.index_url }}"{% if item.index_url == current %} class="active" aria-current="page"{% endif %}>{{ item.title }}</a>{% else %}{{ item.title }}{% endif %}
       </summary>
-      {{ tree(item.children, current, item.index_url) }}
+      {% if folded and section_index and item.index_url and item.index_url == current %}{{ fold_toc(page.toc) }}{% endif %}
+      {{ tree(item.children, current, item.index_url, folded) }}
     </details>
   </li>
   {% elif item.url %}
   <li class="nav-item">
     <a href="{{ item.url }}"{% if item.url == current %} class="active" aria-current="page"{% endif %}>{{ item.title }}</a>
+    {% if folded and item.url == current %}{{ fold_toc(page.toc) }}{% endif %}
   </li>
   {% else %}
   <li class="nav-item"><span class="nav-section-title">{{ item.title }}</span></li>
@@ -31,6 +40,6 @@
   <button type="button" class="sidebar-toggle" aria-controls="sidebar-tree" x-on:click="open = !open" x-bind:aria-expanded="open">{{ sidebar_title or "Navigation" }}</button>
   <div class="sidebar-tree" id="sidebar-tree">
     {% if sidebar_title %}<p class="nav-section-title">{{ sidebar_title }}</p>{% endif %}
-    {{ tree(sidebar_items, page.url, sidebar_index_url) }}
+    {{ tree(sidebar_items, page.url, sidebar_index_url, toc_folded) }}
   </div>
 </nav>

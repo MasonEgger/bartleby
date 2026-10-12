@@ -177,7 +177,7 @@ def test_known_theme_features_are_accepted(tmp_path: Path) -> None:
 
 
 def test_theme_features_are_the_documented_native_set() -> None:
-    """The native feature vocabulary is exactly the documented eight names."""
+    """The native feature vocabulary is exactly the documented names."""
     from bartleby.theme_loader import THEME_FEATURES
 
     assert {
@@ -185,6 +185,7 @@ def test_theme_features_are_the_documented_native_set() -> None:
         "search.highlight",
         "nav.tabs",
         "nav.sidebar",
+        "nav.toc-fold",
         "nav.section-index",
         "nav.back-to-top",
         "content.code.copy",

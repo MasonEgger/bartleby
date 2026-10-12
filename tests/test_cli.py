@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import socket
 from typing import TYPE_CHECKING
 
 import pytest
@@ -263,6 +264,52 @@ def test_serve_command_constructs_devserver(
     monkeypatch.setattr("bartleby.server.DevServer", FakeDevServer)
     main(["serve"])
     assert captured["ran"] is True
+
+
+def test_serve_on_a_busy_port_fails_fast_with_a_labeled_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A busy port exits non-zero with a fix hint, no traceback, and before any build."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    project = tmp_path / "mysite"
+    monkeypatch.chdir(project)
+    capsys.readouterr()
+
+    with socket.create_server(("127.0.0.1", 0)) as occupied:
+        port = occupied.getsockname()[1]
+        with pytest.raises(SystemExit) as exit_info:
+            main(["serve", "--host", "127.0.0.1", "--port", str(port)])
+
+    stderr = capsys.readouterr().err
+    assert exit_info.value.code not in (0, None)
+    assert f"127.0.0.1:{port}" in stderr
+    assert "fix: pass --port with a free port, or --port 0 to pick one" in stderr
+    assert "Traceback" not in stderr
+    assert not (project / "site").exists(), "the port check must run before the build"
+
+
+def test_serve_build_time_oserror_is_not_labeled_a_port_problem(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An OSError from the initial build propagates as it does under build, not as a bind error."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    project = tmp_path / "mysite"
+    monkeypatch.chdir(project)
+    capsys.readouterr()
+    site = project / "site"
+    site.mkdir()
+    site.chmod(0o000)
+    try:
+        with pytest.raises(OSError):
+            main(["serve", "--host", "127.0.0.1", "--port", "0"])
+    finally:
+        site.chmod(0o755)
+
+    stderr = capsys.readouterr().err
+    assert "--port" not in stderr
+    assert "cannot serve on" not in stderr
 
 
 def _scaffold_and_enter(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

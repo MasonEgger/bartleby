@@ -42,6 +42,12 @@ A theme template that printed `post.excerpt | safe` must print `post.excerpt_htm
 
 ### Changed
 
+The dev server now runs on Starlette and uvicorn.
+Pages and the live-reload WebSocket share one port, so the reload script connects to the page's own host and port.
+The server also serves the theme's `404.html` for missing pages.
+`starlette` and `uvicorn` are new dependencies.
+`serve` takes the same flags and prints the same lines as before.
+
 Errors name the file, the key path or id, and a concrete fix, in one shape: `<file>: <key path>: <message> (fix: <hint>)`.
 `bartleby.yml` now rejects unknown top-level keys, unknown metadata field types, and a non-list `choices`.
 Invalid YAML in `bartleby.yml`, `.authors.yml`, `theme.yml`, and page front matter is a clean error, not a traceback.

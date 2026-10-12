@@ -1,18 +1,43 @@
 # ABOUTME: Development server with live reload, file watching, and full rebuilds on change.
-# Wraps the synchronous build pipeline with HTTP/WS serving and watchdog change detection.
+# Serves the built site and reload socket from one Starlette app on uvicorn, watching for changes.
+
+"""Bartleby's development server.
+
+One Starlette app, run in-process by uvicorn, serves both the built site and
+the live-reload WebSocket on the same port (after sphinx-autobuild's design).
+The page's reload snippet therefore connects to ``location.host`` and needs
+no second port. Because uvicorn is async, an idle connection a browser opened
+ahead of time cannot hold up other requests.
+
+The build stays synchronous. A watchdog observer thread runs each rebuild
+(one at a time, since the observer dispatches on a single thread), then hands
+the reload broadcast to the server's event loop. The event filter is
+unchanged: :func:`is_watched` and :func:`classify_change` decide what matters.
+
+HTML is served through a small :class:`~starlette.staticfiles.StaticFiles`
+subclass that rewrites each ``.html`` response with the reload snippet. That
+keeps StaticFiles' directory ``index.html`` handling, its ``404.html``
+fallback, and its content types, so nothing here reimplements file serving.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
-import http.server
 import json
+import logging
 import os
+import socket
 import sys
-import threading
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import uvicorn
+from starlette.applications import Starlette
+from starlette.responses import FileResponse, HTMLResponse
+from starlette.routing import Mount, WebSocketRoute
+from starlette.staticfiles import StaticFiles
+from starlette.websockets import WebSocket, WebSocketDisconnect
 from watchdog.events import (
     EVENT_TYPE_CREATED,
     EVENT_TYPE_DELETED,
@@ -21,24 +46,52 @@ from watchdog.events import (
     FileSystemEventHandler,
 )
 from watchdog.observers import Observer
-from websockets.asyncio.server import ServerConnection, broadcast
-from websockets.asyncio.server import serve as serve_websocket
 
-from bartleby.build import BuildError, build, format_page_error
-from bartleby.config import load_config
+from bartleby.agent_surface import AgentSurfaceError
+from bartleby.authors import AuthorError
+from bartleby.build import BuildError, PageError, build, format_page_error
+from bartleby.cli import LABELED_ERRORS
+from bartleby.config import ConfigError, load_config
+from bartleby.content import ContentError
 from bartleby.plugins import PluginCollection, discover_hooks, discover_plugins
+from bartleby.theme_loader import ThemeError
 
 if TYPE_CHECKING:
-    import socketserver
+    import concurrent.futures
     from collections.abc import Callable
 
+    from starlette.responses import Response
+    from starlette.types import Scope
     from watchdog.events import FileSystemEvent
     from watchdog.observers.api import BaseObserver
-    from websockets.asyncio.server import Server as WebSocketServer
 
-    from bartleby.build import PageError
     from bartleby.config import BartlebyConfig
 
+
+logger = logging.getLogger(__name__)
+
+
+class ServeBindError(OSError):
+    """Raised when the dev server cannot bind its listening socket.
+
+    Only the bind raises this; an ``OSError`` from the build is left alone so it
+    is never mistaken for a port problem.
+
+    :ivar host: The host the bind was attempted on.
+    :ivar port: The port the bind was attempted on.
+    :ivar reason: The operating system's reason, such as ``Address already in use``.
+    """
+
+    def __init__(self, host: str, port: int, reason: str) -> None:
+        super().__init__(f"cannot bind {host}:{port} ({reason})")
+        self.host = host
+        self.port = port
+        self.reason = reason
+
+
+# What a rebuild reports as page errors instead of raising: a bad value plus every
+# labeled author-facing error the CLI reports.
+_REPORTED_ERRORS: tuple[type[Exception], ...] = (ValueError, *LABELED_ERRORS)
 
 _CONTENT_PREFIXES: tuple[str, ...] = ("content/",)
 _TEMPLATE_PREFIXES: tuple[str, ...] = ("templates/", "overrides/", "theme/")
@@ -60,26 +113,26 @@ WATCHED_PATHS: tuple[str, ...] = (
 )
 
 # The single source of truth for the reload endpoint's route. Both the browser
-# snippet below and the WebSocket handler that serves it are built from this
+# snippet below and the WebSocket route that serves it are built from this
 # constant so the route is never hardcoded twice.
 RELOAD_WS_PATH = "/__bartleby_reload"
 
 
-def reload_snippet(ws_port: int) -> str:
+def reload_snippet() -> str:
     """Return the script that reloads the page when the reload channel signals.
 
-    The WebSocket hub listens on its own port, so the script keeps the page's
-    hostname (which works from another machine on the network) and swaps in
-    that port. It is added only by :func:`inject_reload_snippet` in serve
-    mode, never by the build pipeline, so ``bartleby build`` output stays free
-    of dev-only markup.
+    The WebSocket route lives on the same app and port as the pages, so the
+    script connects to ``location.host`` (which also works from another
+    machine on the network). It is added only by :func:`inject_reload_snippet`
+    in serve mode, never by the build pipeline, so ``bartleby build`` output
+    stays free of dev-only markup.
 
-    :param ws_port: The port the reload WebSocket channel is bound to.
     :returns: A ``<script>`` element as a string.
     """
     return (
         "<script>(function(){"
-        f"var ws=new WebSocket('ws://'+location.hostname+':{ws_port}{RELOAD_WS_PATH}');"
+        "var scheme=location.protocol==='https:'?'wss://':'ws://';"
+        f"var ws=new WebSocket(scheme+location.host+'{RELOAD_WS_PATH}');"
         "ws.onmessage=function(){location.reload();};"
         "})();</script>"
     )
@@ -118,14 +171,13 @@ def classify_change(rel_path: str) -> str:
     return "other"
 
 
-def inject_reload_snippet(html: str, *, ws_port: int) -> str:
+def inject_reload_snippet(html: str) -> str:
     """Insert the live-reload snippet just before ``</body>`` (or append it).
 
     :param html: The rendered page HTML served by the dev server.
-    :param ws_port: The port the reload WebSocket channel is bound to.
     :returns: The HTML with the reload snippet added. Serve-mode only.
     """
-    snippet = reload_snippet(ws_port)
+    snippet = reload_snippet()
     marker = "</body>"
     if marker in html:
         return html.replace(marker, snippet + marker, 1)
@@ -186,118 +238,91 @@ def _start_watcher(project_dir: Path, on_change: Callable[[str], None]) -> BaseO
     return observer
 
 
-class _ReloadHub:
-    """Serves the ``/__bartleby_reload`` WebSocket endpoint on its own event loop.
+class _ReloadChannel:
+    """The set of connected reload sockets, owned by the server's event loop.
 
-    :meth:`DevServer.run` also runs a synchronous ``TCPServer.serve_forever()``
-    and a watchdog observer thread. Since ``websockets`` is asyncio-based, this
-    hub runs its own event loop on a dedicated daemon thread so all three can
-    run at once. :meth:`broadcast_reload` and :meth:`stop` are safe to call
-    from any thread; they hand work to the hub's loop via
-    ``call_soon_threadsafe`` / ``run_coroutine_threadsafe``.
+    The WebSocket endpoint adds and removes sockets on the loop thread.
+    :meth:`broadcast_reload` is called from the watchdog thread and hands the
+    send to the loop with ``run_coroutine_threadsafe``, so the client set is
+    only ever read or changed on the loop thread.
     """
 
     def __init__(self) -> None:
-        self.port: int | None = None
-        self._loop: asyncio.AbstractEventLoop | None = None
-        self._thread: threading.Thread | None = None
-        self._server: WebSocketServer | None = None
-        self._clients: set[ServerConnection] = set()
-        self._bind_error: BaseException | None = None
+        self.loop: asyncio.AbstractEventLoop | None = None
+        self._clients: set[WebSocket] = set()
 
-    def start(self, host: str) -> int:
-        """Start the WebSocket server on an ephemeral port and block until bound.
-
-        :param host: The interface to bind, matching the HTTP server's host.
-        :returns: The bound port.
-        :raises RuntimeError: The bind never completed within the timeout, or
-            :func:`~websockets.asyncio.server.serve` raised while binding
-            (for example the port was already in use). Raising here, instead
-            of leaving :attr:`port` as ``None``, stops :meth:`DevServer.run`
-            from silently serving pages whose reload snippet points at a
-            WebSocket channel that never came up.
-        """
-        bound = threading.Event()
-
-        def run_loop() -> None:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            self._loop = loop
-            try:
-                loop.run_until_complete(self._bind(host, bound))
-            except BaseException as exc:
-                self._bind_error = exc
-                bound.set()
-                loop.close()
-                return
-            loop.run_forever()
-            loop.close()
-
-        self._thread = threading.Thread(target=run_loop, daemon=True)
-        self._thread.start()
-        bound.wait(timeout=10)
-        if self._bind_error is not None:
-            raise RuntimeError("reload WebSocket channel failed to bind") from self._bind_error
-        if self.port is None:
-            raise RuntimeError("reload WebSocket channel did not bind within 10s")
-        return self.port
-
-    async def _bind(self, host: str, bound: threading.Event) -> None:
-        self._server = await serve_websocket(self._handle_client, host, 0)
-        sock = self._server.sockets[0]
-        self.port = sock.getsockname()[1]
-        bound.set()
-
-    async def _handle_client(self, connection: ServerConnection) -> None:
-        request = connection.request
-        if request is not None and request.path != RELOAD_WS_PATH:
-            await connection.close()
-            return
-        self._clients.add(connection)
+    async def endpoint(self, websocket: WebSocket) -> None:
+        """Hold one browser's reload socket open until it disconnects."""
+        await websocket.accept()
+        self._clients.add(websocket)
         try:
-            await connection.wait_closed()
+            with contextlib.suppress(WebSocketDisconnect):
+                while True:
+                    await websocket.receive_text()
         finally:
-            self._clients.discard(connection)
+            self._clients.discard(websocket)
 
     def broadcast_reload(self) -> None:
-        """Push a reload signal to every connected client.
+        """Push a reload signal to every connected client, from any thread.
 
-        A no-op when the hub has not started yet or has no clients. The
-        client snapshot is taken on the loop thread (via
-        ``call_soon_threadsafe``), not on the caller's thread, because
-        ``self._clients`` is also mutated by :meth:`_handle_client` on the
-        loop thread; snapshotting here on the watchdog thread would race
-        with that mutation and could raise ``RuntimeError: Set changed size
-        during iteration``.
+        A no-op before the server's loop is running or after it has stopped.
         """
-        if self._loop is None:
+        loop = self.loop
+        if loop is None:
             return
-        self._loop.call_soon_threadsafe(self._broadcast_to_current_clients)
+        future = asyncio.run_coroutine_threadsafe(self._send_reload(), loop)
+        future.add_done_callback(self._log_failed_broadcast)
 
-    def _broadcast_to_current_clients(self) -> None:
-        """Snapshot ``self._clients`` and broadcast, all on the loop thread."""
-        broadcast(list(self._clients), "reload")
+    @staticmethod
+    def _log_failed_broadcast(future: concurrent.futures.Future[None]) -> None:
+        """Log a broadcast that raised; a cancelled one (loop shutdown) is not an error."""
+        if not future.cancelled() and (error := future.exception()) is not None:
+            logger.error("reload broadcast failed", exc_info=error)
 
-    def stop(self) -> None:
-        """Shut down the WebSocket server, then its event loop and thread."""
-        if self._loop is None or self._thread is None:
-            return
+    async def _send_reload(self) -> None:
+        """Send ``reload`` to a snapshot of the clients; a dead socket is skipped."""
+        for client in list(self._clients):
+            with contextlib.suppress(WebSocketDisconnect, RuntimeError):
+                await client.send_text("reload")
 
-        async def _close() -> None:
-            if self._server is not None:
-                self._server.close()
-                await self._server.wait_closed()
 
-        future = asyncio.run_coroutine_threadsafe(_close(), self._loop)
-        future.result(timeout=10)
-        self._loop.call_soon_threadsafe(self._loop.stop)
-        self._thread.join(timeout=10)
+class _ReloadInjectingFiles(StaticFiles):
+    """Static files that add the reload snippet to every HTML response.
+
+    A custom subclass beats a response middleware here: StaticFiles already
+    decides which file answers (directory ``index.html``, the theme's
+    ``404.html``, content types), and this only rewrites the ``.html`` ones.
+    """
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        """Serve ``path`` as StaticFiles would, with the snippet injected into HTML."""
+        response = await super().get_response(path, scope)
+        if isinstance(response, FileResponse) and Path(response.path).suffix == ".html":
+            html = await asyncio.to_thread(Path(response.path).read_text, encoding="utf-8")
+            return HTMLResponse(inject_reload_snippet(html), status_code=response.status_code)
+        return response
+
+
+def build_app(site_dir: Path, channel: _ReloadChannel) -> Starlette:
+    """Return the dev server's ASGI app: the reload WebSocket plus the built site.
+
+    :param site_dir: The built output directory to serve.
+    :param channel: The reload channel whose endpoint is mounted at
+        :data:`RELOAD_WS_PATH`.
+    :returns: A Starlette app serving pages and the reload socket on one port.
+    """
+    return Starlette(
+        routes=[
+            WebSocketRoute(RELOAD_WS_PATH, channel.endpoint),
+            Mount("/", app=_ReloadInjectingFiles(directory=site_dir, html=True)),
+        ]
+    )
 
 
 class DevServer:
     """Bartleby's development server harness.
 
-    The HTTP and WebSocket servers are started by :meth:`run`; for tests
+    The uvicorn server is started by :meth:`run`; for tests
     we use the synchronous helpers (:meth:`build_once`, :meth:`rebuild`,
     :meth:`dispatch_change`) which exercise the rebuild path without touching
     the network.
@@ -317,11 +342,10 @@ class DevServer:
         self.host = host
         self.port = port
         self.events = events
-        # Set by :meth:`run` once the reload WebSocket channel is bound; stays
-        # ``None`` outside serve mode (the synchronous helpers used by tests
-        # and by ``bartleby build`` never touch the reload channel).
-        self.reload_ws_port: int | None = None
-        self._reload_hub: _ReloadHub | None = None
+        # Set by :meth:`run`; stay ``None`` outside serve mode (the synchronous
+        # helpers used by tests and by ``bartleby build`` never touch them).
+        self._channel: _ReloadChannel | None = None
+        self._uvicorn: uvicorn.Server | None = None
 
     def build_once(self) -> None:
         """Run a full build with drafts included."""
@@ -335,7 +359,8 @@ class DevServer:
         effect on the next rebuild without restarting the process. A failed
         build (page render errors or metadata validation) leaves the existing
         ``site/`` untouched and the collected errors are returned instead of
-        raising, so the server keeps serving the previous good build.
+        raising, so the server keeps serving the previous good build. The labeled
+        author-facing errors (:data:`bartleby.cli.LABELED_ERRORS`) are returned the same way.
 
         :returns: The collected page errors, or an empty list on success.
         """
@@ -343,10 +368,29 @@ class DevServer:
             build(self.config_path, include_drafts=True, overrides=self.overrides)
         except BuildError as exc:
             return list(exc.errors)
-        except ValueError as exc:
-            from bartleby.build import PageError as _PageError
-
-            return [_PageError(file_path=str(self.config_path), message=str(exc))]
+        except _REPORTED_ERRORS as exc:
+            # Broken front matter, config, authors, or theme in the middle of a
+            # serve must be reported, not kill the watcher thread.
+            # ``str(exc)`` already leads with the error's own source, so report that
+            # source (relative to the project, like a ContentError path) as the path
+            # and strip it from the message rather than print it twice.
+            message = str(exc)
+            source: Path | str | None = None
+            if isinstance(exc, ContentError) and exc.source_path:
+                source = exc.source_path
+            elif isinstance(exc, ConfigError | AuthorError | ThemeError) and exc.source:
+                source = exc.source
+                message = message.removeprefix(f"{source}: ")
+            elif isinstance(exc, AgentSurfaceError):
+                source = f"content/{exc.source_path}"
+                message = message.removeprefix(f"{source}: ")
+            if source is None:
+                file_path = str(self.config_path)
+            elif isinstance(source, Path):
+                file_path = os.path.relpath(source, self.config_path.parent)
+            else:
+                file_path = source
+            return [PageError(file_path=file_path, message=message)]
         return []
 
     def maybe_recompile_theme(self) -> str:
@@ -481,11 +525,11 @@ class DevServer:
             :meth:`rebuild_with_events` bound to the current watched path.
         """
         errors = perform_rebuild()
-        if not errors and self._reload_hub is not None:
-            self._reload_hub.broadcast_reload()
+        if not errors and self._channel is not None:
+            self._channel.broadcast_reload()
 
-    def run(self, *, ready: Callable[[socketserver.TCPServer], None] | None = None) -> None:
-        """Start the HTTP server and file watcher, serving until interrupted.
+    def run(self, *, ready: Callable[[int], None] | None = None) -> None:
+        """Serve the site and reload socket on one port until stopped or interrupted.
 
         A watchdog Observer watches the whole project tree; every change is
         routed through :meth:`dispatch_change`, so only paths under
@@ -493,76 +537,62 @@ class DevServer:
         :meth:`rebuild` retains the last good build on a failed rebuild, so a
         watcher-triggered failure keeps serving the previous good output.
 
-        :param ready: Optional callback fired once the socket is bound and
-            listening, receiving the live ``TCPServer``. Tests use it to learn
-            the ephemeral port and to call :meth:`~socketserver.BaseServer.shutdown`
-            from another thread; in normal CLI use it is ``None``.
+        The listening socket is bound here, before the initial build and before
+        uvicorn starts, so a port already in use raises :class:`ServeBindError` and port ``0``
+        resolves to a concrete port before anything is printed.
+
+        :param ready: Optional callback fired once the socket is listening and
+            the watcher is running, receiving the bound port. Tests use it to
+            learn the ephemeral port; in normal CLI use it is ``None``.
         """
-        self.build_once()
-        config = load_config(self.config_path, self.overrides)
-        project_dir = self.config_path.parent
-        site_dir = project_dir / config.output_dir
-        reload_hub = _ReloadHub()
-        self.reload_ws_port = reload_hub.start(self.host)
-        self._reload_hub = reload_hub
-        handler = _site_request_handler(site_dir, reload_ws_port=self.reload_ws_port)
-        observer = _start_watcher(project_dir, self._on_watched_change)
+        channel = _ReloadChannel()
         try:
-            # Threaded, so an idle connection a browser opened ahead of time
-            # cannot hold up every other request.
-            with http.server.ThreadingHTTPServer((self.host, self.port), handler) as httpd:
-                self.dispatch_on_serve(httpd, config=config)
-                print(f"Serving at http://{self.host}:{httpd.server_address[1]}/", flush=True)
-                if ready is not None:
-                    ready(httpd)
-                with contextlib.suppress(KeyboardInterrupt):
-                    httpd.serve_forever()
+            # Bind first so a busy port fails before the initial build runs.
+            try:
+                listener = socket.create_server((self.host, self.port))
+            except OSError as exc:
+                raise ServeBindError(self.host, self.port, exc.strerror or str(exc)) from exc
+            with listener, contextlib.suppress(KeyboardInterrupt):
+                self.build_once()
+                config = load_config(self.config_path, self.overrides)
+                site_dir = self.config_path.parent / config.output_dir
+                uvicorn_server = uvicorn.Server(
+                    uvicorn.Config(
+                        build_app(site_dir, channel), log_config=None, log_level="warning"
+                    )
+                )
+                self._channel = channel
+                self._uvicorn = uvicorn_server
+                asyncio.run(self._serve(uvicorn_server, channel, listener, config, ready))
+        finally:
+            self._channel = None
+            self._uvicorn = None
+
+    def stop(self) -> None:
+        """Ask a running :meth:`run` to shut down; safe to call from another thread."""
+        if self._uvicorn is not None:
+            self._uvicorn.should_exit = True
+
+    async def _serve(
+        self,
+        uvicorn_server: uvicorn.Server,
+        channel: _ReloadChannel,
+        listener: socket.socket,
+        config: BartlebyConfig,
+        ready: Callable[[int], None] | None,
+    ) -> None:
+        """Run uvicorn on ``listener`` with the project watcher alive around it."""
+        channel.loop = asyncio.get_running_loop()
+        observer = _start_watcher(self.config_path.parent, self._on_watched_change)
+        try:
+            self.dispatch_on_serve(uvicorn_server, config=config)
+            port = listener.getsockname()[1]
+            print(f"Serving at http://{self.host}:{port}/", flush=True)
+            if ready is not None:
+                ready(port)
+            await uvicorn_server.serve(sockets=[listener])
         finally:
             observer.stop()
-            observer.join()
-            reload_hub.stop()
-            self._reload_hub = None
-
-
-def _site_request_handler(
-    site_dir: Path, *, reload_ws_port: int
-) -> type[http.server.SimpleHTTPRequestHandler]:
-    """Return a request handler class serving files from ``site_dir``.
-
-    :param site_dir: The built output directory to serve.
-    :param reload_ws_port: The reload channel's port; HTML responses are
-        rewritten through :func:`inject_reload_snippet` to connect to it.
-    """
-
-    class Handler(http.server.SimpleHTTPRequestHandler):
-        def __init__(self, *args: object, **kwargs: object) -> None:
-            super().__init__(*args, directory=str(site_dir), **kwargs)  # type: ignore[arg-type]
-
-        def do_GET(self) -> None:
-            if self._serve_html_with_reload_snippet():
-                return
-            super().do_GET()
-
-        def _serve_html_with_reload_snippet(self) -> bool:
-            """Serve the requested path with the reload snippet injected.
-
-            :returns: ``True`` when this path was an HTML file and the
-                response was already sent; ``False`` to fall back to the
-                default static-file handling (non-HTML, missing, or a
-                directory with no ``index.html``).
-            """
-            fs_path = Path(self.translate_path(self.path))
-            if fs_path.is_dir():
-                fs_path = fs_path / "index.html"
-            if fs_path.suffix != ".html" or not fs_path.is_file():
-                return False
-            html = fs_path.read_text(encoding="utf-8")
-            body = inject_reload_snippet(html, ws_port=reload_ws_port).encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return True
-
-    return Handler
+            # Join off the loop: a rebuild in flight may still broadcast to it.
+            await asyncio.to_thread(observer.join)
+            channel.loop = None

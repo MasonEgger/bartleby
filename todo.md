@@ -117,14 +117,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 ## Section 5: The async dev server
 
 ### Step 12: Rewrite the dev server on Starlette and uvicorn with same-port reload (feature)
-- [ ] 1. RED: reload_snippet points at location.host + RELOAD_WS_PATH on serving port; Starlette app serves a built file + mounts reload WS on same app; robustness (idle socket does not block parallel request) on new server; existing is_watched/classify_change tests kept
-- [ ] 2. Document: server.py docstring + CLAUDE.md dev-server bullet (Starlette + uvicorn, one port, event filter unchanged)
-- [ ] 3. GREEN: add starlette + uvicorn deps + uv lock; rewrite server.py (static route + WS route on one app via uvicorn; watchdog -> classifier -> broadcast; reload_snippet same port); remove old ThreadingHTTPServer + separate-port hub
-- [ ] 4. RED: integration (serve on ephemeral port; fetch page + open WS same port; edit file -> reload message arrives)
-- [ ] 5. GREEN: wire into _cmd_serve preserving --host/--port/--events/--set/--base-url
-- [ ] 6. REFACTOR: keep change classifier exactly; only transport changes
-- [ ] 7. Document: CHANGELOG (dev server -> Starlette + uvicorn, same-port reload)
-- [ ] 8. Verify: robustness property + reload round-trip + `just check`
+- [x] 1. RED: reload_snippet points at location.host + RELOAD_WS_PATH on serving port; Starlette app serves a built file + mounts reload WS on same app; robustness (idle socket does not block parallel request) on new server; existing is_watched/classify_change tests kept
+- [x] 2. Document: server.py docstring + CLAUDE.md dev-server bullet (Starlette + uvicorn, one port, event filter unchanged)
+- [x] 3. GREEN: add starlette + uvicorn deps + uv lock; rewrite server.py (static route + WS route on one app via uvicorn; watchdog -> classifier -> broadcast; reload_snippet same port); remove old ThreadingHTTPServer + separate-port hub
+- [x] 4. RED: integration (serve on ephemeral port; fetch page + open WS same port; edit file -> reload message arrives)
+- [x] 5. GREEN: wire into _cmd_serve preserving --host/--port/--events/--set/--base-url
+- [x] 6. REFACTOR: keep change classifier exactly; only transport changes
+- [x] 7. Document: CHANGELOG (dev server -> Starlette + uvicorn, same-port reload)
+- [x] 8. Verify: robustness property + reload round-trip + `just check`
 
 ## Section 6: Three-column docs layout
 

@@ -1,18 +1,22 @@
 # ABOUTME: Tests for the development server core helpers.
-# Network IO (HTTP + WebSocket) is intentionally not exercised in tests —
-# instead we cover the rebuild dispatcher, change classification, and config plumbing.
+# Covers the rebuild dispatcher, change classification, config plumbing, and the
+# Starlette and uvicorn server (HTTP and reload WebSocket on one port).
 
 from __future__ import annotations
 
+import contextlib
 import json
+import logging
 import shutil
 import socket
 import threading
 import time
+import urllib.error
 import urllib.request
 from typing import TYPE_CHECKING
 
 import pytest
+from starlette.routing import Mount, WebSocketRoute
 from watchdog.events import (
     FileClosedEvent,
     FileClosedNoWriteEvent,
@@ -20,20 +24,23 @@ from watchdog.events import (
     FileMovedEvent,
     FileOpenedEvent,
 )
+from websockets.exceptions import ConnectionClosed
 
 from bartleby.server import (
     RELOAD_WS_PATH,
     WATCHED_PATHS,
     DevServer,
     _ProjectChangeHandler,
+    _ReloadChannel,
+    build_app,
     classify_change,
     inject_reload_snippet,
     is_watched,
     reload_snippet,
 )
+from tests.server_helpers import start_running_server, stop_running_server
 
 if TYPE_CHECKING:
-    import socketserver
     from pathlib import Path
 
     from watchdog.events import FileSystemEvent
@@ -247,8 +254,8 @@ def test_watcher_forwards_the_destination_of_a_move(tmp_path: Path) -> None:
 def test_reload_snippet_injected_only_in_serve_mode(project: Path) -> None:
     """The reload snippet is injected on serve but never in ``bartleby build`` output."""
     page = "<html><head></head><body><p>Hi</p></body></html>"
-    served = inject_reload_snippet(page, ws_port=35729)
-    assert reload_snippet(35729) in served
+    served = inject_reload_snippet(page)
+    assert reload_snippet() in served
     assert "</body>" in served
 
     # A plain build must not contain the snippet anywhere in its output.
@@ -289,30 +296,21 @@ def test_events_stream_emits_error_object_on_failed_rebuild(
     assert error_events[0]["errors"]
 
 
-def _start_running_server(
-    server: DevServer,
-) -> tuple[threading.Thread, int, socketserver.TCPServer]:
-    """Start ``server.run`` on a daemon thread and block until it is listening.
-
-    The ``ready`` callback fires once the socket is bound and listening,
-    handing back the live server so the caller can learn the bound port and
-    later call :meth:`~socketserver.BaseServer.shutdown` from another thread.
-
-    :param server: A configured, not-yet-running ``DevServer``.
-    :returns: The worker thread, the bound ephemeral port, and the live server.
-    """
-    bound: dict[str, object] = {}
-    listening = threading.Event()
-
-    def on_ready(httpd: socketserver.TCPServer) -> None:
-        bound["port"] = httpd.server_address[1]
-        bound["httpd"] = httpd
-        listening.set()
-
-    worker = threading.Thread(target=lambda: server.run(ready=on_ready), daemon=True)
-    worker.start()
-    assert listening.wait(timeout=10), "server never started listening"
-    return worker, bound["port"], bound["httpd"]  # type: ignore[return-value]
+def test_events_stream_error_for_broken_config_has_one_relative_path_and_the_hint(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A broken ``bartleby.yml`` reports one relative path prefix and keeps the fix hint."""
+    (project / "bartleby.yml").write_text("site: [unclosed\n", encoding="utf-8")
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
+    server.rebuild_with_events("bartleby.yml")
+    lines = [line for line in capsys.readouterr().out.splitlines() if line.strip()]
+    error_events = [event for event in map(json.loads, lines) if event["type"] == "error"]
+    assert error_events
+    (line,) = error_events[0]["errors"]
+    assert line.startswith("bartleby.yml: ")
+    assert line.count("bartleby.yml") == 1
+    assert str(project) not in line
+    assert "(fix: " in line
 
 
 def _fetch(port: int, path: str = "/") -> str:
@@ -328,13 +326,11 @@ def _run_and_fetch_root(project: Path) -> str:
     :returns: The decoded response body for a GET to ``/``.
     """
     server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
-    worker, port, httpd = _start_running_server(server)
+    worker, port = start_running_server(server)
     try:
         body = _fetch(port)
     finally:
-        httpd.shutdown()
-        worker.join(timeout=10)
-    assert not worker.is_alive()
+        stop_running_server(server, worker)
     return body
 
 
@@ -391,23 +387,28 @@ def test_run_rebuilds_on_watched_content_change(project: Path) -> None:
     a real watchdog observer rather than a direct call to a rebuild method.
     """
     server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
-    worker, port, httpd = _start_running_server(server)
+    worker, port = start_running_server(server)
     try:
         (project / "content" / "index.md").write_text(
             "---\ntitle: Home\n---\n\nWatcher rebuild marker.\n", encoding="utf-8"
         )
         deadline = time.monotonic() + 10
         body = ""
+        last_error: OSError | None = None
         while time.monotonic() < deadline:
-            body = _fetch(port)
-            if "Watcher rebuild marker." in body:
-                break
+            try:
+                body = _fetch(port)
+            except OSError as error:
+                # rebuild() rewrites the output dir in place, so a request that
+                # lands mid-rebuild can get a 404 or a reset. Keep polling.
+                last_error = error
+            else:
+                if "Watcher rebuild marker." in body:
+                    break
             time.sleep(0.1)
-        assert "Watcher rebuild marker." in body
+        assert "Watcher rebuild marker." in body, f"last error: {last_error!r}"
     finally:
-        httpd.shutdown()
-        worker.join(timeout=10)
-    assert not worker.is_alive()
+        stop_running_server(server, worker)
 
 
 def test_run_ignores_changes_outside_watched_paths(project: Path) -> None:
@@ -428,7 +429,7 @@ def test_run_ignores_changes_outside_watched_paths(project: Path) -> None:
 
     server.rebuild = counting_rebuild  # type: ignore[method-assign]
 
-    worker, _port, httpd = _start_running_server(server)
+    worker, port = start_running_server(server)
     try:
         # A file inside the output dir, and a project-root README, are both
         # outside WATCHED_PATHS.
@@ -446,9 +447,7 @@ def test_run_ignores_changes_outside_watched_paths(project: Path) -> None:
             time.sleep(0.05)
         assert calls, "the watcher pipeline appears dead"
     finally:
-        httpd.shutdown()
-        worker.join(timeout=10)
-    assert not worker.is_alive()
+        stop_running_server(server, worker)
 
 
 # --- Step 14: serve the reload snippet and the WebSocket channel -----------
@@ -460,23 +459,54 @@ def test_run_serves_html_with_reload_snippet(project: Path) -> None:
     assert RELOAD_WS_PATH in body
 
 
-def test_served_reload_snippet_targets_the_reload_channel(project: Path) -> None:
-    """The injected script connects to the port the WebSocket hub bound, not the HTTP port.
+def test_reload_snippet_targets_the_serving_port() -> None:
+    """The snippet connects to ``location.host`` on the reload path, with no separate port."""
+    snippet = reload_snippet()
+    assert "location.host+" in snippet
+    assert "location.hostname" not in snippet
+    assert RELOAD_WS_PATH in snippet
 
-    Regression guard: the snippet used ``location.host``, which is the HTTP
-    server, so every page load got a 404 on ``/__bartleby_reload`` and live
-    reload never fired in a real browser.
+
+def test_app_mounts_the_reload_socket_beside_the_site(project: Path) -> None:
+    """One app carries both the reload WebSocket route and the static site mount."""
+    app = build_app(project, _ReloadChannel())
+    paths = {route.path for route in app.routes if isinstance(route, WebSocketRoute)}
+    assert paths == {RELOAD_WS_PATH}
+    assert any(isinstance(route, Mount) and route.path == "" for route in app.routes)
+
+
+def test_served_html_carries_the_snippet_on_the_serving_port(project: Path) -> None:
+    """Served HTML holds the snippet that targets the page's own host and port.
+
+    Regression guard: the snippet once pointed at a separate hub port, so a
+    page behind a proxy or forwarded port never reached the reload channel.
     """
     server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
-    worker, port, httpd = _start_running_server(server)
+    worker, port = start_running_server(server)
     try:
         body = _fetch(port)
     finally:
-        httpd.shutdown()
-        worker.join(timeout=10)
-    assert server.reload_ws_port is not None
-    assert reload_snippet(server.reload_ws_port) in body
-    assert f":{server.reload_ws_port}{RELOAD_WS_PATH}" in body
+        stop_running_server(server, worker)
+    assert reload_snippet() in body
+
+
+def test_run_serves_static_assets_directory_indexes_and_the_404_page(project: Path) -> None:
+    """Assets keep their content type, directories resolve to index.html, misses get 404."""
+    (project / "static").mkdir(exist_ok=True)
+    (project / "static" / "probe.css").write_text("body{color:red}\n", encoding="utf-8")
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
+    worker, port = start_running_server(server)
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/probe.css", timeout=10) as css:
+            assert css.headers.get_content_type() == "text/css"
+            assert RELOAD_WS_PATH not in css.read().decode("utf-8")
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/blog/", timeout=10) as listing:
+            assert listing.headers.get_content_type() == "text/html"
+        with pytest.raises(urllib.error.HTTPError) as missing:
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/no/such/page/", timeout=10)
+        assert missing.value.code == 404
+    finally:
+        stop_running_server(server, worker)
 
 
 def test_idle_connection_does_not_stall_other_requests(project: Path) -> None:
@@ -487,7 +517,7 @@ def test_idle_connection_does_not_stall_other_requests(project: Path) -> None:
     request hangs.
     """
     server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
-    worker, port, httpd = _start_running_server(server)
+    worker, port = start_running_server(server)
     try:
         with (
             socket.create_connection(("127.0.0.1", port), timeout=10),
@@ -495,9 +525,7 @@ def test_idle_connection_does_not_stall_other_requests(project: Path) -> None:
         ):
             assert response.status == 200
     finally:
-        httpd.shutdown()
-        worker.join(timeout=10)
-    assert not worker.is_alive()
+        stop_running_server(server, worker)
 
 
 def test_cli_build_output_is_snippet_free(project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -510,68 +538,59 @@ def test_cli_build_output_is_snippet_free(project: Path, monkeypatch: pytest.Mon
     assert RELOAD_WS_PATH not in rendered
 
 
-def test_run_broadcasts_reload_over_websocket_after_rebuild(project: Path) -> None:
-    """A client connected to ``/__bartleby_reload`` gets a signal after a successful rebuild."""
+def test_reload_round_trip_on_one_port(project: Path) -> None:
+    """A page and the reload socket share a port, and a content edit signals a reload."""
     from websockets.sync.client import connect
 
     server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
-    worker, _port, httpd = _start_running_server(server)
+    worker, port = start_running_server(server)
     try:
-        ws_port = server.reload_ws_port
-        assert ws_port is not None, "the WebSocket reload channel never started"
-        with connect(f"ws://127.0.0.1:{ws_port}/__bartleby_reload", open_timeout=10) as client:
+        assert "Welcome" in _fetch(port)
+        with connect(f"ws://127.0.0.1:{port}{RELOAD_WS_PATH}", open_timeout=10) as client:
             (project / "content" / "index.md").write_text(
                 "---\ntitle: Home\n---\n\nReload broadcast marker.\n", encoding="utf-8"
             )
             message = client.recv(timeout=10)
             assert message == "reload"
+        assert "Reload broadcast marker." in _fetch(port)
     finally:
-        httpd.shutdown()
-        worker.join(timeout=10)
-    assert not worker.is_alive()
+        stop_running_server(server, worker)
 
 
-def test_reload_hub_broadcast_survives_concurrent_client_churn() -> None:
-    """A broadcast raised while clients connect and disconnect must never crash.
+def test_broadcast_survives_concurrent_client_churn(
+    project: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Broadcasting from the watcher thread while sockets connect and drop never errors.
 
-    Regression guard: ``broadcast_reload`` used to build ``list(self._clients)``
-    on the calling (watchdog) thread while ``_handle_client`` added and
-    removed connections on the hub's own loop thread, a race that could raise
-    ``RuntimeError: Set changed size during iteration``. The fix moves the
-    whole snapshot-and-broadcast onto the loop thread via
-    ``call_soon_threadsafe``, so hammering client churn alongside repeated
-    broadcasts must never surface that error.
+    The client set belongs to the server's event loop, so a broadcast from
+    another thread must hand off to that loop instead of touching the set.
+    Hammering connects and drops against repeated broadcasts must leave the
+    server alive and answering requests, and no broadcast may fail (a failure
+    surfaces as an error log from the broadcast's done-callback).
     """
     from websockets.sync.client import connect
 
-    from bartleby.server import _ReloadHub
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
+    worker, port = start_running_server(server)
+    channel = server._channel
+    assert channel is not None
+    stop = threading.Event()
 
-    hub = _ReloadHub()
-    hub.start("127.0.0.1")
-    errors: list[BaseException] = []
-    assert hub._loop is not None
-    hub._loop.call_soon_threadsafe(
-        lambda: hub._loop.set_exception_handler(  # type: ignore[union-attr]
-            lambda loop, context: errors.append(context["exception"])
-        )
-    )
+    def churn_clients() -> None:
+        while not stop.is_set():
+            with (
+                contextlib.suppress(OSError, ConnectionClosed),
+                connect(f"ws://127.0.0.1:{port}{RELOAD_WS_PATH}", open_timeout=2),
+            ):
+                pass
+
+    def broadcast_repeatedly() -> None:
+        deadline = time.monotonic() + 1.0
+        while time.monotonic() < deadline:
+            channel.broadcast_reload()
+        stop.set()
+
     try:
-        stop = threading.Event()
-
-        def churn_clients() -> None:
-            while not stop.is_set():
-                try:
-                    with connect(f"ws://127.0.0.1:{hub.port}/__bartleby_reload", open_timeout=2):
-                        pass
-                except OSError:
-                    pass
-
-        def broadcast_repeatedly() -> None:
-            deadline = time.monotonic() + 1.0
-            while time.monotonic() < deadline:
-                hub.broadcast_reload()
-            stop.set()
-
         churners = [threading.Thread(target=churn_clients) for _ in range(4)]
         for churner in churners:
             churner.start()
@@ -580,35 +599,53 @@ def test_reload_hub_broadcast_survives_concurrent_client_churn() -> None:
         broadcaster.join(timeout=10)
         for churner in churners:
             churner.join(timeout=10)
-        assert not errors, f"broadcast_reload raced with client churn: {errors}"
+        assert "Welcome" in _fetch(port)
     finally:
-        hub.stop()
+        stop_running_server(server, worker)
+    assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
 
 
-def test_reload_hub_start_raises_when_bind_fails(monkeypatch: pytest.MonkeyPatch) -> None:
-    """start() surfaces a failed bind instead of leaving ``port`` silently ``None``."""
-    import bartleby.server as server_module
-
-    async def failing_serve(*args: object, **kwargs: object) -> object:
-        raise OSError("address already in use")
-
-    monkeypatch.setattr(server_module, "serve_websocket", failing_serve)
-    hub = server_module._ReloadHub()
-    with pytest.raises(RuntimeError):
-        hub.start("127.0.0.1")
-    assert hub.port is None
+def test_run_raises_when_the_port_is_in_use(project: Path) -> None:
+    """A bound port fails loudly with ``OSError`` instead of serving nothing."""
+    with socket.create_server(("127.0.0.1", 0)) as occupied:
+        port = occupied.getsockname()[1]
+        server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=port)
+        with pytest.raises(OSError):
+            server.run()
 
 
-def test_reload_hub_stop_closes_the_event_loop() -> None:
-    """stop() leaves the hub's event loop closed rather than leaking it."""
-    from bartleby.server import _ReloadHub
+def test_run_survives_broken_front_matter_and_rebuilds_on_the_fix(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Broken front matter reports an error, keeps the last page, and the next edit rebuilds."""
+    from websockets.sync.client import connect
 
-    hub = _ReloadHub()
-    hub.start("127.0.0.1")
-    loop = hub._loop
-    assert loop is not None
-    hub.stop()
-    assert loop.is_closed()
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, events=True)
+    worker, port = start_running_server(server)
+    page = project / "content" / "index.md"
+    try:
+        good_body = _fetch(port)
+
+        # An unterminated flow sequence is invalid YAML, which raises ContentError.
+        page.write_text("---\ntitle: [unclosed\n---\n\nBody.\n", encoding="utf-8")
+        deadline = time.monotonic() + 10
+        events_seen = ""
+        while time.monotonic() < deadline and '"type": "error"' not in events_seen:
+            events_seen += capsys.readouterr().out
+            time.sleep(0.05)
+        assert '"type": "error"' in events_seen, "the broken page never produced an error event"
+        assert _fetch(port) == good_body
+
+        # The watcher must still be alive: a valid edit rebuilds and broadcasts a reload.
+        with connect(f"ws://127.0.0.1:{port}{RELOAD_WS_PATH}", open_timeout=10) as client:
+            page.write_text(
+                "---\ntitle: Home\n---\n\nRecovered after broken front matter.\n",
+                encoding="utf-8",
+            )
+            assert client.recv(timeout=10) == "reload"
+        assert "Recovered after broken front matter." in _fetch(port)
+    finally:
+        stop_running_server(server, worker)
 
 
 def test_run_retains_last_good_build_after_watcher_triggered_failure(project: Path) -> None:
@@ -624,7 +661,7 @@ def test_run_retains_last_good_build_after_watcher_triggered_failure(project: Pa
 
     server.rebuild = counting_rebuild  # type: ignore[method-assign]
 
-    worker, port, httpd = _start_running_server(server)
+    worker, port = start_running_server(server)
     try:
         good_body = _fetch(port)
 
@@ -643,6 +680,4 @@ def test_run_retains_last_good_build_after_watcher_triggered_failure(project: Pa
 
         assert _fetch(port) == good_body
     finally:
-        httpd.shutdown()
-        worker.join(timeout=10)
-    assert not worker.is_alive()
+        stop_running_server(server, worker)

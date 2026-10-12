@@ -109,6 +109,10 @@ _ERROR_CODES: dict[type[Exception], str] = {
     AgentSurfaceError: "agent_surface_error",
 }
 
+# The author-facing error types the CLI reports without a traceback. The dev
+# server catches the same tuple so a bad edit mid-serve is reported, not fatal.
+LABELED_ERRORS: tuple[type[Exception], ...] = tuple(_ERROR_CODES)
+
 
 class UsageError(Exception):
     """A non-recoverable usage problem (missing/invalid params, no config).
@@ -138,15 +142,7 @@ def main(argv: list[str] | None = None) -> None:
         result = handler(args)
     except UsageError as exc:
         _emit_error(ErrorOutput(message=str(exc), code=exc.code, usage=True), fmt)
-    except (
-        BuildError,
-        ConfigError,
-        AuthorError,
-        ThemeCompileError,
-        ThemeError,
-        ContentError,
-        AgentSurfaceError,
-    ) as exc:
+    except LABELED_ERRORS as exc:
         _report_error(exc, fmt)
     else:
         if result is not None:
@@ -209,16 +205,7 @@ def _configure_logging(*, quiet: bool = False, verbose: bool = False) -> None:
         logger.addHandler(handler)
 
 
-def _report_error(
-    exc: BuildError
-    | ConfigError
-    | AuthorError
-    | ThemeCompileError
-    | ThemeError
-    | ContentError
-    | AgentSurfaceError,
-    fmt: str,
-) -> None:
+def _report_error(exc: Exception, fmt: str) -> None:
     """Surface a build/config/author/content failure in the requested format and exit 1.
 
     Honors ``BARTLEBY_DEBUG``: when set to a truthy value, the exception is
@@ -1203,17 +1190,32 @@ def _cmd_config_schema(args: argparse.Namespace) -> ConfigSchemaOutput:
 
 
 def _cmd_serve(args: argparse.Namespace) -> None:
-    """Start the development server (HTTP + initial build + change-driven rebuilds)."""
+    """Start the development server (HTTP + initial build + change-driven rebuilds).
+
+    ``DevServer.run`` binds its socket before the initial build, so a busy port
+    fails here at once rather than after a full build.
+
+    :raises UsageError: When the host and port cannot be bound.
+    """
     config_path = _resolve_config_path(args)
-    from bartleby.server import DevServer
+    from bartleby.server import DevServer, ServeBindError
 
     config = load_config(config_path, _config_overrides(args))
     host = args.host or config.dev_server.host
     port = args.port if args.port is not None else config.dev_server.port
-    DevServer(
+    server = DevServer(
         config_path,
         host=host,
         port=port,
         events=args.events,
         overrides=_config_overrides(args),
-    ).run()
+    )
+    try:
+        server.run()
+    except ServeBindError as exc:
+        raise UsageError(
+            format_error(
+                f"cannot serve on {host}:{port} ({exc.reason})",
+                hint="pass --port with a free port, or --port 0 to pick one",
+            )
+        ) from exc

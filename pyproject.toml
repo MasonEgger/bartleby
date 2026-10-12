@@ -23,6 +23,8 @@ dependencies = [
     "python-slugify>=8.0",
     "aiofiles>=23.0",
     "ruamel-yaml>=0.19.1",
+    "starlette>=1.7.0",
+    "uvicorn>=0.54.0",
 ]
 
 [dependency-groups]

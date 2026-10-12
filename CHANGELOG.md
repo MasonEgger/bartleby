@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+`ruamel.yaml` is a new dependency.
+Bartleby uses its round-trip loader to write `bartleby.yml` without losing the comments and key order in a file you wrote by hand.
+The new `config_edit` module is the one writer behind `config set`, `enable`, and `new site --full-config`.
+
 ### Changed (Breaking)
 
 The default theme is now `scrivener`, which replaces the old built-in look.

@@ -601,3 +601,11 @@ def test_include_examples_is_rejected_as_unsupported(tmp_path: Path) -> None:
     assert "ai.skills.include_examples" in message
     assert "not yet supported" in message
     assert "fix:" in message
+
+
+def test_color_mode_default_left_blank_means_no_preference(tmp_path: Path) -> None:
+    """A bare ``default:`` is null, so no color mode is pinned."""
+    body = _BASE_CONFIG + "theme:\n  color_mode:\n    default:\n"
+    config = load_config(_write_config(tmp_path, body))
+
+    assert config.theme.color_mode == {}

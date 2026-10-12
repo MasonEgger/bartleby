@@ -15,14 +15,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 8. Verify: coverage of schema + both drift directions + `just check`
 
 ### Step 2: The comment-preserving YAML writer and the full-config renderer (feature)
-- [ ] 1. RED: config_edit tests (set_key keeps comment; creates intermediate maps; siblings untouched; render_full_config emits every field at default with description comment and re-parses; scalar types correct)
-- [ ] 2. Document: config_edit.py docstring (two entry points, ruamel round-trip, one shared writer)
-- [ ] 3. GREEN: add ruamel.yaml dep + uv lock; config_edit.py set_key + render_full_config on one YAML(rt) instance
-- [ ] 4. RED: integration round-trip from scaffold bartleby.yml
-- [ ] 5. GREEN: wire minimally
-- [ ] 6. REFACTOR: shared dotted-path walk
-- [ ] 7. Document: CHANGELOG ruamel.yaml dependency
-- [ ] 8. Verify: comment preservation + full-config round-trip + `just check`
+- [x] 1. RED: config_edit tests (set_key keeps comment; creates intermediate maps; siblings untouched; render_full_config emits every field at default with description comment and re-parses; scalar types correct)
+- [x] 2. Document: config_edit.py docstring (two entry points, ruamel round-trip, one shared writer)
+- [x] 3. GREEN: add ruamel.yaml dep + uv lock; config_edit.py set_key + render_full_config on one YAML(rt) instance
+- [x] 4. RED: integration round-trip from scaffold bartleby.yml
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: shared dotted-path walk
+- [x] 7. Document: CHANGELOG ruamel.yaml dependency
+- [x] 8. Verify: comment preservation + full-config round-trip + `just check`
 
 ## Section 2: CLI configuration surface
 

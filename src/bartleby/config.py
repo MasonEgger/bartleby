@@ -508,7 +508,7 @@ def _parse_color_mode(raw: Any) -> dict[str, str]:
             key_path="theme.color_mode.toggle",
             hint="enable the toggle with the `color-mode.toggle` feature under theme.features",
         )
-    return {str(key): str(value) for key, value in raw.items()}
+    return {str(key): str(value) for key, value in raw.items() if value is not None}
 
 
 def _reject_removed_theme_keys(raw: dict[str, Any]) -> None:

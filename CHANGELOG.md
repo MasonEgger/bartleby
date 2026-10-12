@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Bartleby uses its round-trip loader to write `bartleby.yml` without losing the comments and key order in a file you wrote by hand.
 The new `config_edit` module is the one writer behind `config set`, `enable`, and `new site --full-config`.
 
+markwright emits class hooks and ships no CSS, so both bundled themes now style them.
+`scrivener` and `material` each skin fence labels and secondary labels, the five fence environments, command, super-user, custom and line-number prefixes, highlight marks, YouTube, CodePen, Twitter and Instagram embeds, the slideshow, and the image compare, in light and dark mode.
+
 ### Changed (Breaking)
 
 The default theme is now `scrivener`, which replaces the old built-in look.

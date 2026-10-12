@@ -29,6 +29,12 @@
     --bm-code-text: color-mix(in srgb, var(--bm-text) 90%, var(--bm-accent));
     --bm-on-primary: #ffffff;
     --bm-radius: var(--bb-radius, 0.125rem);
+    --bm-mark: color-mix(in srgb, #ffeb3b 50%, transparent);
+    --bm-env-local: #607d8b;
+    --bm-env-second: #00897b;
+    --bm-env-third: #fb8c00;
+    --bm-env-fourth: #43a047;
+    --bm-env-fifth: #8e24aa;
     --bm-header-height: 3rem;
     --bm-tabs-height: 2.4rem;
     --bm-sidebar-width: 15rem;
@@ -45,6 +51,12 @@
     --bm-link: color-mix(in srgb, var(--bm-accent) 65%, white);
     --bm-code-bg: color-mix(in srgb, var(--bm-text) 7%, var(--bm-bg));
     --bm-code-text: color-mix(in srgb, var(--bm-text) 85%, var(--bm-accent));
+    --bm-mark: color-mix(in srgb, #ffeb3b 26%, transparent);
+    --bm-env-local: #90a4ae;
+    --bm-env-second: #26a69a;
+    --bm-env-third: #ffa726;
+    --bm-env-fourth: #66bb6a;
+    --bm-env-fifth: #ba68c8;
     color-scheme: dark;
   }
 
@@ -931,5 +943,296 @@
   }
   .mw-embed .mw-embed-link {
     color: var(--bm-link);
+  }
+
+  /* markwright class hooks. markwright ships no CSS; these rules skin its output the way
+     material skins its own: tinted surfaces, a colored left rule, small elevation on controls. */
+
+  /* Highlight: a translucent yellow marker. In code a highlight arrives as one <mark> per
+     token, so the padding and radius drop and the fragments read as one bar. */
+  .prose mark {
+    background: var(--bm-mark);
+    color: inherit;
+    padding: 0.1em 0.25em;
+    border-radius: var(--bm-radius);
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+  .prose .highlight mark {
+    padding: 0.1em 0;
+    border-radius: 0;
+  }
+
+  /* Fence labels: a title bar on the block, like material's code title. */
+  .code-label {
+    margin: 1.25em 0 0;
+    padding: 0.5em 1em;
+    border: 1px solid var(--bm-border);
+    border-bottom: 0;
+    border-radius: var(--bm-radius) var(--bm-radius) 0 0;
+    background: color-mix(in srgb, var(--bm-text) 9%, var(--bm-bg));
+    color: var(--bm-text);
+    font-family: var(--bb-font-code, "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+  .code-label + .highlight > pre {
+    margin-top: 0;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+  .secondary-code-label {
+    display: block;
+    margin: 0 0 0.5rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--bm-border);
+    color: var(--bm-text-muted);
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  /* Environments: a tinted block with a colored left rule, as material's admonitions are. */
+  .environment-local { --bm-env: var(--bm-env-local); }
+  .environment-second { --bm-env: var(--bm-env-second); }
+  .environment-third { --bm-env: var(--bm-env-third); }
+  .environment-fourth { --bm-env: var(--bm-env-fourth); }
+  .environment-fifth { --bm-env: var(--bm-env-fifth); }
+  pre.environment-local,
+  pre.environment-second,
+  pre.environment-third,
+  pre.environment-fourth,
+  pre.environment-fifth {
+    border-left: 0.2rem solid var(--bm-env);
+    background: color-mix(in srgb, var(--bm-env) 10%, var(--bm-bg));
+  }
+
+  /* Line prefixes: each line is an <li data-prefix>; the prefix is drawn in a gutter. */
+  pre.prefixed code {
+    white-space: normal;
+  }
+  pre.prefixed code ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  pre.prefixed code ol li {
+    margin: 0;
+    padding: 0;
+    white-space: pre;
+  }
+  pre.prefixed code ol li::before {
+    content: attr(data-prefix);
+    display: inline-block;
+    margin-right: 0.75ch;
+    color: var(--bm-text-faint);
+    text-align: left;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  pre.command code ol li::before,
+  pre.super_user code ol li::before,
+  pre.custom_prefix code ol li::before {
+    min-width: 1ch;
+    color: var(--bm-link);
+    font-weight: 500;
+  }
+  pre.line_numbers code ol li::before {
+    width: 2ch;
+    margin-right: 1.25ch;
+    padding-right: 1ch;
+    border-right: 1px solid var(--bm-border);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  pre.line_numbers code ol li:first-child:nth-last-child(n + 10)::before,
+  pre.line_numbers code ol li:first-child:nth-last-child(n + 10) ~ li::before {
+    width: 3ch;
+  }
+  pre.line_numbers code ol li:first-child:nth-last-child(n + 100)::before,
+  pre.line_numbers code ol li:first-child:nth-last-child(n + 100) ~ li::before {
+    width: 4ch;
+  }
+
+  /* Live embeds. YouTube keeps its author-set size up to the column width and its aspect ratio. */
+  iframe.youtube {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 1.25em 0;
+    border: 0;
+    border-radius: var(--bm-radius);
+    background: var(--bm-surface);
+    box-shadow: 0 0.1rem 0.3rem color-mix(in srgb, black 25%, transparent);
+  }
+  /* CodePen's inline style sets the box, a 2px border and the margin; the border color and
+     margin have to win against it. This is the state before CodePen's script swaps in its iframe. */
+  p.codepen {
+    max-width: 100%;
+    border-color: var(--bm-border) !important;
+    border-width: 1px !important;
+    border-radius: calc(var(--bm-radius) * 2);
+    background: var(--bm-surface);
+    color: var(--bm-text-muted);
+    font-size: 0.875rem;
+    margin: 1.25em 0 !important;
+  }
+  .twitter,
+  .instagram {
+    max-width: 100%;
+    margin: 1.25em 0;
+  }
+  blockquote.twitter-tweet,
+  blockquote.instagram-media {
+    max-width: 34rem;
+    margin: 0;
+    padding: 1rem;
+    border: 1px solid var(--bm-border);
+    border-radius: calc(var(--bm-radius) * 2);
+    background: var(--bm-surface);
+    color: var(--bm-text);
+    font-size: 0.875rem;
+    font-style: normal;
+  }
+
+  /* Slideshow: slides sit in a scroll-snap row; round arrows float over the edges. */
+  .slideshow {
+    position: relative;
+    overflow: hidden;
+    max-width: 100%;
+    margin: 1.25em 0;
+    border-radius: var(--bm-radius);
+    background: var(--bm-surface);
+    box-shadow: 0 0.1rem 0.3rem color-mix(in srgb, black 25%, transparent);
+  }
+  .slideshow .slides {
+    display: flex;
+    height: 100%;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+  }
+  .slideshow .slides::-webkit-scrollbar {
+    display: none;
+  }
+  .slideshow .slides img {
+    flex: 0 0 100%;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    object-fit: cover;
+    scroll-snap-align: start;
+  }
+  .slideshow .action {
+    position: absolute;
+    top: 50%;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    transform: translateY(-50%);
+    border-radius: 50%;
+    background: color-mix(in srgb, black 55%, transparent);
+    color: #ffffff;
+    font-size: 1.75rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.2s;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .slideshow .action:hover {
+    background: var(--bm-primary);
+  }
+  .slideshow .action.left {
+    left: 0.5rem;
+  }
+  .slideshow .action.right {
+    right: 0.5rem;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .slideshow .slides {
+      scroll-behavior: auto;
+    }
+    .slideshow .action {
+      transition: none;
+    }
+  }
+
+  /* Image compare: the left image is clipped at --value, which the range input sets. */
+  .image-compare {
+    position: relative;
+    overflow: hidden;
+    max-width: 100%;
+    margin: 1.25em 0;
+    border-radius: var(--bm-radius);
+    background: var(--bm-surface);
+    box-shadow: 0 0.1rem 0.3rem color-mix(in srgb, black 25%, transparent);
+  }
+  .image-compare img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    object-fit: cover;
+  }
+  .image-compare .image-left {
+    position: absolute;
+    top: 0;
+    left: 0;
+    clip-path: inset(0 calc(100% - var(--value)) 0 0);
+  }
+  .image-compare .control {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    background: transparent;
+    cursor: ew-resize;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .image-compare .control::-webkit-slider-thumb {
+    width: 3px;
+    height: 100vh;
+    border: 0;
+    background: #ffffff;
+    box-shadow: 0 0 0.25rem color-mix(in srgb, black 50%, transparent);
+    cursor: ew-resize;
+    -webkit-appearance: none;
+  }
+  .image-compare .control::-moz-range-thumb {
+    width: 3px;
+    height: 100vh;
+    border: 0;
+    border-radius: 0;
+    background: #ffffff;
+    box-shadow: 0 0 0.25rem color-mix(in srgb, black 50%, transparent);
+    cursor: ew-resize;
+  }
+  .image-compare .control-arrow {
+    position: absolute;
+    top: 50%;
+    left: var(--value);
+    z-index: 3;
+    box-sizing: border-box;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0.6rem;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: var(--bm-primary);
+    color: var(--bm-on-primary);
+    box-shadow: 0 0.1rem 0.3rem color-mix(in srgb, black 40%, transparent);
+    pointer-events: none;
+  }
+  .image-compare:focus-within {
+    outline: 2px solid var(--bm-accent);
+    outline-offset: 2px;
   }
 }

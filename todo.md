@@ -108,11 +108,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 5. Document: none here
 
 ### Step 11: Both themes style every markwright class hook (task)
-- [ ] 1. Scope: material + scrivener tailwind.css + safelist.txt component classes for every markwright hook; regenerated main.css
-- [ ] 2. Tooling: frontend-design; enumerated markwright class hooks; just theme-css; build + browser
-- [ ] 3. Do: enumerate hooks from rendered output; add classes to both themes; recompile
-- [ ] 4. Verify: all eight extensions styled in both themes, both modes, desktop + mobile; screenshots to Mason
-- [ ] 5. Document: CHANGELOG (markwright hooks styled in both themes)
+- [x] 1. Scope: material + scrivener tailwind.css + safelist.txt component classes for every markwright hook; regenerated main.css
+- [x] 2. Tooling: frontend-design; enumerated markwright class hooks; just theme-css; build + browser
+- [x] 3. Do: enumerate hooks from rendered output; add classes to both themes; recompile
+- [x] 4. Verify: all eight extensions styled in both themes, both modes, desktop + mobile; screenshots to Mason
+- [x] 5. Document: CHANGELOG (markwright hooks styled in both themes)
 
 ## Section 5: The async dev server
 

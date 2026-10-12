@@ -24,6 +24,12 @@
     --sc-ruling: color-mix(in srgb, var(--sc-ink) 14%, var(--sc-paper));
     --sc-wash: color-mix(in srgb, var(--sc-ink) 5%, var(--sc-paper));
     --sc-radius: var(--bb-radius, 2px);
+    --sc-mark: #f4e7a6;
+    --sc-env-local: #6b7280;
+    --sc-env-second: #3b6ea8;
+    --sc-env-third: #a8741a;
+    --sc-env-fourth: #3f7d4f;
+    --sc-env-fifth: #8a4f8f;
     --sc-ruling-unit: 1.75rem;
     --sc-half: 0.875rem;
     --sc-quarter: 0.4375rem;
@@ -48,6 +54,12 @@
     --sc-muted: color-mix(in srgb, var(--sc-ink) 68%, var(--sc-paper));
     --sc-ruling: color-mix(in srgb, var(--sc-ink) 16%, var(--sc-paper));
     --sc-wash: color-mix(in srgb, var(--sc-ink) 6%, var(--sc-paper));
+    --sc-mark: color-mix(in srgb, #e3c34a 30%, transparent);
+    --sc-env-local: #9aa1ad;
+    --sc-env-second: #7aa5d8;
+    --sc-env-third: #d8a85a;
+    --sc-env-fourth: #7fbf8d;
+    --sc-env-fifth: #c391c7;
     color-scheme: dark;
   }
 
@@ -1033,5 +1045,294 @@
   }
   .mw-embed .mw-embed-link {
     color: var(--sc-link);
+  }
+
+  /* markwright class hooks. markwright ships no CSS; these rules skin its output in
+     scrivener's terms: hairlines, the half ruling for padding, 2px radius, no shadows. */
+
+  /* Highlight: a muted marker wash. In code a highlight arrives as one <mark> per token,
+     so the padding and radius drop and the fragments read as one bar. */
+  .prose mark {
+    background: var(--sc-mark);
+    color: inherit;
+    padding: 0.05em 0.2em;
+    border-radius: var(--sc-radius);
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+  .prose .highlight mark {
+    padding: 0.05em 0;
+    border-radius: 0;
+  }
+
+  /* Fence labels: the label is a header strip fused to the top of the block it names. */
+  .code-label {
+    margin: 0;
+    padding: var(--sc-quarter) var(--sc-half);
+    border: 1px solid var(--sc-ruling);
+    border-bottom: 0;
+    border-radius: var(--sc-radius) var(--sc-radius) 0 0;
+    background: color-mix(in srgb, var(--sc-ink) 8%, var(--sc-paper));
+    color: var(--sc-ink);
+    font-family: var(--sc-font-ui);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+  }
+  .code-label + .highlight > pre {
+    margin-top: 0;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+  .secondary-code-label {
+    display: block;
+    margin: 0 0 var(--sc-quarter);
+    padding-bottom: var(--sc-quarter);
+    border-bottom: 1px solid var(--sc-ruling);
+    color: var(--sc-muted);
+    font-family: var(--sc-font-ui);
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+
+  /* Environments: a 2px rule on the left edge and a faint wash of the same hue. */
+  .environment-local { --sc-env: var(--sc-env-local); }
+  .environment-second { --sc-env: var(--sc-env-second); }
+  .environment-third { --sc-env: var(--sc-env-third); }
+  .environment-fourth { --sc-env: var(--sc-env-fourth); }
+  .environment-fifth { --sc-env: var(--sc-env-fifth); }
+  pre.environment-local,
+  pre.environment-second,
+  pre.environment-third,
+  pre.environment-fourth,
+  pre.environment-fifth {
+    border-left: 2px solid var(--sc-env);
+    background: color-mix(in srgb, var(--sc-env) 8%, var(--sc-paper));
+  }
+
+  /* Line prefixes: each line is an <li data-prefix>; the prefix is drawn in a gutter. */
+  pre.prefixed code {
+    white-space: normal;
+  }
+  pre.prefixed code ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  pre.prefixed code ol li {
+    margin: 0;
+    padding: 0;
+    white-space: pre;
+  }
+  pre.prefixed code ol li::before {
+    content: attr(data-prefix);
+    display: inline-block;
+    margin-right: 0.75ch;
+    color: var(--sc-muted);
+    text-align: left;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  pre.command code ol li::before,
+  pre.super_user code ol li::before,
+  pre.custom_prefix code ol li::before {
+    min-width: 1ch;
+  }
+  pre.line_numbers code ol li::before {
+    width: 2ch;
+    margin-right: 1.25ch;
+    padding-right: 1ch;
+    border-right: 1px solid var(--sc-ruling);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  pre.line_numbers code ol li:first-child:nth-last-child(n + 10)::before,
+  pre.line_numbers code ol li:first-child:nth-last-child(n + 10) ~ li::before {
+    width: 3ch;
+  }
+  pre.line_numbers code ol li:first-child:nth-last-child(n + 100)::before,
+  pre.line_numbers code ol li:first-child:nth-last-child(n + 100) ~ li::before {
+    width: 4ch;
+  }
+
+  /* Live embeds. YouTube keeps its author-set size up to the column width and its aspect ratio. */
+  iframe.youtube {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 0 0 var(--sc-ruling-unit);
+    border: 1px solid var(--sc-ruling);
+    border-radius: var(--sc-radius);
+    background: var(--sc-surface);
+  }
+  /* CodePen's inline style sets the box, a 2px border and the margin; the border color and
+     margin have to win against it. This is the state before CodePen's script swaps in its iframe. */
+  p.codepen {
+    max-width: 100%;
+    border-color: var(--sc-ruling) !important;
+    border-width: 1px !important;
+    border-radius: var(--sc-radius);
+    background: var(--sc-surface);
+    color: var(--sc-muted);
+    font-family: var(--sc-font-ui);
+    font-size: 0.9375rem;
+    margin: 0 0 var(--sc-ruling-unit) !important;
+  }
+  .twitter,
+  .instagram {
+    max-width: 100%;
+    margin: 0 0 var(--sc-ruling-unit);
+  }
+  .twitter > .twitter-tweet-rendered,
+  .instagram > .instagram-media-rendered {
+    margin-bottom: 0;
+  }
+  blockquote.twitter-tweet,
+  blockquote.instagram-media {
+    max-width: 34rem;
+    margin: 0;
+    padding: var(--sc-half);
+    border: 1px solid var(--sc-ruling);
+    border-radius: var(--sc-radius);
+    background: var(--sc-surface);
+    color: var(--sc-ink);
+    font-family: var(--sc-font-ui);
+    font-size: 0.9375rem;
+    font-style: normal;
+  }
+
+  /* Slideshow: slides sit in a scroll-snap row; the arrows are the only chrome. */
+  .slideshow {
+    position: relative;
+    overflow: hidden;
+    max-width: 100%;
+    margin: 0 0 var(--sc-ruling-unit);
+    border: 1px solid var(--sc-ruling);
+    border-radius: var(--sc-radius);
+    background: var(--sc-surface);
+  }
+  .slideshow .slides {
+    display: flex;
+    height: 100%;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+  }
+  .slideshow .slides::-webkit-scrollbar {
+    display: none;
+  }
+  .slideshow .slides img {
+    flex: 0 0 100%;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    object-fit: cover;
+    scroll-snap-align: start;
+  }
+  .slideshow .action {
+    position: absolute;
+    top: 50%;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    transform: translateY(-50%);
+    border: 1px solid var(--sc-ink);
+    border-radius: var(--sc-radius);
+    background: var(--sc-paper);
+    color: var(--sc-ink);
+    font-family: var(--sc-font-ui);
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .slideshow .action:hover {
+    border-color: var(--sc-margin);
+    background: var(--sc-margin);
+    color: var(--sc-paper);
+  }
+  .slideshow .action.left {
+    left: var(--sc-quarter);
+  }
+  .slideshow .action.right {
+    right: var(--sc-quarter);
+  }
+
+  /* Image compare: the left image is clipped at --value, which the range input sets. */
+  .image-compare {
+    position: relative;
+    overflow: hidden;
+    max-width: 100%;
+    margin: 0 0 var(--sc-ruling-unit);
+    border: 1px solid var(--sc-ruling);
+    border-radius: var(--sc-radius);
+    background: var(--sc-surface);
+  }
+  .image-compare img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    object-fit: cover;
+  }
+  .image-compare .image-left {
+    position: absolute;
+    top: 0;
+    left: 0;
+    clip-path: inset(0 calc(100% - var(--value)) 0 0);
+  }
+  .image-compare .control {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    background: transparent;
+    cursor: ew-resize;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .image-compare .control::-webkit-slider-thumb {
+    width: 2px;
+    height: 100vh;
+    border: 0;
+    background: var(--sc-ink);
+    cursor: ew-resize;
+    -webkit-appearance: none;
+  }
+  .image-compare .control::-moz-range-thumb {
+    width: 2px;
+    height: 100vh;
+    border: 0;
+    border-radius: 0;
+    background: var(--sc-ink);
+    cursor: ew-resize;
+  }
+  .image-compare .control-arrow {
+    position: absolute;
+    top: 50%;
+    left: var(--value);
+    z-index: 3;
+    box-sizing: border-box;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0.5rem;
+    transform: translate(-50%, -50%);
+    border: 1px solid var(--sc-paper);
+    border-radius: var(--sc-radius);
+    background: var(--sc-ink);
+    color: var(--sc-paper);
+    pointer-events: none;
+  }
+  .image-compare:focus-within {
+    outline: 2px solid var(--sc-margin);
+    outline-offset: 2px;
   }
 }

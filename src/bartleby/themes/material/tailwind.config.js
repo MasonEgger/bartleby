@@ -19,6 +19,13 @@
 //   color.text, color.bg-dark, color.text-dark, font.text, font.code, radius.
 //   Dark mode is switched by [data-theme="dark"] on <html> (the color-mode toggle).
 //
+// markwright hooks
+//   markwright emits class hooks and ships no CSS, so tailwind.css styles them
+//   here: a translucent yellow marker for highlights, a title bar for fence
+//   labels, tinted blocks with a colored left rule per fence environment (as the
+//   admonitions are), surface cards for embeds, and round primary controls with
+//   a small elevation for the slideshow and image compare.
+//
 // Type decisions
 //   Roboto when installed, then the system UI stack (no webfont download).
 //   Code uses Roboto Mono, then the system monospace stack. Prose copy is

@@ -43,6 +43,12 @@
 //   Layout. Reading column 66ch; sidebar on the left in the ui face; table of
 //   contents on the right, quiet. Left-aligned, ragged right.
 //
+//   markwright hooks. markwright emits class hooks and ships no CSS, so tailwind.css
+//   styles them here: a muted marker wash for highlights, a header strip for fence
+//   labels, a 2px left rule plus a faint wash per fence environment (the one place
+//   several hues appear, since environments exist to be told apart), hairline
+//   cards for embeds, ink-on-paper controls for the slideshow and image compare.
+//
 //   Overridable tokens: color.primary, color.accent, color.bg, color.text,
 //   color.bg-dark, color.text-dark, font.text, font.ui, font.code, radius.
 //   Dark mode is switched by [data-theme="dark"] on <html> (the color-mode toggle).

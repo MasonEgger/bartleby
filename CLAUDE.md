@@ -70,7 +70,7 @@ Look at `src/bartleby/config.py` and `src/bartleby/authors.py` for the canonical
 ## Where Things Are Defined
 
 - `spec.md` is the living product spec (canonical). Its sections: Starting context, Project overview, Available tooling, External tool candidates, Goals, Non-goals, Roadmap / phase log (with the Deferred list), Component boundaries, Success criteria. Nothing may implement a Non-goal or a Deferred item without a spec change first.
-- `plan.md` and `todo.md` are the current BPE plan (26 steps, 8 sections) and its checkbox mirror. `.ai-sessions/` is tracked: session summaries and `lessons.md` are committed; only `implementation-notes.md` and `handoffs/` stay local. The BPE goal loop requires a new session summary in every commit.
+- `plan.md` and `todo.md` are the current BPE plan (Goal 8: 19 steps, 8 sections) and its checkbox mirror. `.ai-sessions/` is tracked: session summaries and `lessons.md` are committed; only `implementation-notes.md` and `handoffs/` stay local. The BPE goal loop requires a new session summary in every commit.
 - Plugin hooks: the 16 `on_*` methods on the base class in `plugins.py` are the public hook API.
 - Template lookup: `template_search_bases()` in `templates.py` is the single source of truth for the cascade (project `overrides/`, `templates/`, project root, then the theme); `resolve_template_name()` picks the per-page candidate.
 - Section layout: `doc_layout.html` (in `scrivener` and `material`) is the shared page/post/listing layout; it includes `partials/section_nav.html` from `base` for the section sidebar and TOC. `navigation.py` still maps a content-type directory to one nav link; authors list pages under it in `nav` to get a sidebar.

@@ -274,7 +274,7 @@ def test_third_party_notices_lists_vendored_libraries() -> None:
     text = notices.read_text(encoding="utf-8")
     for library, license_name in (
         ("Alpine.js", "MIT"),
-        ("HTMX", "BSD 2-Clause"),
+        ("HTMX", "Zero-Clause BSD"),
         ("lunr.js", "MIT"),
     ):
         assert library in text, f"{library} not listed in THIRD-PARTY-NOTICES"

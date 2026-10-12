@@ -2,6 +2,9 @@
 
 ## Recent
 <!-- 10 most recent lessons, newest first -->
+- Start a license audit from `find` over the shipped tree, not from the plan's list. Step 17's plan named one icon and three libraries; the tree held 24 more icons and an htmx notice mislabeled BSD-2 (it is Zero-Clause BSD) (2026-10-12)
+- Compare a reproduced license notice whitespace-normalized against the fetched upstream text. A dropped copyright holder (modern-normalize has three) or a stale year (Octicons) is invisible to a reader and still fails the license (2026-10-12)
+- Apache-2.0 material bundled inside an MIT package needs the license text shipped in the notices file, not a link to it (2026-10-12)
 - A reference page tied to a schema should hold a generated block between markers (`<!-- config-schema:begin/end -->`) that a test regenerates from `CONFIG_SCHEMA` and compares byte for byte. A hand-written table with a row-count test lets a default drift. Step 16 mutated the schema three ways to prove the test bites (2026-10-12)
 - Writing honest docs is a correctness pass. Stating exactly what an error does turned up a bare `ValueError` traceback from `int()` on `site.feed.limit` that the suite never caught, so write the docs claim before deciding the behavior is fine (2026-10-12)
 - A printed "next command" is a claim the user will paste, so build it with `shlex.quote` and test a site name with a space and one with a trailing slash. Step 15's first draft printed an unquoted path that broke on a space (2026-10-12)
@@ -9,9 +12,6 @@
 - A feature tour is a test of the themes and the pipeline, not only of content. Step 14's tour exposed three features that rendered broken for every user who wrote them (content tabs in a shape neither theme styled, the critic source block processed itself, emoji as 64px blocks), so render every tour section in both themes before calling it done (2026-10-12)
 - A "source beside result" page must guard its source blocks from preprocessors that run before fences are protected. `pymdownx.critic` rewrote its own example, so the source is a raw HTML pre with entity-escaped markers (2026-10-12)
 - A tour's hook list in its test must map one to one onto the tour's claims. A loose hook (`data-prefix` covering three features) passes while any one of them breaks (2026-10-12)
-- A plan can name two feature flags for behavior one existing flag already covers. Step 13 planned a header-tabs flag, but `nav.tabs` already renders top-level sections as tabs, so check the current `THEME_FEATURES` vocabulary before adding a name (2026-10-12)
-- A "responsive" claim is only proven by a scripted overflow probe (scrollWidth versus clientWidth at phone width) across the real pages. Step 13's probe on 24 docs URLs found a 635px sideways scroll on the configuration reference page that predated the step and that no screenshot review had caught (2026-10-12)
-- A docs count that a test pins with a literal word ("all eight") goes stale the moment the set grows. Derive the word from the collection (`len(THEME_FEATURES)`) in the test, then mutate one docs row to confirm the test fails (2026-10-12)
 
 ## Architecture
 - A server's catch list for author-facing errors must be the same tuple the CLI's error map is built from (`cli.LABELED_ERRORS`, derived from `_ERROR_CODES`), not a hand-copied list. A labeled error outside the list kills the watcher thread with no message (2026-10-12)
@@ -26,6 +26,9 @@
 - Before refreshing a README "Status"/test-count section, pull live facts (`git log --reverse` for the first-commit date, `pytest --co | tail -1` for the test count) and cross-check the "deferred items" list against plan.md "Out of scope" rather than copying the stale original forward; the v1 hardening had already closed half the originally-listed deferrals (2026-06-23)
 
 ## Workflow
+- A plan can name two feature flags for behavior one existing flag already covers. Step 13 planned a header-tabs flag, but `nav.tabs` already renders top-level sections as tabs, so check the current `THEME_FEATURES` vocabulary before adding a name (2026-10-12)
+- A "responsive" claim is only proven by a scripted overflow probe (scrollWidth versus clientWidth at phone width) across the real pages. Step 13's probe on 24 docs URLs found a 635px sideways scroll on the configuration reference page that predated the step and that no screenshot review had caught (2026-10-12)
+- A docs count that a test pins with a literal word ("all eight") goes stale the moment the set grows. Derive the word from the collection (`len(THEME_FEATURES)`) in the test, then mutate one docs row to confirm the test fails (2026-10-12)
 - A test that polls a live server during a rebuild must tolerate the rebuild window (HTTPError, URLError until a deadline), or it flakes. The flake is also evidence: `rebuild()` rewrites the output directory in place, so a request mid-rebuild sees a 404, and an atomic output swap is the fix (2026-10-12)
 - To style "every class hook" a library emits, enumerate the hooks from the library's extension sources and a probe build that exercises every extension, not from its docs or a prefix assumption. Step 11 expected an `mw-` prefix on markwright's markup, but only the click-to-load wrapper has one; the other seven extensions emit unprefixed hooks like `code-label` and `slideshow` (2026-10-12)
 - A plan Verify line that says "screenshot every page type" is only met by reading each PNG, so budget for the reads or hand the unread combinations to the validator by name. Step 11's validator read twelve screenshots across both themes, both color modes, and both viewports (2026-10-12)

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+A new `ACKNOWLEDGMENTS.md` credits every bundled library and icon pack, the Lucide-derived sun icon, and the projects that shaped the design, each with its license and a compatibility verdict.
+It ships in the wheel's license files.
+`THIRD-PARTY-NOTICES` now records htmx as Zero-Clause BSD (it said BSD 2-Clause) and Alpine.js with its upstream copyright years.
+
 Docs pages now read as three columns in both bundled themes: the section navigation on the left, the page in the middle, and the page table of contents on the right.
 Below 76rem the table of contents hides, and below 60rem the navigation folds behind a toggle.
 A listing has no headings, so it gets two columns instead of an empty third.

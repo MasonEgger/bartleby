@@ -113,3 +113,4 @@ See [`spec.md`](spec.md) for the full specification.
 ## License
 
 MIT. See [`LICENSE`](LICENSE) for the full text.
+Bundled code and design inspiration are credited in [`ACKNOWLEDGMENTS.md`](ACKNOWLEDGMENTS.md).

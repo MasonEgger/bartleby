@@ -164,11 +164,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 5. Document: add new pages to docs nav
 
 ### Step 17: Acknowledgments and the license compatibility check (task)
-- [ ] 1. Scope: ACKNOWLEDGMENTS.md (each borrowed source, what was taken, license, MIT-compatibility note); linked from README + docs
-- [ ] 2. Tooling: style-linting; upstream license files + web check for Zensical license + sun icon license
-- [ ] 3. Do: enumerate borrowings incl. theme-system visual inspirations; record license + verdict; resolve sun icon (credit or replace)
-- [ ] 4. Verify: every entry names source + license + verdict; no unconfirmed/incompatible asset remains (grep themes for the icon)
-- [ ] 5. Document: ACKNOWLEDGMENTS.md; link from README + docs
+- [x] 1. Scope: ACKNOWLEDGMENTS.md (each borrowed source, what was taken, license, MIT-compatibility note); linked from README + docs
+- [x] 2. Tooling: style-linting; upstream license files + web check for Zensical license + sun icon license
+- [x] 3. Do: enumerate borrowings incl. theme-system visual inspirations; record license + verdict; resolve sun icon (credit or replace)
+- [x] 4. Verify: every entry names source + license + verdict; no unconfirmed/incompatible asset remains (grep themes for the icon)
+- [x] 5. Document: ACKNOWLEDGMENTS.md; link from README + docs
 
 ### Step 18: Correctness sweep for first-run claims (feature)
 - [ ] 1. RED: new site --blog feed carries sample post (RSS + Atom); feature tour HTML has output class for every claimed feature; highlighted code references highlight CSS (HTML + compiled theme CSS); docs feeds carry entries per enabled type

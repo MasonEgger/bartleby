@@ -10,6 +10,7 @@ A theme is a directory that holds a `theme.yml` manifest and optional `templates
 This page lists the manifest keys, how Bartleby resolves a theme, the native features, the token mechanics, and the `bartleby theme` commands.
 The `theme:` block in `bartleby.yml` is in the [configuration reference](configuration.md#theme).
 For task walkthroughs, read [Choose and Customize a Theme](../../guides/posts/choose-and-customize-a-theme.md) and [Write a Theme](../../guides/posts/write-a-theme.md).
+The code and icons the bundled themes ship, and the projects that shaped their design, are credited in [ACKNOWLEDGMENTS.md](https://github.com/MasonEgger/bartleby/blob/main/ACKNOWLEDGMENTS.md).
 
 ## Bundled Themes
 

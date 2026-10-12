@@ -143,6 +143,43 @@ A feature that is enabled in `bartleby.yml` but declared by no manifest in the c
 The `color-mode.toggle` feature alone switches the toggle on.
 The old `theme.color_mode.toggle` key is a config error.
 
+## Page Layout
+
+`scrivener` and `material` lay a page out in up to three columns: the section navigation on the left, the page in the middle, and the page's table of contents on the right.
+A page with a section sidebar or headings gets this layout, and a page with neither is a single reading column.
+A listing page has no headings, so it gets two columns instead of an empty third.
+
+Two features change the layout:
+
+- `nav.sidebar` turns on the left column.
+  Without `nav.tabs`, it shows the whole nav tree.
+  With `nav.tabs`, top-level sections become tabs in the header, and the sidebar shows the tree of the section that holds the page.
+- `nav.toc-fold` folds the page's headings into the left tree, under the page's own entry, and removes the right column.
+  The fold applies only when the page is in the sidebar tree.
+  Other pages, such as a page outside the nav, keep the right-hand table of contents.
+
+`nav.tabs` is the header-tabs flag, and there is no second flag for that layout.
+A header nav item for a section with no URL of its own links to the section's first page, with or without `nav.tabs`.
+
+The layout changes with the width of the window:
+
+| Width | Layout |
+|-------|--------|
+| 76rem and wider | Three columns |
+| Below 76rem | The right-hand table of contents hides, leaving two columns |
+| Below 60rem | One column. The section tree sits above the page and folds behind a toggle. |
+| Below 40rem | The header nav wraps to its own scrolling row, and code blocks and wide tables scroll inside their boxes. |
+
+The `base` theme owns the section navigation partial, `partials/section_nav.html`, so a theme that extends `base` can reuse its answer to which tree the sidebar shows and whether the table of contents is folded.
+
+## Embeds and Code Blocks
+
+markwright emits class hooks and ships no CSS, so `scrivener` and `material` each style them.
+That covers code block labels, the five fence environments, command and line-number prefixes, highlight marks, the four embeds, the slideshow, and the image compare, in light and dark mode.
+`base` provides the click-to-load script and styles that the `load: click` embed option needs, and the two themes inherit them.
+See [Configure markwright and Click-to-Load Embeds](../../guides/posts/configure-markwright.md).
+The feature tour that `bartleby new site` writes shows every one of these in a rendered page.
+
 ## Tokens
 
 `theme.tokens` is a flat map of dotted names to string values.

@@ -157,11 +157,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 ## Section 8: Docs, acknowledgments, correctness, and the final gate
 
 ### Step 16: Document the config, enable, markwright, and layout surface from the schema (task)
-- [ ] 1. Scope: docs configuration.md (from schema), enable how-to, markwright + click-to-load how-to, CLI reference updates (--set/--base-url/config/enable/disable), three-column layout in theme docs; docs nav; schema-to-docs drift test
-- [ ] 2. Tooling: diataxis, tutorial-writing, style-linting, python (drift test); config schema --output json; build/lint docs
-- [ ] 3. Do: generate/write config reference from schema + drift test; write how-tos; update CLI reference; writing hard rules
-- [ ] 4. Verify: build/lint clean; drift test passes; both-way flag/command/section cross-check
-- [ ] 5. Document: add new pages to docs nav
+- [x] 1. Scope: docs configuration.md (from schema), enable how-to, markwright + click-to-load how-to, CLI reference updates (--set/--base-url/config/enable/disable), three-column layout in theme docs; docs nav; schema-to-docs drift test
+- [x] 2. Tooling: diataxis, tutorial-writing, style-linting, python (drift test); config schema --output json; build/lint docs
+- [x] 3. Do: generate/write config reference from schema + drift test; write how-tos; update CLI reference; writing hard rules
+- [x] 4. Verify: build/lint clean; drift test passes; both-way flag/command/section cross-check
+- [x] 5. Document: add new pages to docs nav
 
 ### Step 17: Acknowledgments and the license compatibility check (task)
 - [ ] 1. Scope: ACKNOWLEDGMENTS.md (each borrowed source, what was taken, license, MIT-compatibility note); linked from README + docs

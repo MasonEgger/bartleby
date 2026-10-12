@@ -41,6 +41,26 @@ The generated config holds only what the site needs to build and defines no cont
 `--blog` also adds the blog content type, the `tags` taxonomy, a `nav` entry, a sample post at `content/blog/posts/welcome.md`, and `.authors.yml`.
 Fails if `NAME` already exists.
 
+The command lists what it created and the command to run next:
+
+```
+Created site at demo/
+  .authors.yml
+  README.md
+  bartleby.yml
+  content/ (with a blog in content/blog/)
+  hooks/
+  static/
+  templates/
+Next: cd demo && bartleby serve
+```
+
+`.authors.yml` and the `with a blog` note appear only with `--blog`.
+`--quiet` hides the text.
+With `--output json`, the result has `path`, `config`, `created`, `blog`, `full_config`, and `next_command`.
+`--blog` is the same block that `bartleby enable blog blog` writes.
+[Enable Content Types](../../guides/posts/enable-content-types.md) shows how to add more.
+
 ### `bartleby new post`
 
 Create a new content file under a content type.
@@ -68,7 +88,9 @@ bartleby build [--include-drafts] [--strict] [--dry-run] [--set KEY.PATH=VALUE] 
   It writes nothing.
 - `--set KEY.PATH=VALUE` overrides one config value for this run.
   The value parses as YAML, and the flag repeats.
+  An error that comes from an override names `--set` as its source, as in `error [config_error] --set: theme.features: unknown feature 'bogus' ...`.
 - `--base-url URL` overrides `site.url` for this run, and wins over a `--set site.url=...`.
+  Canonical and absolute URLs use it.
 
 Output goes to `site/` next to `bartleby.yml`, or to the directory named by `output_dir`.
 The new output replaces the old one only when the whole build succeeds.
@@ -119,14 +141,41 @@ bartleby serve [--host HOST] [--port PORT] [--events] [--set KEY.PATH=VALUE] [--
 
 - `--host` defaults to `dev_server.host` from the config, which defaults to `127.0.0.1`.
 - `--port` defaults to `dev_server.port`, which defaults to `8000`.
-- `--events` prints one JSON object per line on stdout for each change and rebuild.
-  The `type` key is `change`, `rebuild`, or `error`.
+- `--events` prints one JSON object per line on stdout: a `ready` object once, then one object for each change and rebuild.
+  See [the event stream](#the-event-stream).
 - `--set KEY.PATH=VALUE` overrides one config value for the whole session, rebuilds included.
 - `--base-url URL` overrides `site.url` for the whole session.
 
 The server always includes drafts.
 Every change triggers a full rebuild, because Bartleby has no incremental build.
 A failed rebuild keeps serving the last good output.
+
+Once the initial build finishes and the server is listening, the command prints the build summary, the address, and how to stop:
+
+```
+Built 9 pages (12 static files) into site/
+Serving at http://127.0.0.1:8000/
+Press Ctrl+C to stop
+```
+
+The address carries the host and port the server actually bound.
+
+### The Event Stream
+
+With `--events`, the command prints these objects in place of the text above, one per line, and flushes each line as it writes it.
+
+| `type` | When | Fields |
+|--------|------|--------|
+| `ready` | Once, after the first build, when the server is listening | `url`, `pages`, `static_files`, `output_dir`, `stop_hint` |
+| `change` | A watched file changed | `path`, relative to the project |
+| `rebuild` | The rebuild after a change succeeded | `status`, always `ok` |
+| `error` | The rebuild after a change failed | `errors`, a list of messages |
+
+```
+{"type": "ready", "url": "http://127.0.0.1:8000/", "pages": 9, "static_files": 12, "output_dir": "site/", "stop_hint": "Press Ctrl+C to stop"}
+```
+
+A `change` object is always followed by a `rebuild` or an `error`.
 
 ## `bartleby render`
 
@@ -200,6 +249,8 @@ See [Agent output formats](agent-surface.md#generated-skills) for what each skil
 ## `bartleby config`
 
 Inspect and edit `bartleby.yml`.
+The four actions share the key paths that [the option reference](configuration.md#option-reference) lists.
+[Configure Bartleby from the Command Line](../../guides/posts/configure-from-the-command-line.md) walks through them.
 
 ### `bartleby config show`
 
@@ -207,8 +258,23 @@ Inspect and edit `bartleby.yml`.
 bartleby config show [--set KEY.PATH=VALUE] [--base-url URL]
 ```
 
-Print every resolved config value with its source: `default`, `file`, or `--set`.
+Print every resolved config value with its source, sorted by key path.
 Values are the parsed ones the build uses.
+
+```
+ai.llms_txt                               = true  (default)
+site.feed.limit                           = 25  (file)
+site.title                                = "Zed"  (--set)
+```
+
+The source label is one of three:
+
+| Label | Meaning |
+|-------|---------|
+| `default` | The key is absent from `bartleby.yml`, and the schema default applies. |
+| `file` | The key is written in `bartleby.yml`. |
+| `--set` | A `--set` override supplied it. `--base-url` is an override of `site.url`, so it reads `--set` too. |
+
 With `--output json`, the command returns `status` and `values`, a list sorted by `path` of objects with `path`, `value`, and `source`.
 
 ### `bartleby config get`
@@ -219,7 +285,7 @@ bartleby config get KEY [--set KEY.PATH=VALUE] [--base-url URL]
 
 Print one resolved value, such as `site.title`.
 A string prints bare; any other value prints as JSON.
-An unknown key exits with code `2` and names the key.
+An unknown key exits with code `2`, names the key, and points at `config show` and `config schema`.
 
 ### `bartleby config set`
 
@@ -230,6 +296,7 @@ bartleby config set KEY VALUE
 Write one value into `bartleby.yml`, keeping its comments and key order.
 `VALUE` is parsed as YAML, so `9000` is an integer.
 The command validates the edited config before it writes, so a rejected value leaves the file untouched.
+On success, it prints `Set KEY to VALUE in bartleby.yml`, or says the value is already set.
 
 ### `bartleby config schema`
 
@@ -237,9 +304,10 @@ The command validates the edited config before it writes, so a rejected value le
 bartleby config schema
 ```
 
-List every key `bartleby.yml` accepts, with its type, default, allowed values, and description.
+List every key `bartleby.yml` accepts, one per line, with its type, default, allowed values, and description.
 The command reads no project file.
-With `--output json`, it returns `status` and `fields`, one object per key.
+With `--output json`, it returns `status` and `fields`, one object per key with `path`, `type`, `default`, `choices`, `repeatable`, `required`, and `description`.
+The configuration reference is checked against this list by a test.
 
 ## `bartleby enable`
 
@@ -251,9 +319,13 @@ Add a content type to `bartleby.yml`.
 `SHAPE` is the kind of content type; `blog` is the only one.
 `NAME` is the type's name, such as `tutorials`, and the new block uses `NAME/posts` as its path.
 The block carries `feeds: [rss, atom]`, and the command adds the `tags` taxonomy when the site lacks it.
+The command creates no content directory and adds no `nav` entry.
 A site may enable the same shape under several names.
 If the name is already defined and enabled, the command changes nothing and says so.
 If it is defined but disabled, the command sets `enabled: true` on it and leaves every other key as it was.
+It prints `Added blog content type 'NAME' to bartleby.yml` or `Re-enabled content type 'NAME' in bartleby.yml`.
+With `--output json`, the result has `status`, `action`, `shape`, `name`, `file`, `enabled`, and `changed`.
+See [Enable Content Types](../../guides/posts/enable-content-types.md).
 
 ## `bartleby disable`
 

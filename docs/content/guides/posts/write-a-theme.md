@@ -52,7 +52,7 @@ features:
 
 `name` is the only required key.
 `version`, `description`, `extends`, and `features` are optional.
-Each `features` entry must be one of the eight native feature names, or the theme fails to load with an error that lists the valid ones.
+Each `features` entry must be one of the nine native feature names, or the theme fails to load with an error that lists the valid ones.
 
 For a full example, here is the manifest of the bundled `scrivener` theme, unchanged:
 
@@ -135,6 +135,9 @@ Break one and the matching feature fails quietly.
 - **The navigation and table of contents helpers.** `partials/nav_macros.html` provides the `holds` and `first_url` macros, and `partials/toc_macros.html` provides `entries` and `tracker`.
   Import them with `{% from "partials/nav_macros.html" import holds %}` instead of copying the logic.
   Because your theme extends `base`, the imports resolve with no extra work.
+- **The section navigation partial.** `partials/section_nav.html` works out which tree the sidebar shows and whether `nav.toc-fold` folds the table of contents.
+  Import it with `{% import "partials/section_nav.html" as section with context %}` and read `section.sidebar_items`, `section.sidebar_title`, `section.sidebar_index_url`, and `section.toc_folded`.
+  The bundled themes use it for their three-column layout.
 - **The color-mode script.** When the `color-mode.toggle` feature is on, `base.html` runs a small script in `<head>` before the page paints.
   It reads the `localStorage` key `bartleby-color-mode`, falls back to `color_mode.default`, then to the system setting, and sets `data-theme` on `<html>`.
   Gate your toggle button on `feature('color-mode.toggle')` too.

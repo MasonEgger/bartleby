@@ -32,6 +32,12 @@ The new `config_edit` module is the one writer behind `config set`, `enable`, an
 markwright emits class hooks and ships no CSS, so both bundled themes now style them.
 `scrivener` and `material` each skin fence labels and secondary labels, the five fence environments, command, super-user, custom and line-number prefixes, highlight marks, YouTube, CodePen, Twitter and Instagram embeds, the slideshow, and the image compare, in light and dark mode.
 
+The docs now cover the configuration and layout surface.
+The configuration reference lists every `bartleby.yml` key with its type, default, allowed values, and required flag, and a test regenerates that list from `CONFIG_SCHEMA` and fails when the page differs.
+Three new guides cover enabling content types, configuring markwright and click-to-load embeds, and configuring from the command line.
+The CLI reference documents `--set`, `--base-url`, `config`, `enable`, `disable`, the `new site` and `serve` output, and the `ready` event on the `--events` stream.
+The themes reference documents the three-column layout, `nav.toc-fold`, and the phone-width behavior.
+
 ### Changed (Breaking)
 
 The default theme is now `scrivener`, which replaces the old built-in look.

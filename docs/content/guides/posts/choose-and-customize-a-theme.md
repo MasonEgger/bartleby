@@ -52,6 +52,17 @@ bartleby build
 
 If you enable a feature that no theme in the chain implements, the build prints a warning that names the theme and the feature.
 
+Three features shape the page layout.
+Both bundled themes lay a docs page out in three columns: the section navigation on the left, the page in the middle, and the page's table of contents on the right.
+
+- `nav.sidebar` turns on the left column.
+- `nav.tabs` moves top-level sections into tabs in the header, and the sidebar then shows only the section the page belongs to.
+- `nav.toc-fold` folds the page's headings into the left tree and removes the right column.
+  Pages that are not in the sidebar tree keep the right-hand table of contents.
+
+On a narrow window the right column hides first, and the section navigation then folds behind a toggle above the page.
+The [themes reference](../../reference/pages/themes.md#page-layout) lists the widths.
+
 ## Step 2: Recolor the Theme with Tokens
 
 Tokens change a theme's colors, fonts, and corner radius without touching a template.

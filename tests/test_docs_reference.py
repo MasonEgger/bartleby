@@ -26,10 +26,12 @@ from bartleby.authors import Author, load_authors
 from bartleby.build import build
 from bartleby.cli import _build_parser, _global_flags
 from bartleby.config import AIConfig, BartlebyConfig, load_config
+from bartleby.config_schema import CONFIG_SCHEMA, ConfigField
 from bartleby.content import Page, TermLink, discover_content
 from bartleby.listings import generate_listing_pages
 from bartleby.llm import generate_jsonld
 from bartleby.navigation import NavItem
+from bartleby.output import BuildOutput, ServeStartOutput
 from bartleby.pagination import PaginatorPage
 from bartleby.plugins import KNOWN_EVENTS, BasePlugin
 from bartleby.skills import generate_skills
@@ -184,7 +186,7 @@ def test_base_class_defines_every_known_event() -> None:
 _NO_DEFAULT = object()
 _INTERNAL_FIELDS = {"config_dir", "disabled_plugins"}
 # Mapping-valued fields whose accepted keys the dataclass cannot express.
-_MAPPING_KEYS = {"theme.color_mode": ("default",), "ai.robots": ("allow", "disallow")}
+_MAPPING_KEYS = {"theme.color_mode": ("default",)}
 
 
 def _dataclass_named(annotation: str) -> type | None:
@@ -246,28 +248,84 @@ def _leaves(keys: set[str]) -> set[str]:
     return {key for key in keys if not any(other.startswith(f"{key}.") for other in keys)}
 
 
+_SCHEMA_BEGIN = "<!-- config-schema:begin -->"
+_SCHEMA_END = "<!-- config-schema:end -->"
+_SCHEMA_COLUMNS = ("Path", "Type", "Default", "Allowed Values", "Required", "Description")
+
+
+def _schema_default_cell(field: ConfigField) -> str:
+    value = field.default
+    if value is None:
+        return "none"
+    if isinstance(value, bool):
+        return f"`{str(value).lower()}`"
+    if isinstance(value, str):
+        return f"`{value}`" if value else '`""`'
+    if isinstance(value, int):
+        return f"`{value}`"
+    return f"`{json.dumps(value)}`"
+
+
+def render_schema_block() -> str:
+    """The configuration reference tables, one per top-level key, in CONFIG_SCHEMA order."""
+    groups: dict[str, list[ConfigField]] = {}
+    for field in CONFIG_SCHEMA:
+        groups.setdefault(field.path.split(".")[0], []).append(field)
+    lines: list[str] = []
+    for section, fields in groups.items():
+        lines += [f"### Options for `{section}`", ""]
+        lines.append("| " + " | ".join(_SCHEMA_COLUMNS) + " |")
+        lines.append("|" + "|".join("---" for _ in _SCHEMA_COLUMNS) + "|")
+        for field in fields:
+            assert "|" not in field.description, f"{field.path}: a pipe breaks the table row"
+            choices = ", ".join(f"`{choice}`" for choice in field.choices or ()) or "any"
+            required = "yes" if field.required else "no"
+            cells = (
+                f"`{field.path}`",
+                field.type_name,
+                _schema_default_cell(field),
+                choices,
+                required,
+                field.description,
+            )
+            lines.append("| " + " | ".join(cells) + " |")
+        lines.append("")
+    return "\n".join(lines).rstrip("\n")
+
+
+def _schema_block_in(page: str) -> str:
+    """The text between the config-schema markers of ``page``."""
+    after_begin = page.split(_SCHEMA_BEGIN, maxsplit=1)[1]
+    return after_begin.split(_SCHEMA_END, maxsplit=1)[0].strip("\n")
+
+
+def _normalized_path(path: str) -> str:
+    """Drop the ``<name>`` segment so a schema path lines up with the dataclass walk."""
+    return path.replace(".<name>.", ".")
+
+
 def _config_doc_rows() -> dict[str, str]:
-    """Every documented key path, mapped to its Default cell (empty when there is none)."""
+    """Every documented key path, mapped to its Default cell, read from the schema tables."""
     rows: dict[str, str] = {}
-    for heading, body in _sections(_read("configuration.md")).items():
-        names = _ticks(heading)
-        if not names or not heading.startswith("`") or heading.startswith("`bartleby"):
-            continue
-        key_tables = [table for table in _tables(body) if table.header[0] == "Key"]
-        if not key_tables:
-            rows.update({name: "" for name in names})
-            continue
-        for table in key_tables:
-            block = re.search(r"The `([\w.]+)` block", table.context)
-            prefix = f"{block.group(1)}." if block else f"{names[0]}."
-            for row in table.rows:
-                default = row[1] if len(row) > 1 else ""
-                rows.update({f"{prefix}{key}": default for key in _ticks(row[0])})
+    block = _schema_block_in(_read("configuration.md"))
+    for table in _tables(block):
+        assert tuple(table.header) == _SCHEMA_COLUMNS
+        for row in table.rows:
+            rows[_normalized_path(row[0].strip("`"))] = row[2]
     return rows
 
 
 def _config_keys() -> Surface:
     return _leaves(set(_config_code_keys())), _leaves(set(_config_doc_rows()))
+
+
+def test_configuration_reference_is_the_schema() -> None:
+    """The block between the markers is CONFIG_SCHEMA rendered, byte for byte.
+
+    On failure, replace the text between the two markers in configuration.md with
+    ``render_schema_block()``.
+    """
+    assert _schema_block_in(_read("configuration.md")) == render_schema_block()
 
 
 def test_top_level_keys_are_the_dataclass_fields() -> None:
@@ -292,7 +350,7 @@ def test_documented_defaults_match_the_dataclasses() -> None:
     mismatches: list[str] = []
     for path, default in _config_code_keys().items():
         expected = _format_default(default)
-        if expected is None or not docs.get(path):
+        if expected is None or docs.get(path, "none") == "none":
             continue
         if docs[path] != expected:
             mismatches.append(f"{path}: docs say {docs[path]!r}, code says {expected!r}")
@@ -333,11 +391,15 @@ def _usage_blocks() -> list[str]:
     """Each ``bartleby ...`` usage line in cli.md, with indented continuation lines joined."""
     blocks: list[str] = []
     for fence in re.findall(r"```\n(.*?)```", _read("cli.md"), flags=re.DOTALL):
+        in_usage = False
         for line in fence.splitlines():
             if line.startswith("bartleby "):
                 blocks.append(line)
-            elif line.startswith(" ") and blocks:
+                in_usage = True
+            elif line.startswith(" ") and in_usage:
                 blocks[-1] += " " + line.strip()
+            else:
+                in_usage = False
     return blocks
 
 
@@ -389,6 +451,29 @@ def _cli_global_flags() -> Surface:
     body = _sections(_read("cli.md"))["Global Flags"]
     docs = {row[0].strip("`") for row in _table_with_header(body, "Flag").rows}
     return code, docs
+
+
+def _serve_event_types() -> Surface:
+    """Every ``type`` the ``serve --events`` stream prints."""
+    server_source = (Path(__file__).parent.parent / "src" / "bartleby" / "server.py").read_text(
+        encoding="utf-8"
+    )
+    code = set(re.findall(r'"type": "(\w+)"', server_source))
+    code.add(str(_ready_event()["type"]))
+    body = _sections(_read("cli.md"))["The Event Stream"]
+    return code, _first_column_ticks(_table_with_header(body, "`type`"))
+
+
+def _ready_event() -> dict[str, object]:
+    build = BuildOutput(pages=1, static_files=1, duration_ms=1, output_dir="site/")
+    return ServeStartOutput(url="http://127.0.0.1:8000/", build=build).to_dict()
+
+
+def _serve_ready_fields() -> Surface:
+    """The fields of the ``ready`` event are the ones its row in the event table names."""
+    body = _sections(_read("cli.md"))["The Event Stream"]
+    row = next(row for row in _table_with_header(body, "`type`").rows if row[0] == "`ready`")
+    return set(_ready_event()) - {"type"}, set(_ticks(row[2]))
 
 
 # ---------------------------------------------------------------------------
@@ -717,6 +802,8 @@ SURFACES: dict[str, Callable[[], Surface]] = {
     "cli commands": _cli_commands,
     "cli arguments": _cli_arguments,
     "cli global flags": _cli_global_flags,
+    "serve event types": _serve_event_types,
+    "serve ready fields": _serve_ready_fields,
     "theme features": _theme_features,
     "theme manifest keys": _theme_manifest_keys,
     "theme directory layout": _theme_layout,

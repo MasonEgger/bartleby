@@ -11,6 +11,12 @@ See [Markdown pipeline](../../concepts/markdown-pipeline.md) for why the order m
 
 ## `markwright`
 
+The `markwright:` section of `bartleby.yml` selects and configures these extensions.
+It takes the keys of a `markwright.toml`: `enable` or `disable`, `warn`, and one table per extension.
+Without the section, every extension loads and every embed loads eagerly.
+Set `load: click` on an embed to hold it back until the reader clicks it.
+See [Configure markwright and Click-to-Load Embeds](../../guides/posts/configure-markwright.md), and markwright's own documentation for each extension's options.
+
 | Extension | Purpose |
 |-----------|---------|
 | `markwright.fence` | Code block labels, secondary labels, environment tags, line numbers, and command prefixes |
@@ -23,6 +29,9 @@ See [Markdown pipeline](../../concepts/markdown-pipeline.md) for why the order m
 | `markwright.image_compare` | Before and after image sliders |
 
 ## `pymdownx`
+
+`pymdownx.tabbed` runs with `alternate_style` on, which is the style the bundled themes expect.
+Override it through `markdown_extensions` if you need the other style.
 
 | Extension | Purpose |
 |-----------|---------|

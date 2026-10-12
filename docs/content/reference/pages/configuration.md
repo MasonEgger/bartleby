@@ -9,6 +9,14 @@ The `bartleby.yml` file at the project root is the single source of truth for si
 Bartleby loads it once at the start of every build.
 The `site` section is the only required one.
 
+Each section below has a short example and the notes that the tables cannot hold.
+The [Option Reference](#option-reference) at the end lists every key with its type, default, allowed values, and whether it is required.
+That list is generated from the same schema that `bartleby config schema` prints and `bartleby new site --full-config` writes, and a test fails when the page and the schema disagree.
+
+You can change values without editing the file.
+`--set KEY.PATH=VALUE` and `--base-url` override a value for one run, and `bartleby config show`, `get`, and `set` read and write it.
+The [CLI reference](cli.md#bartleby-config) has the flags, and [Configure Bartleby from the Command Line](../../guides/posts/configure-from-the-command-line.md) walks through them.
+
 ## `site`
 
 Global site metadata.
@@ -28,25 +36,13 @@ site:
     limit: 50
 ```
 
-| Key | Default | Purpose |
-|-----|---------|---------|
-| `title` | required | Site title |
-| `url` | required | Absolute base URL, used for canonical links, feeds, and the sitemap |
-| `description` | `""` | Site description and fallback page description |
-| `author` | `""` | Default author name |
-| `default_image` | none | Fallback Open Graph image |
-| `twitter` | none | Twitter handle for card metadata |
-| `feed` | see below | Site-wide aggregate feed |
+`site.title` and `site.url` are the only required keys in the whole file.
+`site.url` is the absolute base for canonical links, feeds, and the sitemap.
+Override it for one run with `--base-url` or `--set site.url=...`.
 
-The `site.feed` block controls the aggregate feed that merges items across content types:
-
-| Key | Default | Purpose |
-|-----|---------|---------|
-| `enabled` | `true` | Generate the aggregate feed |
-| `formats` | `[rss, atom]` | Formats to write at the site root |
-| `include` | `[]` | Content types to merge. Empty means every type that has its own `feeds`. A listed type must define `feeds`. |
-| `limit` | `50` | Maximum items in the merged feed |
-| `title` | `site.title` | Channel title |
+The `site.feed` block controls the aggregate feed that merges items across content types.
+A type listed in `site.feed.include` must define `feeds`.
+Leave `include` empty to merge every type that has its own `feeds`.
 
 ## `nav`
 
@@ -96,26 +92,11 @@ content_types:
           - advanced
 ```
 
-| Key | Default | Purpose |
-|-----|---------|---------|
-| `path` | required | Directory under `content/` that holds the type's pages |
-| `enabled` | `true` | Build the type's pages, listing, and feeds. `false` skips them and keeps the block. |
-| `url_base` | none | URL prefix for the type's pages |
-| `url_format` | none | URL template. Placeholders: `{slug}`, `{date:FORMAT}` (strftime), `{title}`, `{categories}` |
-| `readtime` | `false` | Compute `page.readtime` |
-| `excerpt_separator` | none | Marker that ends the excerpt |
-| `taxonomies` | `[]` | Site taxonomies this type uses. Each must be declared under `taxonomies`. |
-| `feeds` | `[]` | Per-type feed formats: `rss`, `atom` |
-| `pagination.enabled` | `false` | Paginate the listing page |
-| `pagination.per_page` | `10` | Pages per listing page |
-| `pagination.url_format` | `page/{page}` | URL template for pages after the first |
-| `metadata` | none | Schema for custom front matter fields, one entry per field |
-| `metadata.<field>.type` | required | The field's type |
-| `metadata.<field>.required` | `false` | Whether every page of the type must set the field |
-| `metadata.<field>.choices` | none | The values the field accepts |
-
 `<field>` stands for a field name that you choose.
 The supported types are listed in [Front matter fields](front-matter-fields.md#custom-metadata).
+`url_format` accepts the placeholders `{slug}`, `{date:FORMAT}` (strftime), `{title}`, and `{categories}`.
+Setting `enabled: false` skips the type's pages, listing, and feeds and keeps the block, as `bartleby disable` does.
+See [Enable Content Types](../../guides/posts/enable-content-types.md) for the commands.
 
 ## `taxonomies`
 
@@ -130,9 +111,8 @@ taxonomies:
     slug_format: "{slug}"
 ```
 
-| Key | Default | Purpose |
-|-----|---------|---------|
-| `slug_format` | `{slug}` | Template that builds a term's slug. The placeholder `{slug}` is the slugified term. |
+`slug_format` is a template that builds a term's slug.
+Its placeholder `{slug}` is the slugified term.
 
 ## `theme`
 
@@ -165,16 +145,13 @@ theme:
   favicon: "img/favicon.ico"
 ```
 
-| Key | Default | Purpose |
-|-----|---------|---------|
-| `name` | `scrivener` | A bundled theme: `base`, `material`, or `scrivener` |
-| `path` | none | A theme directory, relative to the project or absolute |
-| `package` | none | The name of an entry point in the `bartleby.themes` group |
-| `features` | `[]` | Features to switch on, from the list below |
-| `color_mode.default` | none | Starting mode: `light` or `dark`. Without it, the toggle follows the reader's system setting. |
-| `tokens` | `{}` | Design tokens, a flat map of dotted names to CSS values |
-| `icon_packs` | all `true` | Enable or disable a bundled icon pack: `material`, `fontawesome`, `octicons`, `simple` |
-| `logo`, `favicon` | none | The site logo and favicon, as a path relative to `static/` or a full URL. `img/logo.svg` is the file `static/img/logo.svg`. The bundled themes show the logo before the site title in the header and link the favicon from the `<head>`. Templates read them as `config.theme.logo` and `config.theme.favicon`, both root-relative URLs such as `/img/logo.svg`. |
+`theme.color_mode.default` is the starting mode, `light` or `dark`.
+Without it, the toggle follows the reader's system setting.
+`theme.icon_packs` maps a bundled pack to a flag: `material`, `fontawesome`, `octicons`, and `simple`.
+Every pack is on until you set it to `false`.
+`theme.logo` and `theme.favicon` take a path relative to `static/` or a full URL, so `img/logo.svg` is the file `static/img/logo.svg`.
+The bundled themes show the logo before the site title in the header and link the favicon from the `<head>`.
+Templates read them as `config.theme.logo` and `config.theme.favicon`, both root-relative URLs such as `/img/logo.svg`.
 
 Set at most one of `name`, `path`, and `package`.
 Setting more than one is a config error.
@@ -271,6 +248,8 @@ Settings for the markwright extensions (embeds, code fences, highlighting).
 The section has the shape of a `markwright.toml`: `enable` or `disable` (not both), `warn`, and one table per extension.
 markwright validates it, so an unknown key or bad value fails the build with markwright's own message.
 Only this section counts; a `markwright.toml` or `[tool.markwright]` table next to `bartleby.yml` is ignored, and the build warns about it.
+Embeds load eagerly unless you set `load: click` on one.
+[Configure markwright and Click-to-Load Embeds](../../guides/posts/configure-markwright.md) shows the shape.
 
 ```yaml
 markwright:
@@ -326,20 +305,12 @@ ai:
       - "Never use marketing language"
 ```
 
-| Key | Default | Purpose |
-|-----|---------|---------|
-| `llms_txt` | `true` | Write `llms.txt` |
-| `llms_full_txt` | `true` | Write `llms-full.txt` |
-| `markdown_variants` | `true` | Write an `index.md` next to each page's HTML |
-| `agent_surface` | `true` | Write `schema.json` and `content-index.json` |
-| `robots.allow` | `[]` | Crawler names that get an explicit `Allow: /` group |
-| `robots.disallow` | `[]` | Crawler names that get a `Disallow: /` group |
-| `skills.output_dir` | `.claude/skills` | Where `generate-skill` writes |
-| `skills.style_guide` | none | A Markdown file whose text goes into the generated skills. A missing file is a usage error. |
-| `skills.regenerate_on_build` | `false` | Rewrite the skills after every `bartleby build`, as `generate-skill` does. A dry run and the dev server do not. |
-| `agent_context.voice` | none | Voice description, copied into the write and review skills |
-| `agent_context.audience` | none | Audience description, copied the same way |
-| `agent_context.constraints` | `[]` | List of rules, copied the same way |
+`ai.robots` takes two lists, `allow` and `disallow`.
+Crawlers in `allow` get an explicit `Allow: /` group, and crawlers in `disallow` get a `Disallow: /` group.
+`ai.skills.style_guide` names a Markdown file whose text goes into the generated skills, and a missing file is a usage error.
+`ai.skills.regenerate_on_build` rewrites the skills after every `bartleby build`, as `generate-skill` does.
+A dry run and the dev server do not.
+`ai.agent_context.voice`, `audience`, and `constraints` are copied into the write and review skills.
 
 See [Agent output formats](agent-surface.md) for what each output contains.
 
@@ -353,7 +324,147 @@ dev_server:
   port: 8000
 ```
 
-| Key | Default | Purpose |
-|-----|---------|---------|
-| `host` | `127.0.0.1` | Address the server binds to. `--host` overrides it. |
-| `port` | `8000` | Port the server binds to. `--port` overrides it. |
+`--host` and `--port` on `bartleby serve` override these two keys.
+
+## Option Reference
+
+Every key `bartleby.yml` accepts, in the order of `CONFIG_SCHEMA`.
+A path segment in angle brackets, such as `<name>`, stands for a name that you choose, so `content_types.<name>.path` is `content_types.blog.path` for a content type called `blog`.
+`none` in the Default column means the key has no value until you set one.
+`any` in the Allowed Values column means the key does not restrict its value to a closed set.
+
+<!-- config-schema:begin -->
+
+### Options for `site`
+
+| Path | Type | Default | Allowed Values | Required | Description |
+|---|---|---|---|---|---|
+| `site.title` | string | none | any | yes | The site title. |
+| `site.url` | string | none | any | yes | The canonical site URL, used for absolute links. |
+| `site.description` | string | `""` | any | no | A short site description. |
+| `site.author` | string | `""` | any | no | The default author name. |
+| `site.default_image` | string | none | any | no | A fallback social image path or URL. |
+| `site.twitter` | string | none | any | no | The site Twitter handle for social cards. |
+| `site.feed.enabled` | boolean | `true` | any | no | Generate the site-wide aggregate feed. |
+| `site.feed.formats` | list | `["rss", "atom"]` | `rss`, `atom` | no | Feed formats to emit at the site root. |
+| `site.feed.include` | list | `[]` | any | no | Content types to aggregate; empty means every type with feeds. |
+| `site.feed.limit` | integer | `50` | any | no | Maximum items in the aggregate feed. |
+| `site.feed.title` | string | none | any | no | Feed title override; falls back to site.title. |
+
+### Options for `nav`
+
+| Path | Type | Default | Allowed Values | Required | Description |
+|---|---|---|---|---|---|
+| `nav` | list | none | any | no | Explicit navigation tree; omit to build it from the content directory. |
+
+### Options for `theme`
+
+| Path | Type | Default | Allowed Values | Required | Description |
+|---|---|---|---|---|---|
+| `theme.name` | string | `scrivener` | any | no | A bundled theme name. Set only one of name, path, or package. |
+| `theme.path` | string | none | any | no | A theme directory, relative to the project or absolute. |
+| `theme.package` | string | none | any | no | A theme installed as a bartleby.themes entry point. |
+| `theme.features` | list | `[]` | `color-mode.toggle`, `content.code.copy`, `nav.back-to-top`, `nav.section-index`, `nav.sidebar`, `nav.tabs`, `nav.toc-fold`, `search`, `search.highlight` | no | Theme features to enable. |
+| `theme.tokens` | mapping | `{}` | any | no | Design-token overrides, dotted token name to CSS value. |
+| `theme.color_mode.default` | string | none | `light`, `dark` | no | The color mode used before a visitor chooses one. |
+| `theme.icon_packs` | mapping | `{}` | any | no | Icon pack name to enabled flag. |
+| `theme.logo` | string | none | any | no | The site logo, a path under static/ or a URL. |
+| `theme.favicon` | string | none | any | no | The site favicon, a path under static/ or a URL. |
+
+### Options for `authors_file`
+
+| Path | Type | Default | Allowed Values | Required | Description |
+|---|---|---|---|---|---|
+| `authors_file` | string | `.authors.yml` | any | no | The authors file, relative to the project. |
+
+### Options for `exclude_patterns`
+
+| Path | Type | Default | Allowed Values | Required | Description |
+|---|---|---|---|---|---|
+| `exclude_patterns` | list | `["_drafts/**", "_*.md", ".git/**"]` | any | no | Glob patterns for content files to skip. |
+
+### Options for `markdown_extensions`
+
+| Path | Type | Default | Allowed Values | Required | Description |
+|---|---|---|---|---|---|
+| `markdown_extensions` | list | `[]` | any | no | Extra Python-Markdown extensions, by name or name with options. |
+
+### Options for `markwright`
+
+| Path | Type | Default | Allowed Values | Required | Description |
+|---|---|---|---|---|---|
+| `markwright` | mapping | `{}` | any | no | markwright settings (enable, disable, warn, one table per extension), validated by markwright itself. |
+
+### Options for `plugins`
+
+| Path | Type | Default | Allowed Values | Required | Description |
+|---|---|---|---|---|---|
+| `plugins` | list | `[]` | any | no | Plugins to enable; a name-to-boolean mapping also disables auto-registered ones. |
+
+### Options for `extra_css`
+
+| Path | Type | Default | Allowed Values | Required | Description |
+|---|---|---|---|---|---|
+| `extra_css` | list | `[]` | any | no | Extra stylesheet paths or URLs to load on every page. |
+
+### Options for `extra_js`
+
+| Path | Type | Default | Allowed Values | Required | Description |
+|---|---|---|---|---|---|
+| `extra_js` | list | `[]` | any | no | Extra script paths or URLs to load on every page. |
+
+### Options for `output_dir`
+
+| Path | Type | Default | Allowed Values | Required | Description |
+|---|---|---|---|---|---|
+| `output_dir` | string | `site` | any | no | Where the built site is written. |
+
+### Options for `content_types`
+
+| Path | Type | Default | Allowed Values | Required | Description |
+|---|---|---|---|---|---|
+| `content_types.<name>.path` | string | none | any | yes | The directory under content/ that holds this type. |
+| `content_types.<name>.enabled` | boolean | `true` | any | no | Build this type's listing, pages, and feeds; false skips them but keeps the block. |
+| `content_types.<name>.url_base` | string | none | any | no | The URL prefix for this type. |
+| `content_types.<name>.url_format` | string | none | any | no | The URL pattern for pages of this type. |
+| `content_types.<name>.taxonomies` | list | `[]` | any | no | Taxonomies this type uses; each must be declared under taxonomies. |
+| `content_types.<name>.feeds` | list | `[]` | `rss`, `atom` | no | Feed formats to emit for this type. |
+| `content_types.<name>.readtime` | boolean | `false` | any | no | Compute a reading time for each page. |
+| `content_types.<name>.excerpt_separator` | string | none | any | no | The marker that ends a page excerpt. |
+| `content_types.<name>.pagination.enabled` | boolean | `false` | any | no | Paginate the listing page. |
+| `content_types.<name>.pagination.per_page` | integer | `10` | any | no | Items per listing page. |
+| `content_types.<name>.pagination.url_format` | string | `page/{page}` | any | no | The URL pattern for pages after the first. |
+| `content_types.<name>.metadata.<field>.type` | string | none | `string`, `integer`, `boolean`, `date`, `list` | yes | The front matter field type. |
+| `content_types.<name>.metadata.<field>.required` | boolean | `false` | any | no | Whether pages must set this field. |
+| `content_types.<name>.metadata.<field>.choices` | list | none | any | no | Allowed values for this field. |
+
+### Options for `taxonomies`
+
+| Path | Type | Default | Allowed Values | Required | Description |
+|---|---|---|---|---|---|
+| `taxonomies.<name>.slug_format` | string | `{slug}` | any | no | The URL slug pattern for a term. |
+
+### Options for `ai`
+
+| Path | Type | Default | Allowed Values | Required | Description |
+|---|---|---|---|---|---|
+| `ai.llms_txt` | boolean | `true` | any | no | Write llms.txt. |
+| `ai.llms_full_txt` | boolean | `true` | any | no | Write llms-full.txt. |
+| `ai.markdown_variants` | boolean | `true` | any | no | Write a Markdown variant of each page. |
+| `ai.agent_surface` | boolean | `true` | any | no | Write schema.json and content-index.json. |
+| `ai.robots` | mapping | `{}` | any | no | Crawler directives, such as disallow mapped to a list of crawlers. |
+| `ai.skills.output_dir` | string | `.claude/skills` | any | no | Where generated agent skills are written. |
+| `ai.skills.style_guide` | string | none | any | no | A style guide file included in generated skills. |
+| `ai.skills.regenerate_on_build` | boolean | `false` | any | no | Regenerate skills on every build. |
+| `ai.agent_context.voice` | string | none | any | no | The writing voice, included in generated skills. |
+| `ai.agent_context.audience` | string | none | any | no | The target audience, included in generated skills. |
+| `ai.agent_context.constraints` | list | `[]` | any | no | Rules generated skills must follow. |
+
+### Options for `dev_server`
+
+| Path | Type | Default | Allowed Values | Required | Description |
+|---|---|---|---|---|---|
+| `dev_server.host` | string | `127.0.0.1` | any | no | The host the dev server binds to. |
+| `dev_server.port` | integer | `8000` | any | no | The port the dev server listens on. |
+
+<!-- config-schema:end -->

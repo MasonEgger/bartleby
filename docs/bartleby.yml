@@ -45,6 +45,9 @@ nav:
       - Override a Single Theme Template: guides/posts/override-theme-template.md
       - Add a Custom Jinja2 Filter: guides/posts/add-jinja-filter.md
       - Validate Post Metadata at Build Time: guides/posts/validate-metadata.md
+      - Enable Content Types: guides/posts/enable-content-types.md
+      - Configure Bartleby from the Command Line: guides/posts/configure-from-the-command-line.md
+      - Configure markwright and Click-to-Load Embeds: guides/posts/configure-markwright.md
       - Write a Custom Shortcode: guides/posts/write-a-shortcode.md
       - Inject Content with a Hook: guides/posts/inject-content-with-hook.md
       - Configure AI Crawler Directives: guides/posts/ai-crawler-directives.md

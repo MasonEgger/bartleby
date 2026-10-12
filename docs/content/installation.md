@@ -32,7 +32,7 @@ pip install bartleby-ssg
 bartleby --help
 ```
 
-The help output lists the top-level subcommands: `new`, `build`, `validate`, `serve`, `schema`, `content`, `render`, `lint`, `export`, `generate-skill`, and `theme`.
+The help output lists the top-level subcommands: `new`, `build`, `validate`, `serve`, `schema`, `content`, `render`, `lint`, `export`, `generate-skill`, `theme`, `config`, `enable`, and `disable`.
 
 ## Install from Source
 
@@ -58,8 +58,8 @@ cd mysite
 bartleby build
 ```
 
-Bartleby prints `Created site at mysite/`, then `Built 7 pages (5 static files) into site/`.
-Open `site/index.html` through any static file server, or run `bartleby serve`, to see the home page, the blog listing, and a sample post.
+Bartleby prints a list of what it created and `Next: cd mysite && bartleby serve`, then `Built 2 pages (12 static files) into site/`.
+Run `bartleby serve` to see the welcome page and the feature tour.
 To see the Material look instead, set `theme.name: material` in `bartleby.yml`.
 
 ## Next Step

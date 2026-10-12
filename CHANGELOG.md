@@ -7,42 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-A new `ACKNOWLEDGMENTS.md` credits every bundled library and icon pack, the Lucide-derived sun icon, and the projects that shaped the design, each with its license and a compatibility verdict.
-It ships in the wheel's license files.
-`THIRD-PARTY-NOTICES` now records htmx as Zero-Clause BSD (it said BSD 2-Clause) and Alpine.js with its upstream copyright years.
-
-Docs pages now read as three columns in both bundled themes: the section navigation on the left, the page in the middle, and the page table of contents on the right.
-Below 76rem the table of contents hides, and below 60rem the navigation folds behind a toggle.
-A listing has no headings, so it gets two columns instead of an empty third.
-The new `nav.toc-fold` feature folds the table of contents into the left navigation.
-The current page's headings appear under its own entry in the tree, and the right column goes away.
-`nav.tabs` already moves top-level sections into header tabs, so there is no second flag for that layout.
-A header nav item for a section with no URL of its own now links to the section's first page, for every site, with or without `nav.tabs`.
-On narrow screens the header nav wraps to its own scrolling row, code blocks scroll inside their box, and wide tables scroll inside theirs.
-
-`bartleby new site` now writes a docs-shaped site: a small `bartleby.yml`, a home page that says what to do next, and a feature tour.
-The config holds only the site title and URL, the nav, and the theme features, with no content types and no `markwright:` section.
-The feature tour at `content/tour/index.md` shows every markwright and pymdownx feature as its source followed by the live result, with embeds loading eagerly.
-The scaffold README shows how to opt into click-to-load with `load: click` under `markwright:`.
-`bartleby new site --blog` adds the blog content type, the `tags` taxonomy, a nav entry, and a sample post, using the same block as `bartleby enable blog blog`.
-It combines with `--full-config`.
-
-`ruamel.yaml` is a new dependency.
-Bartleby uses its round-trip loader to write `bartleby.yml` without losing the comments and key order in a file you wrote by hand.
-The new `config_edit` module is the one writer behind `config set`, `enable`, and `new site --full-config`.
-
-markwright emits class hooks and ships no CSS, so both bundled themes now style them.
-`scrivener` and `material` each skin fence labels and secondary labels, the five fence environments, command, super-user, custom and line-number prefixes, highlight marks, YouTube, CodePen, Twitter and Instagram embeds, the slideshow, and the image compare, in light and dark mode.
-
-The docs now cover the configuration and layout surface.
-The configuration reference lists every `bartleby.yml` key with its type, default, allowed values, and required flag, and a test regenerates that list from `CONFIG_SCHEMA` and fails when the page differs.
-Three new guides cover enabling content types, configuring markwright and click-to-load embeds, and configuring from the command line.
-The CLI reference documents `--set`, `--base-url`, `config`, `enable`, `disable`, the `new site` and `serve` output, and the `ready` event on the `--events` stream.
-The themes reference documents the three-column layout, `nav.toc-fold`, and the phone-width behavior.
-
 ### Changed (Breaking)
+
+The scaffold from `bartleby new site` is now a docs site, not a blog.
+A new site has a home page, a feature tour, and a small `bartleby.yml` with no content types.
+The blog is opt-in: run `bartleby new site --blog`, or `bartleby enable blog <name>` on an existing site.
+Anything that scripted the old scaffold and expected `content/blog/` or a sample post must pass `--blog`.
+
+A key left null in `bartleby.yml` now reads as its default, the same as leaving the key out.
+A bare `enabled:` on a content type, `site.feed.enabled:`, and the `ai.*` flags that default to true used to read as false.
+A null `site.title` or `site.url` used to become the string "None" and is now treated as missing.
+Write `false` to turn a flag off.
+
+The `on_serve` hook now receives a `uvicorn.Server` instead of an `http.server.ThreadingHTTPServer`.
+A plugin that read attributes of the old server object sees a different type.
+The hook is typed `object`, so the signature is unchanged.
+
+`bartleby enable blog <name>` writes `rss` and `atom` under the content type's `feeds`.
+Each enabled blog now publishes its own RSS and Atom feeds, and the combined site feed includes it.
+A disabled content type produces no output on any surface: no listing, pages, feeds, taxonomy pages, `schema.json` entry, or generated skill.
 
 The default theme is now `scrivener`, which replaces the old built-in look.
 Set `theme.name: material` to keep an indigo, mkdocs-material style layout.
@@ -66,13 +49,105 @@ Any other mkdocs-material feature (`navigation.footer`, `navigation.tracking`, `
 Listings render the HTML; feeds and `llms.txt` use the plain text.
 A theme template that printed `post.excerpt | safe` must print `post.excerpt_html | safe`.
 
+### Removed (Breaking)
+
+`theme.color_mode.toggle` is a `ConfigError`.
+The `color-mode.toggle` feature is the only switch for the light and dark toggle.
+`ai.skills.include_examples` is a `ConfigError`, because generated skills never included examples.
+`bartleby serve --dirty` is gone.
+Incremental rebuilds are a non-goal, and the flag always ran a full rebuild.
+
+### Added
+
+`bartleby new site` prints what it created and the exact next command, with the path quoted when it holds a space.
+`bartleby serve` prints the build summary, the bound URL, and how to stop, after the socket binds, so `--port 0` shows the real port.
+`serve --events` opens with a matching `ready` object, and `--output json` carries the same data as text.
+
+`--full-config` on `bartleby new site` writes every option Bartleby accepts, each at its default with a one-line comment.
+It is generated from `CONFIG_SCHEMA`, the one schema behind config validation, `config schema`, and the configuration reference, and a test fails when any accepted key is missing from it.
+
+`--set key.path=value` on `build`, `serve`, and `validate` overrides config for one run without touching the file.
+The value parses as YAML and goes through the same validator as the file, and an error names `--set` as its source.
+`--base-url` overrides `site.url` for one run, so canonical and absolute URLs use it.
+Environment-variable overrides are not part of this release.
+
+The new `bartleby config` command group reads and writes config.
+`config show` prints the resolved config with the source of each value (default, file, or `--set`).
+`config get` prints one key and exits non-zero on an unknown key.
+`config set` validates the new value and writes it into `bartleby.yml` with the file's comments and key order intact.
+`config schema --output json` lists every key with its type, default, allowed values, and a one-line description.
+
+`bartleby enable <content-type> <name>` adds a content type to `bartleby.yml`, and `bartleby disable <content-type> <name>` sets `enabled: false` and keeps the block.
+`enable` merges the config a blog needs, and running it twice changes nothing.
+A site can enable the same shape more than once, so `bartleby enable blog tutorials` adds a second blog at `tutorials/`.
+
+A `markwright:` section in `bartleby.yml` has the same shape as `markwright.toml`.
+Bartleby validates it and passes it to the extensions through markwright's public config API, so it never reimplements markwright's schema.
+A `markwright.toml` or `[tool.markwright]` table is ignored with one warning.
+Embeds load eagerly by default.
+A site opts into click-to-load per embed with `load: click`, and both bundled themes ship the script and styles that swap the preview for the embed.
+Those assets load only on pages that print a click preview.
+
+The dev server serves the theme's `404.html` for missing pages.
+An enabled content type with no published posts writes a valid empty feed, so the alternate link a page advertises never returns 404.
+
+A new `ACKNOWLEDGMENTS.md` credits every bundled library and icon pack, the Lucide-derived sun icon, and the projects that shaped the design, each with its license and a compatibility verdict.
+It ships in the wheel's license files.
+`THIRD-PARTY-NOTICES` now records htmx as Zero-Clause BSD (it said BSD 2-Clause) and Alpine.js with its upstream copyright years.
+
+Docs pages now read as three columns in both bundled themes: the section navigation on the left, the page in the middle, and the page table of contents on the right.
+Below 76rem the table of contents hides, and below 60rem the navigation folds behind a toggle.
+A listing has no headings, so it gets two columns instead of an empty third.
+The new `nav.toc-fold` feature folds the table of contents into the left navigation.
+The current page's headings appear under its own entry in the tree, and the right column goes away.
+`nav.tabs` already moves top-level sections into header tabs, so there is no second flag for that layout.
+A header nav item for a section with no URL of its own now links to the section's first page, for every site, with or without `nav.tabs`.
+On narrow screens the header nav wraps to its own scrolling row, code blocks scroll inside their box, and wide tables scroll inside theirs.
+
+The feature tour at `content/tour/index.md` shows every markwright and pymdownx feature as its source followed by the live result, with embeds loading eagerly.
+The scaffold README shows how to opt into click-to-load with `load: click` under `markwright:`.
+`bartleby new site --blog` uses the same block as `bartleby enable blog blog`, and it combines with `--full-config`.
+
+The new `config_edit` module is the one writer behind `config set`, `enable`, and `new site --full-config`.
+
+markwright emits class hooks and ships no CSS, so both bundled themes now style them.
+`scrivener` and `material` each skin fence labels and secondary labels, the five fence environments, command, super-user, custom and line-number prefixes, highlight marks, YouTube, CodePen, Twitter and Instagram embeds, the slideshow, and the image compare, in light and dark mode.
+
+The docs now cover the configuration and layout surface.
+The configuration reference lists every `bartleby.yml` key with its type, default, allowed values, and required flag, and a test regenerates that list from `CONFIG_SCHEMA` and fails when the page differs.
+Three new guides cover enabling content types, configuring markwright and click-to-load embeds, and configuring from the command line.
+The CLI reference documents `--set`, `--base-url`, `config`, `enable`, `disable`, the `new site` and `serve` output, and the `ready` event on the `--events` stream.
+The themes reference documents the three-column layout, `nav.toc-fold`, and the phone-width behavior.
+
+- `theme.name`, `theme.path`, and `theme.package` select a theme; set at most one.
+- `theme.tokens` is a flat map of dotted design-token names to CSS values.
+- A feature enabled in `theme.features` that the active theme does not implement logs a build warning.
+  The build still succeeds.
+- The single hardwired `theme/` package is replaced by a theme system.
+  A theme is a directory with a `theme.yml` manifest, and it can build on another theme with `extends`.
+- Three themes ship with Bartleby.
+  `base` holds the shared templates, scripts, and icons that every other theme builds on.
+  `material` is an indigo header bar, navigation tabs, a section sidebar, and a table of contents, in the style of mkdocs-material.
+  `scrivener` is the default: a plain reading layout in the system sans, neutral colors, and one accent for the current page, with a light and a dark palette.
+- Both `material` and `scrivener` ship compiled CSS, so a site builds with no Tailwind install and no custom CSS.
+  Each has a section sidebar that folds behind a toggle on narrow screens, search with `?h=` result highlighting, and a color-mode toggle.
+- `bartleby theme eject` copies the active theme, flattened, into one editable directory (`themes/<name>` by default; `--to` and `--force` are available).
+  Point `theme.path` at that directory and edit the templates directly.
+- The color-mode toggle in both bundled themes is a switch with a sun and a moon icon, shared from `base` as `partials/color_mode_toggle.html`.
+- `bartleby new site` writes a `README.md` with the commands and the project layout.
+- `bartleby theme inspect` lists every theme file with the layer that provides it, so you can see which files a project, an ejected theme, or a bundled theme supplies.
+
 ### Changed
 
 The dev server now runs on Starlette and uvicorn.
 Pages and the live-reload WebSocket share one port, so the reload script connects to the page's own host and port.
-The server also serves the theme's `404.html` for missing pages.
-`starlette` and `uvicorn` are new dependencies.
-`serve` takes the same flags and prints the same lines as before.
+A busy port fails fast with a `--port` hint before any build runs.
+A rebuild that hits a labeled error reports it and keeps the watcher alive.
+`serve` takes `--set` and `--base-url` along with the flags it had before.
+
+`pymdownx.tabbed` now defaults to `alternate_style`, so content tabs render in the shape both themes style.
+The tour's Critic Markup source block prints the literal markers instead of being processed itself.
+Emoji render at text size in both themes.
 
 Errors name the file, the key path or id, and a concrete fix, in one shape: `<file>: <key path>: <message> (fix: <hint>)`.
 `bartleby.yml` now rejects unknown top-level keys, unknown metadata field types, and a non-list `choices`.
@@ -86,11 +161,6 @@ A page that would overwrite `schema.json` or `content-index.json` is an `agent_s
 `ai.skills.regenerate_on_build` rewrites the skills after `bartleby build`.
 `theme.logo` and `theme.favicon` render in all three bundled themes.
 They are paths relative to `static/`, or full URLs.
-
-`bartleby new site` writes a site that builds with no warnings on the default theme.
-The scaffold sets `theme.name: scrivener` with seven native features and a Home and Blog nav.
-It includes a published sample post with an author, a tag, and a description, and a Welcome home page that links to it.
-`validate` and `lint` are clean on a fresh scaffold, and the quickstart and installation pages match what it prints.
 
 `llms.txt` and `llms-full.txt` use absolute URLs, and each page summary is one line.
 `urls.absolute_url` is the one place that builds an absolute URL, so the sitemap, feeds, SEO tags, `llms.txt`, and `content-index.json` agree.
@@ -106,43 +176,8 @@ Generated skills contain no placeholders.
 During that export `on_startup` receives `"export"`, and the page hooks fire.
 
 The public reference docs (hooks, config schema, template context, CLI, theme manifest, agent output formats) were corrected against the code.
-`tests/test_docs_reference.py` compares 26 surfaces in both directions, so a change to code or docs that drifts apart fails the suite.
+`tests/test_docs_reference.py` compares 28 surfaces in both directions, so a change to code or docs that drifts apart fails the suite.
 The docs site builds on the Scrivener theme, with a corrected listing, excerpt, and tag display, and a new `errors.md` reference page.
-
-### Dependencies
-
-- markwright is now `>=0.3.0` (was `>=0.1.0`).
-  Rendered output is unchanged for Bartleby's docs; 0.3.0 adds the public config API and click-to-load embeds that Bartleby will use, and fixes fence directives inside list items and indented fences.
-- pymdown-extensions is now `>=11.0.1` (was `>=10.0`), the first release without PYSEC-2026-3654.
-  The lock resolves 12.2, which escapes quotes in highlighted code as `&quot;` and `&#39;`, which a browser renders as the same text.
-- pydantic arrives as a transitive dependency of markwright 0.3.0.
-
-### Removed (Breaking)
-
-`theme.color_mode.toggle` is a `ConfigError`.
-The `color-mode.toggle` feature is the only switch for the light and dark toggle.
-`ai.skills.include_examples` is a `ConfigError`, because generated skills never included examples.
-`bartleby serve --dirty` is gone.
-Incremental rebuilds are a non-goal, and the flag always ran a full rebuild.
-
-### Added
-
-- `theme.name`, `theme.path`, and `theme.package` select a theme; set at most one.
-- `theme.tokens` is a flat map of dotted design-token names to CSS values.
-- A feature enabled in `theme.features` that the active theme does not implement logs a build warning. The build still succeeds.
-- The single hardwired `theme/` package is replaced by a theme system.
-  A theme is a directory with a `theme.yml` manifest, and it can build on another theme with `extends`.
-- Three themes ship with Bartleby.
-  `base` holds the shared templates, scripts, and icons that every other theme builds on.
-  `material` is an indigo header bar, navigation tabs, a section sidebar, and a table of contents, in the style of mkdocs-material.
-  `scrivener` is the default: a plain reading layout in the system sans, neutral colors, and one accent for the current page, with a light and a dark palette.
-- Both `material` and `scrivener` ship compiled CSS, so a site builds with no Tailwind install and no custom CSS.
-  Each has a section sidebar that folds behind a toggle on narrow screens, search with `?h=` result highlighting, and a color-mode toggle.
-- `bartleby theme eject` copies the active theme, flattened, into one editable directory (`themes/<name>` by default; `--to` and `--force` are available).
-  Point `theme.path` at that directory and edit the templates directly.
-- The color-mode toggle in both bundled themes is a switch with a sun and a moon icon, shared from `base` as `partials/color_mode_toggle.html`.
-- `bartleby new site` writes a `README.md` with the commands and the project layout, and prints the next command to run.
-- `bartleby theme inspect` lists every theme file with the layer that provides it, so you can see which files a project, an ejected theme, or a bundled theme supplies.
 
 ### Fixed
 
@@ -162,9 +197,9 @@ Incremental rebuilds are a non-goal, and the flag always ran a full rebuild.
 - Posts with no date, author, or reading time no longer render an empty meta paragraph under the title.
 - Posts and listings in both bundled themes now get the section sidebar and table of contents that pages get.
   The sidebar needs the section's pages listed under it in `nav`, because `nav` keeps a content-type directory as one link.
-- `bartleby serve` handles requests on threads, so an idle or preconnected browser socket (iOS Safari does this) no longer stalls every other request.
-- Live reload works: the injected script connects to the reload channel's own port on the page's host, not the HTTP port.
-- One file edit triggers one rebuild. The watcher ignores open and close events, so the build reading its own sources no longer starts another build.
+- Live reload works: the injected script connects to the page's own host and port.
+- One file edit triggers one rebuild.
+  The watcher ignores open and close events, so the build reading its own sources no longer starts another build.
 - `bartleby serve` flushes its startup line, so the URL shows up when output is piped.
 - Highlighted code is colored in both bundled themes, in light and dark mode.
   The Pygments token classes under `.highlight` had no CSS, so every block rendered in one color.
@@ -181,11 +216,20 @@ Incremental rebuilds are a non-goal, and the flag always ran a full rebuild.
   The allowed values come from the same list `config schema` prints.
 - `taxonomies.<name>.slug_format` must be a string.
   `config set taxonomies.tags.slug_format '{slug}'` used to store a YAML mapping, so quote the pattern: `config set taxonomies.tags.slug_format '"{slug}"'`.
-- `bartleby build` and `serve` report an output directory they cannot write as a labeled error that names the directory and suggests `chmod` or `output_dir`, instead of a traceback.
-- A key left blank now reads as its default, the same as leaving the key out.
-  This covers a bare `enabled:` on a content type, `site.feed.enabled:`, and the `ai.*` flags that default to true, which used to read as false.
-  Write `false` to turn a flag off.
+- `bartleby build` and `serve` report an unwritable project directory or output directory as a labeled error that names the directory and suggests `chmod` or `output_dir`, instead of a traceback.
+  An `output_dir` on another filesystem no longer raises a traceback either.
 - The docs site enables `feeds` for guides, so its feed links lead to feeds with entries.
+
+### Dependencies
+
+- markwright is now `>=0.3.0` (was `>=0.1.0`).
+  Rendered output is unchanged for Bartleby's docs; 0.3.0 adds the public config API and click-to-load embeds that Bartleby will use, and fixes fence directives inside list items and indented fences.
+- pymdown-extensions is now `>=11.0.1` (was `>=10.0`), the first release without PYSEC-2026-3654.
+  The lock resolves 12.2, which escapes quotes in highlighted code as `&quot;` and `&#39;`, which a browser renders as the same text.
+- pydantic arrives as a transitive dependency of markwright 0.3.0.
+- ruamel.yaml (`>=0.19.1`) is new.
+  Its round-trip loader writes `bartleby.yml` without losing the comments and key order in a file you wrote by hand.
+- starlette (`>=1.7.0`) and uvicorn (`>=0.54.0`) are new, for the dev server.
 
 ## [0.1.0] - 2026-10-05
 

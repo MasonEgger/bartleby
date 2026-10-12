@@ -181,8 +181,8 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 8. Verify: every first-run claim has a failing-if-broken test + `just check`
 
 ### Step 19: Final gate for Goal 8 (task)
-- [ ] 1. Scope: CHANGELOG (finalize Unreleased), README (first-run if drifted); no version bump
-- [ ] 2. Tooling: python; just check; clean-venv wheel install; browser
-- [ ] 3. Do: just check green; clean install; new site + serve -> three-column + tour from small config; --full-config lists every option; enable blog feeds carry entries; wheel bundles scaffold + both themes; walk Goal 8 success criteria
-- [ ] 4. Verify: just check green AND clean-env reproduces three-column site + tour + --full-config + working enable feeds; success-criteria checklist with evidence for Mason
-- [ ] 5. Document: finalize CHANGELOG + README
+- [x] 1. Scope: CHANGELOG (finalize Unreleased), README (first-run if drifted); no version bump
+- [x] 2. Tooling: python; just check; clean-venv wheel install; browser
+- [x] 3. Do: just check green; clean install; new site + serve -> three-column + tour from small config; --full-config lists every option; enable blog feeds carry entries; wheel bundles scaffold + both themes; walk Goal 8 success criteria
+- [x] 4. Verify: just check green AND clean-env reproduces three-column site + tour + --full-config + working enable feeds; success-criteria checklist with evidence for Mason
+- [x] 5. Document: finalize CHANGELOG + README

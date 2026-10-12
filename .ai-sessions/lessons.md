@@ -2,6 +2,8 @@
 
 ## Recent
 <!-- 10 most recent lessons, newest first -->
+- A final gate's evidence file is itself a claim and gets audited like any other. A verdict that rests on a judgment (fit to show, stable enough to build on) is "met with a note" that names whose judgment it is (2026-10-12)
+- A clean-install walk is proof only when a second party repeats it with their own wheel and venv from outside the repo. The executor's walk and the validator's independent one both passed for Goal 8 (2026-10-12)
 - Start a correctness sweep from a grep for every bare coercion (`int(`, bool reads, list iteration) on raw config values. One unguarded `int()` was reported in Step 16 and fourteen more sites of the same shape sat beside it (2026-10-12)
 - A fix hint is itself a claim and must be true for its case. Two hints in Step 18 named fixes that could not work (an output_dir clause for a failure inside the project dir; shell quoting missing from a slug hint), so test that the hinted fix works (2026-10-12)
 - A theme that ships code highlighting must ship the token CSS. Two cycles of screenshot review missed it because monochrome code still looks like code; pin every token pair with a contrast test (2026-10-12)
@@ -10,10 +12,10 @@
 - Apache-2.0 material bundled inside an MIT package needs the license text shipped in the notices file, not a link to it (2026-10-12)
 - A reference page tied to a schema should hold a generated block between markers (`<!-- config-schema:begin/end -->`) that a test regenerates from `CONFIG_SCHEMA` and compares byte for byte. A hand-written table with a row-count test lets a default drift. Step 16 mutated the schema three ways to prove the test bites (2026-10-12)
 - Writing honest docs is a correctness pass. Stating exactly what an error does turned up a bare `ValueError` traceback from `int()` on `site.feed.limit` that the suite never caught, so write the docs claim before deciding the behavior is fine (2026-10-12)
-- A printed "next command" is a claim the user will paste, so build it with `shlex.quote` and test a site name with a space and one with a trailing slash. Step 15's first draft printed an unquoted path that broke on a space (2026-10-12)
-- A startup URL must print after the socket binds, because port 0 only resolves then. Build the serve summary where the bound port is known (`DevServer._serve`), not in the CLI from config (2026-10-12)
 
 ## Architecture
+- A printed "next command" is a claim the user will paste, so build it with `shlex.quote` and test a site name with a space and one with a trailing slash. Step 15's first draft printed an unquoted path that broke on a space (2026-10-12)
+- A startup URL must print after the socket binds, because port 0 only resolves then. Build the serve summary where the bound port is known (`DevServer._serve`), not in the CLI from config (2026-10-12)
 - A server's catch list for author-facing errors must be the same tuple the CLI's error map is built from (`cli.LABELED_ERRORS`, derived from `_ERROR_CODES`), not a hand-copied list. A labeled error outside the list kills the watcher thread with no message (2026-10-12)
 - Refuse a function-local import used to dodge a module cycle. Put the function that combines two modules in the module that already imports both: `resolve_with_sources` lives in `config_schema.py` (which imports `config`), on top of a public `config.source_tags`, so `config.py` never imports `config_schema` (2026-10-12)
 - An error-source heuristic that labels by "an override sits under the error's key" mislabels section-level file errors: a bad `dev_server` block in the file was blamed on `--set dev_server.port=...`. Label an error with the override only when the error key equals the override key or sits under it, and label everything else with the file (2026-10-12)

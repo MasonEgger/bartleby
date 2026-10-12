@@ -16,13 +16,42 @@ For human authors, the surface area is small: write Markdown with YAML front mat
 uv pip install bartleby-ssg
 bartleby new site mysite
 cd mysite
-bartleby new post "Hello world" --type blog
-bartleby build
+bartleby serve
 ```
 
-The scaffold is a working site with a sample post.
-The rendered site lands in `mysite/site/`.
-For a live-reload preview, run `bartleby serve`.
+`new site` lists what it created and the next command:
+
+```text
+Created site at mysite/
+  README.md
+  bartleby.yml
+  content/
+  hooks/
+  static/
+  templates/
+Next: cd mysite && bartleby serve
+```
+
+`serve` builds the site, prints its URL, and rebuilds and reloads the browser each time you save a file:
+
+```text
+Built 2 pages (12 static files) into site/
+Serving at http://127.0.0.1:8000/
+Press Ctrl+C to stop
+```
+
+The scaffold is a docs-shaped site: a home page that says what to do next, and a feature tour that shows each Markdown feature as its source followed by the result.
+Its `bartleby.yml` is small, with the site title and URL, the nav, and the theme features.
+`bartleby build` writes the rendered site to `mysite/site/`.
+
+Add what you need as you go:
+
+- `bartleby new site --full-config mysite` writes every option Bartleby accepts, each at its default with a one-line comment.
+- `bartleby new site --blog mysite` starts with a blog and a sample post.
+- `bartleby enable blog news` adds a blog to an existing site, and `bartleby disable blog news` turns it off.
+  Each enabled blog publishes its own RSS and Atom feeds, plus one combined feed for the site.
+- `bartleby config show`, `config get`, `config set`, and `--set key.path=value` read and change config without opening the file.
+
 New posts are drafts until you set `draft: false` in the front matter.
 
 The default theme is `scrivener`.
@@ -45,8 +74,8 @@ Set `theme.name: material` in `bartleby.yml` to switch to the Material look.
 - **Cross-references**: relative `.md` links rewritten to output URLs
 - **Shortcodes**: `[% ... %]` syntax for reusable Jinja2 fragments
 - **Plugin hooks**: 16 events, from `hooks/*.py` or `bartleby.plugins` entry points
-- **CLI** with `new`, `build`, `validate`, `serve`, `schema`, `content`, `render`, `lint`, `export`, `generate-skill`, and `theme`; every command takes `--output json`
-- **Dev server** with change-driven rebuilds
+- **CLI** with `new`, `build`, `validate`, `serve`, `schema`, `content`, `render`, `lint`, `export`, `generate-skill`, `theme`, `config`, `enable`, and `disable`; every command takes `--output json`
+- **Dev server** on Starlette and uvicorn, with change-driven rebuilds and live reload on the same port
 
 ## Documentation
 
@@ -71,7 +100,7 @@ The plugin hooks, the `bartleby.yml` schema, the template context and base-theme
 ## Status
 
 Version 0.1.0 is on PyPI as `bartleby-ssg`.
-The branch after it replaces the single hardwired theme with a theme system and three bundled themes, rewrites the error messages, makes the scaffold a working site, fixes the agent files and generated skills, and documents the public interfaces.
+The branch after it replaces the single hardwired theme with a theme system and three bundled themes, rewrites the error messages, makes the scaffold a docs-shaped site with a feature tour, adds a three-column docs layout, a `config` command group, `enable` and `disable` for content types, and a dev server with same-port live reload, fixes the agent files and generated skills, and documents the public interfaces.
 `just check` runs ruff lint and format, mypy strict on `src/`, the full pytest suite, and an end-to-end smoke test.
 See the [CHANGELOG](CHANGELOG.md) for the full list, including the breaking changes to `theme:` config.
 

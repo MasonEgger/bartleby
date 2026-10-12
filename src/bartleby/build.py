@@ -10,6 +10,7 @@ import re
 import shutil
 import tempfile
 import time
+import tomllib
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -324,6 +325,7 @@ def _load_inputs(
         authors = load_authors(project_dir / config.authors_file)
         active_theme = select_theme(config.theme, project_dir) if theme is None else theme
         _warn_unimplemented_features(config, active_theme)
+        _warn_ignored_markwright_config(project_dir, config_path.name)
 
         content_dir = project_dir / "content"
         if not content_dir.is_dir():
@@ -372,6 +374,38 @@ def _warn_unimplemented_features(config: BartlebyConfig, theme: ResolvedTheme) -
                 theme.chain[0].name,
                 feature_name,
             )
+
+
+def _warn_ignored_markwright_config(project_dir: Path, config_name: str) -> None:
+    """Warn once when a markwright config file sits beside ``bartleby.yml`` and is ignored.
+
+    Only the ``markwright:`` section of the Bartleby config applies. A ``markwright.toml`` or a
+    ``[tool.markwright]`` table in ``pyproject.toml`` is never read, so say so instead of
+    leaving the author to wonder why it has no effect.
+
+    :param project_dir: The directory holding the Bartleby config.
+    :param config_name: The Bartleby config's file name, as named in the warning.
+    """
+    ignored: list[str] = []
+    if (project_dir / "markwright.toml").is_file():
+        ignored.append("markwright.toml")
+
+    pyproject = project_dir / "pyproject.toml"
+    if pyproject.is_file():
+        try:
+            tool_table = tomllib.loads(pyproject.read_text(encoding="utf-8")).get("tool")
+        except tomllib.TOMLDecodeError:
+            # Not Bartleby's file to validate; it cannot hold a markwright table we can read.
+            tool_table = None
+        if isinstance(tool_table, dict) and "markwright" in tool_table:
+            ignored.append("pyproject.toml [tool.markwright]")
+
+    if ignored:
+        _LOGGER.warning(
+            "ignored %s: only the `markwright:` section of %s applies",
+            " and ".join(ignored),
+            config_name,
+        )
 
 
 def _filter_and_validate(state: _BuildState, *, include_drafts: bool) -> None:

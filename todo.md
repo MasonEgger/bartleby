@@ -91,14 +91,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 ## Section 4: markwright integration
 
 ### Step 9: The `markwright:` config section through markwright's public API (feature)
-- [ ] 1. RED: markwright section parses to raw mapping; no section -> default selected extensions; disable drops one; invalid option -> Bartleby ConfigError sourced to bartleby.yml markwright key; config_from_mapping + extension_configs used; stray markwright.toml/[tool.markwright] warns once
-- [ ] 2. Document: markdown_pipeline.py docstring (configs via markwright public API, never reimplement schema)
-- [ ] 3. GREEN: config.py carry markwright mapping; markdown_pipeline.py config_from_mapping + selected_extensions + extension_configs + exception translation; build.py ignored-file warning
-- [ ] 4. RED: integration (disable twitter -> raw fence; stray markwright.toml warning)
-- [ ] 5. GREEN: wire into build.py
-- [ ] 6. REFACTOR: markwright-config construction in one helper
-- [ ] 7. Document: none here
-- [ ] 8. Verify: enable/disable + option validation + ignored-file warning coverage + `just check`
+- [x] 1. RED: markwright section parses to raw mapping; no section -> default selected extensions; disable drops one; invalid option -> Bartleby ConfigError sourced to bartleby.yml markwright key; config_from_mapping + extension_configs used; stray markwright.toml/[tool.markwright] warns once
+- [x] 2. Document: markdown_pipeline.py docstring (configs via markwright public API, never reimplement schema)
+- [x] 3. GREEN: config.py carry markwright mapping; markdown_pipeline.py config_from_mapping + selected_extensions + extension_configs + exception translation; build.py ignored-file warning
+- [x] 4. RED: integration (disable twitter -> raw fence; stray markwright.toml warning)
+- [x] 5. GREEN: wire into build.py
+- [x] 6. REFACTOR: markwright-config construction in one helper
+- [x] 7. Document: none here
+- [x] 8. Verify: enable/disable + option validation + ignored-file warning coverage + `just check`
 
 ### Step 10: Click-to-load host script and styles in both themes (task)
 - [ ] 1. Scope: base click-to-load swap script + conditional include; preview styles in base + material/scrivener skins

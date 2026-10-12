@@ -246,6 +246,13 @@ def _top_level_value_fields() -> tuple[ConfigField, ...]:
             default=[],
         ),
         _field(
+            "markwright",
+            "mapping",
+            "markwright settings (enable, disable, warn, one table per extension), "
+            "validated by markwright itself.",
+            default={},
+        ),
+        _field(
             "plugins",
             "list",
             "Plugins to enable; a name-to-boolean mapping also disables auto-registered ones.",

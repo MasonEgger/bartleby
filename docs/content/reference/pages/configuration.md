@@ -264,6 +264,18 @@ markdown_extensions:
       base_path: ["includes"]
 ```
 
+## `markwright`
+
+Settings for the markwright extensions (embeds, code fences, highlighting).
+The section has the shape of a `markwright.toml`: `enable` or `disable` (not both), `warn`, and one table per extension.
+markwright validates it, so an unknown key or bad value fails the build with markwright's own message.
+Only this section counts; a `markwright.toml` or `[tool.markwright]` table next to `bartleby.yml` is ignored, and the build warns about it.
+
+```yaml
+markwright:
+  disable: [twitter]
+```
+
 ## `plugins`
 
 Controls installed plugins.

@@ -46,6 +46,7 @@ _TOP_LEVEL_KEYS: tuple[str, ...] = (
     "taxonomies",
     "exclude_patterns",
     "markdown_extensions",
+    "markwright",
     "plugins",
     "extra_css",
     "extra_js",
@@ -265,7 +266,12 @@ DEFAULT_EXCLUDE_PATTERNS: list[str] = ["_drafts/**", "_*.md", ".git/**"]
 
 @dataclass(slots=True)
 class BartlebyConfig:
-    """Root configuration object representing a fully-parsed ``bartleby.yml``."""
+    """Root configuration object representing a fully-parsed ``bartleby.yml``.
+
+    :ivar markwright: The ``markwright:`` section exactly as written. It has the shape of a
+        ``markwright.toml`` and is validated by markwright's own config API at render time
+        (:func:`bartleby.markdown_pipeline.create_markdown_renderer`), never here.
+    """
 
     site: SiteConfig
     nav: list[dict[str, object]] | None
@@ -283,6 +289,7 @@ class BartlebyConfig:
     config_dir: Path
     output_dir: str = "site"
     disabled_plugins: set[str] = field(default_factory=set)
+    markwright: dict[str, object] = field(default_factory=dict)
 
     def enabled_content_types(self) -> dict[str, ContentTypeConfig]:
         """The content types the build produces output for, in config order."""
@@ -611,7 +618,22 @@ def _parse_config(raw: dict[str, Any], config_dir: Path) -> BartlebyConfig:
         dev_server=_parse_dev_server(raw.get("dev_server")),
         config_dir=config_dir,
         output_dir=str(raw.get("output_dir", "site")),
+        markwright=_parse_markwright(raw.get("markwright")),
     )
+
+
+def _parse_markwright(raw: Any) -> dict[str, object]:
+    """Carry the ``markwright`` section through untouched; markwright validates its contents.
+
+    :param raw: The raw ``markwright`` value from the parsed YAML.
+    :returns: The section as a plain mapping, empty when the key is absent or null.
+    :raises ConfigError: If the section is not a mapping.
+    """
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise _expected("markwright", "mapping", "`markwright: {disable: [youtube]}`")
+    return {str(key): value for key, value in raw.items()}
 
 
 def _parse_plugins(raw: Any) -> tuple[list[str], set[str]]:

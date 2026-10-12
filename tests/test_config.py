@@ -728,3 +728,20 @@ def test_content_type_enabled_defaults_to_true_and_reads_false(tmp_path: Path) -
     config = load_config(config_path)
     assert config.content_types["blog"].enabled is True
     assert config.content_types["notes"].enabled is False
+
+
+def test_markwright_section_loads_as_a_raw_mapping(tmp_path: Path) -> None:
+    """The `markwright:` section is carried as written; markwright owns its schema."""
+    config_path = tmp_path / "bartleby.yml"
+    config_path.write_text(
+        "site:\n  title: T\n  url: https://example.com\n"
+        "markwright:\n  disable: [twitter]\n  youtube:\n    load: click\n",
+        encoding="utf-8",
+    )
+    config = load_config(config_path)
+    assert config.markwright == {"disable": ["twitter"], "youtube": {"load": "click"}}
+
+
+def test_markwright_section_defaults_to_an_empty_mapping() -> None:
+    """With no `markwright:` section the config carries an empty mapping, not defaults."""
+    assert load_config(FIXTURES / "minimal.yml").markwright == {}

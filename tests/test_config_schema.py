@@ -145,7 +145,7 @@ class TestDefaults:
 
     @pytest.mark.parametrize(
         "path",
-        ["authors_file", "markdown_extensions", "plugins", "extra_css", "extra_js"],
+        ["authors_file", "markdown_extensions", "markwright", "plugins", "extra_css", "extra_js"],
     )
     def test_absent_top_level_keys_default_as_config_py_parses_them(
         self, path: str, tmp_path: Path

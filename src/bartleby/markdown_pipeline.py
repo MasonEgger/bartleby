@@ -1,30 +1,47 @@
 # ABOUTME: Markdown rendering pipeline with all default extensions configured.
 # Wires markwright, pymdownx, and standard extensions into Python-Markdown.
 
+"""The Markdown rendering pipeline.
+
+The markwright extensions and their options come from markwright's public config API,
+driven by the ``markwright:`` section of ``bartleby.yml``: the section goes to
+``config_from_mapping`` as written, ``selected_extensions`` names what loads, and
+``extension_configs`` supplies the options. Bartleby never reimplements markwright's
+schema and sets no markwright option, so markwright's own defaults apply (embeds load
+eagerly, for one). The pymdownx and standard extensions below load after markwright's,
+which keeps ``markwright.fence`` ahead of ``pymdownx.superfences``.
+"""
+
 from __future__ import annotations
 
+import logging
+import warnings
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from typing import TYPE_CHECKING, Any
 
 import markdown
+from markwright import (
+    ConfigError as MarkwrightConfigError,
+)
+from markwright import (
+    ConfigWarning,
+    config_from_mapping,
+    extension_configs,
+    selected_extensions,
+)
+
+from bartleby.config import ConfigError
 
 if TYPE_CHECKING:
     from bartleby.config import BartlebyConfig
 
+_LOGGER = logging.getLogger("bartleby")
 
-_DEFAULT_EXTENSIONS: tuple[str, ...] = (
-    # markwright — fence must load before superfences so its preprocessor
-    # (priority 40) extracts directives before superfences's preprocessor
-    # (priority 25) processes the fenced block.
-    "markwright.fence",
-    "markwright.highlight",
-    "markwright.youtube",
-    "markwright.codepen",
-    "markwright.twitter",
-    "markwright.instagram",
-    "markwright.slideshow",
-    "markwright.image_compare",
+_MARKWRIGHT_SOURCE = "bartleby.yml"
+_MARKWRIGHT_KEY = "markwright"
+
+_BUNDLED_EXTENSIONS: tuple[str, ...] = (
     # pymdownx
     "pymdownx.superfences",
     "pymdownx.highlight",
@@ -65,31 +82,79 @@ class RenderedContent:
 def create_markdown_renderer(config: BartlebyConfig) -> markdown.Markdown:
     """Build a ``markdown.Markdown`` instance with Bartleby's default extensions.
 
-    :param config: Parsed Bartleby config. Per-extension overrides from
-        ``config.markdown_extensions`` are merged with the defaults — the
-        override's name replaces the default-list string entry, and any
-        ``config`` mapping is passed through as ``extension_configs``.
+    :param config: Parsed Bartleby config. ``config.markwright`` selects and configures the
+        markwright extensions; per-extension overrides from ``config.markdown_extensions``
+        are merged with the other defaults: the override's name replaces the
+        default-list string entry, and any ``config`` mapping is passed through as
+        ``extension_configs``.
     :returns: A configured :class:`markdown.Markdown` instance.
+    :raises ConfigError: When markwright rejects the ``markwright:`` section.
     :raises ImportError: When a required extension cannot be loaded; the
         error message names the offending extension.
     """
-    overrides = _index_overrides(config.markdown_extensions)
-    extensions: list[str] = list(_DEFAULT_EXTENSIONS)
-    extension_configs: dict[str, dict[str, object]] = {}
-    for name, override_config in overrides.items():
-        if name not in extensions:
-            extensions.append(name)
-        if override_config:
-            extension_configs[name] = override_config
+    # markwright reports no-op or contradictory options as ConfigWarning, from option
+    # validation, from selection, and again at extension init; collect them all so each
+    # distinct message reaches the bartleby log once instead of a raw Python warning.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", ConfigWarning)
+        # markwright's extensions go first so markwright.fence precedes pymdownx.superfences
+        markwright_names, markwright_configs = _markwright_extensions(config.markwright)
+        extensions: list[str] = [*markwright_names, *_BUNDLED_EXTENSIONS]
+        configs: dict[str, dict[str, object]] = dict(markwright_configs)
+        for name, override_config in _index_overrides(config.markdown_extensions).items():
+            if name not in extensions:
+                extensions.append(name)
+            if override_config:
+                configs[name] = override_config
 
+        try:
+            renderer = markdown.Markdown(
+                extensions=extensions,
+                extension_configs=configs,
+                output_format="html",
+            )
+        except (ImportError, ModuleNotFoundError) as exc:
+            raise ImportError(f"Failed to load a configured markdown extension: {exc}") from exc
+
+    logged: set[str] = set()
+    for warning in caught:
+        if not issubclass(warning.category, ConfigWarning):
+            warnings.warn_explicit(
+                warning.message, warning.category, warning.filename, warning.lineno
+            )
+            continue
+        message = str(warning.message)
+        if message not in logged:
+            logged.add(message)
+            _LOGGER.warning("%s", message)
+    return renderer
+
+
+def _markwright_extensions(
+    section: dict[str, object],
+) -> tuple[list[str], dict[str, dict[str, object]]]:
+    """Resolve the ``markwright:`` section through markwright's public config API.
+
+    :param section: The raw section, empty when ``bartleby.yml`` has none.
+    :returns: The dotted extension names markwright selects, in its order, and the
+        ``extension_configs`` entries for those with options.
+    :raises ConfigError: With markwright's message, ``bartleby.yml`` as the source and
+        ``markwright`` as the key path, when markwright rejects the section.
+    """
+    label = f"{_MARKWRIGHT_SOURCE}: {_MARKWRIGHT_KEY}"
     try:
-        return markdown.Markdown(
-            extensions=extensions,
-            extension_configs=extension_configs,
-            output_format="html",
-        )
-    except (ImportError, ModuleNotFoundError) as exc:
-        raise ImportError(f"Failed to load a configured markdown extension: {exc}") from exc
+        markwright_config = config_from_mapping(section, label)
+    except MarkwrightConfigError as exc:
+        raise ConfigError(
+            str(exc).removeprefix(f"{label}: "),
+            key_path=_MARKWRIGHT_KEY,
+            hint="fix the `markwright:` section; it takes the same keys as markwright.toml",
+            source=_MARKWRIGHT_SOURCE,
+        ) from exc
+
+    names = selected_extensions(markwright_config)
+
+    return [f"markwright.{name}" for name in names], extension_configs(markwright_config, names)
 
 
 def render_markdown(source: str, renderer: markdown.Markdown) -> RenderedContent:

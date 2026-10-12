@@ -33,7 +33,7 @@ from bartleby.config import (
     parse_override_value,
     validate_config_text,
 )
-from bartleby.config_edit import set_key
+from bartleby.config_edit import render_full_config, set_key
 from bartleby.config_schema import CONFIG_SCHEMA, resolve_parsed_with_sources
 from bartleby.content import ContentError, discover_content
 from bartleby.content_query import (
@@ -323,6 +323,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
     new_site = new_sub.add_parser("site", help="Create a new site directory", parents=[flags])
     new_site.add_argument("name", help="Directory name for the new site")
+    new_site.add_argument(
+        "--full-config",
+        action="store_true",
+        help="Write a bartleby.yml listing every option with its description as a comment",
+    )
     new_site.set_defaults(_handler=_cmd_new_site)
 
     new_post = new_sub.add_parser("post", help="Create a new content file", parents=[flags])
@@ -565,6 +570,9 @@ def _cmd_new_site(args: argparse.Namespace) -> NewSiteOutput:
         destination.parent.mkdir(parents=True, exist_ok=True)
         starter_text = Template(source.read_text(encoding="utf-8")).substitute(values)
         destination.write_text(starter_text, encoding="utf-8")
+
+    if args.full_config:
+        (target / "bartleby.yml").write_text(render_full_config(CONFIG_SCHEMA), encoding="utf-8")
 
     return NewSiteOutput(path=f"{args.name}/", config=f"{args.name}/bartleby.yml")
 

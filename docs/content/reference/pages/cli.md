@@ -31,12 +31,13 @@ To act on the docs site from the repository root, run `bartleby build --config d
 Scaffold a new project directory.
 
 ```
-bartleby new site NAME
+bartleby new site NAME [--full-config]
 ```
 
 Creates `NAME/` containing `bartleby.yml`, `.authors.yml`, `content/index.md`, and a first post at `content/blog/posts/welcome.md`.
 It also creates empty `templates/`, `static/`, and `hooks/` directories.
 The generated config selects the `scrivener` theme and defines one `blog` content type that stores posts in `blog/posts` and opts in to the `tags` taxonomy.
+`--full-config` writes a `bartleby.yml` that lists every option with its description as a comment, in place of the minimal config.
 Fails if `NAME` already exists.
 
 ### `bartleby new post`

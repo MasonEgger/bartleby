@@ -57,14 +57,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 8. Verify: each action + config set write-safety coverage + `just check`
 
 ### Step 6: `bartleby new site --full-config` (feature)
-- [ ] 1. RED: full-config tests (generated file covers every CONFIG_SCHEMA path; parses with no error/warning; each option carries description comment; minimal config is a subset)
-- [ ] 2. Document: new site --full-config argparse help
-- [ ] 3. GREEN: cli.py _cmd_new_site writes render_full_config(CONFIG_SCHEMA) when --full-config
-- [ ] 4. RED: integration (scaffold --full-config then build succeeds)
-- [ ] 5. GREEN: wire minimally
-- [ ] 6. REFACTOR: none expected
-- [ ] 7. Document: none here
-- [ ] 8. Verify: every-key test mutation-checked + `just check`
+- [x] 1. RED: full-config tests (generated file covers every CONFIG_SCHEMA path; parses with no error/warning; each option carries description comment; minimal config is a subset)
+- [x] 2. Document: new site --full-config argparse help
+- [x] 3. GREEN: cli.py _cmd_new_site writes render_full_config(CONFIG_SCHEMA) when --full-config
+- [x] 4. RED: integration (scaffold --full-config then build succeeds)
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: none expected
+- [x] 7. Document: none here
+- [x] 8. Verify: every-key test mutation-checked + `just check`
 
 ## Section 3: Content types on demand
 

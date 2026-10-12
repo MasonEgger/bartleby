@@ -148,7 +148,7 @@ Installed entries can be folded into plan.md per-section Tools blocks; not-insta
 ## Roadmap / phase log
 
 **Shipped:**
-- none yet
+- v0.1.1-stabilization: the theme system with bundled base, material, and scrivener themes, plus the docs showcase, developer experience, and agent surface stabilization (.ai-sessions/v0.1.1-stabilization/)
 
 **Deferred:**
 - `bartleby migrate mkdocs`: a one-shot command that reads `mkdocs.yml`, writes `bartleby.yml`, and reports what did not map. The chosen answer for migrators instead of a config alias layer (decided 2026-10-09).

@@ -1,231 +1,188 @@
-# Bartleby 0.1.x Stabilization TODO: Theme System and Showcase
+# Bartleby Goal 8 TODO: First-Run Experience and Docs Layout
 
 Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done when all its sub-steps are checked.
 
-## Section 1: Theme system core
+## Section 1: The config schema and the annotated writer
 
-### Step 1: Theme manifest and resolver (feature)
-- [x] 1. RED: fixtures (parent, child extends parent, cyclic-a/b) + tests for manifest parse, missing/invalid manifest, leaf-first chain, cycle error, extends-bundled, bad path, package entry point
-- [x] 2. Document: theme_loader.py module docstring (manifest schema, three sources, chain semantics)
-- [x] 3. GREEN: theme_loader.py (ThemeManifest, ThemeLayer, ResolvedTheme, ThemeError, load_manifest, resolve_theme) + themes/__init__.py
-- [x] 4. RED: bundled-name resolution tests (xfail until Step 6/11)
-- [x] 5. GREEN: wire minimally
-- [x] 6. REFACTOR: per-field manifest helpers in config.py style
-- [x] 7. Document: none beyond docstring
-- [x] 8. Verify: coverage + `just check`
+### Step 1: The config schema object and its drift test (feature)
+- [ ] 1. RED: config_schema tests (flat ordered fields with path/type/default/choices/repeatable/description; every top-level key covered; closed sets carry real allowed values; defaults equal config.py dataclass defaults; schema_field lookup + KeyError)
+- [ ] 2. Document: config_schema.py module docstring (single source for full-config, config schema, reference docs)
+- [ ] 3. GREEN: config_schema.py with ConfigField + CONFIG_SCHEMA + schema_field, referencing config.py defaults and THEME_FEATURES
+- [ ] 4. RED: drift-direction test (new accepted top-level key with no schema entry fails; mutation-check it)
+- [ ] 5. GREEN: close gaps
+- [ ] 6. REFACTOR: per-section field helpers mirroring config.py grouping
+- [ ] 7. Document: none beyond docstring
+- [ ] 8. Verify: coverage of schema + both drift directions + `just check`
 
-### Step 2: Resolution chain drives templates, static assets, and icons (feature)
-- [x] 1. RED: cascade tests (search bases order, parent fallback, child wins, overrides/ beats all), static copy child-wins, icon lookup leaf-first
-- [x] 2. Document: docstrings for template_search_bases, resolve_template_name, icon lookup
-- [x] 3. GREEN: templates.py takes ResolvedTheme; icons.py chain-aware; build.py resolves once + copies static root-first
-- [x] 4. RED: integration build on theme.path fixture child
-- [x] 5. GREEN: wire into build.py
-- [x] 6. REFACTOR: drop get_theme_templates_dir/get_theme_static_dir
-- [x] 7. Document: none beyond docstrings
-- [x] 8. Verify: coverage + `just check`
+### Step 2: The comment-preserving YAML writer and the full-config renderer (feature)
+- [ ] 1. RED: config_edit tests (set_key keeps comment; creates intermediate maps; siblings untouched; render_full_config emits every field at default with description comment and re-parses; scalar types correct)
+- [ ] 2. Document: config_edit.py docstring (two entry points, ruamel round-trip, one shared writer)
+- [ ] 3. GREEN: add ruamel.yaml dep + uv lock; config_edit.py set_key + render_full_config on one YAML(rt) instance
+- [ ] 4. RED: integration round-trip from scaffold bartleby.yml
+- [ ] 5. GREEN: wire minimally
+- [ ] 6. REFACTOR: shared dotted-path walk
+- [ ] 7. Document: CHANGELOG ruamel.yaml dependency
+- [ ] 8. Verify: comment preservation + full-config round-trip + `just check`
 
-### Step 3: Native theme config vocabulary and the feature contract (feature)
-- [x] 1. RED: one-of name/path/package; native feature names only; tokens map; logo/favicon/icon_packs; old mkdocs names -> ConfigError with hint; unimplemented-feature warning tests
-- [x] 2. Document: ThemeConfig docstrings + THEME_FEATURES constant docstring
-- [x] 3. GREEN: config.py new fields + validation + migration-hint error; build.py warning; templates.py fed native list
-- [x] 4. RED: CLI integration for breaking-change error + warning text
-- [x] 5. GREEN: wire CLI output
-- [x] 6. REFACTOR: THEME_FEATURES and manifest validation adjacent
-- [x] 7. Document: CHANGELOG breaking-change table
-- [x] 8. Verify: coverage + `just check`
+## Section 2: CLI configuration surface
 
-### Step 4: Per-theme Tailwind compile and token emission (feature)
-- [x] 1. RED: leaf-first --config/--input with parent fallback; --content over all layers + project dirs; tokens -> .bartleby/tokens.css with --bb-* vars; empty tokens file present
-- [x] 2. Document: compile_theme_css docstring
-- [x] 3. GREEN: theme_compile.py takes ResolvedTheme + tokens; cli.py passes resolved theme
-- [x] 4. RED: skip-guarded real-binary compile of base
-- [x] 5. GREEN: wire minimally
-- [x] 6. REFACTOR: shared "nearest layer providing path" helper
-- [x] 7. Document: Justfile theme-css loops over bundled themes
-- [x] 8. Verify: coverage + `just check`
+### Step 3: The `--set key.path=value` override layer (feature)
+- [ ] 1. RED: apply_overrides tests (string + int YAML-typed; missing `=` error names --set; validator failure labeled --set source; dotted path creates maps, last wins; load_config overrides apply then validate)
+- [ ] 2. Document: apply_overrides + load_config overrides param docstring
+- [ ] 3. GREEN: config.py apply_overrides + overrides param threaded through load_config
+- [ ] 4. RED: CLI integration (--set append on build/serve/validate; overridden build; bad --set non-zero)
+- [ ] 5. GREEN: wire --set into three subparsers
+- [ ] 6. REFACTOR: share dotted-path walk with config_edit.py
+- [ ] 7. Document: none here
+- [ ] 8. Verify: value typing + error labeling coverage + `just check`
 
-### Step 5: `bartleby theme eject` and `bartleby theme inspect` (feature)
-- [x] 1. RED: eject flattens chain leaf-wins with no `extends`; refuses overwrite without --force; --to honored; inspect lists provider layer + overrides shadowing; --format json stable
-- [x] 2. Document: handler docstrings + argparse help
-- [x] 3. GREEN: cli.py subparsers; theme_loader flatten_chain + inspect_chain result dataclasses
-- [x] 4. RED: e2e eject material -> theme.path -> edit partial -> build shows edit (permanent test)
-- [x] 5. GREEN: wire minimally
-- [x] 6. REFACTOR: share per-file layer walk with Step 4 helper
-- [x] 7. Document: none here
-- [x] 8. Verify: coverage + `just check`
+### Step 4: `--base-url` and resolved-config provenance (feature)
+- [ ] 1. RED: resolve_with_sources tests (default/file/set per key; --base-url maps to site.url override, provenance set); CLI --base-url renders canonical URLs, accepted on build/serve/validate
+- [ ] 2. Document: resolve_with_sources docstring (three sources, --set/--base-url mapping)
+- [ ] 3. GREEN: config.py resolve_with_sources; cli.py --base-url -> site.url override
+- [ ] 4. RED: integration (resolve_with_sources agrees with load_config on final values)
+- [ ] 5. GREEN: wire minimally
+- [ ] 6. REFACTOR: provenance tagging beside apply_overrides
+- [ ] 7. Document: none here
+- [ ] 8. Verify: all three sources + --base-url mapping coverage + `just check`
 
-### Step 6: Split the existing theme into bundled `base` and `material` (task)
-- [x] 1. Scope: themes/base + themes/material layout; delete theme/; update imports
-- [x] 2. Tooling: python; pytest, just check
-- [x] 3. Do: git mv into layout; write both theme.yml; replace Material-named feature() calls with native; un-xfail base/material tests; docs/bartleby.yml -> material temporarily
-- [x] 4. Verify: `just check` green; `bartleby build docs/` exits 0
-- [x] 5. Document: spec.md Component boundaries theme block
+### Step 5: The `config` command group (feature)
+- [ ] 1. RED: command tests (show lists values + sources, json stable; get prints value, unknown key non-zero; set writes keeping comments, idempotent; set rejects invalid without writing; schema json one object per field)
+- [ ] 2. Document: show/get/set/schema handler docstrings + argparse help
+- [ ] 3. GREEN: cli.py config parser + handlers (set validates in memory before writing via config_edit.set_key); output.py result dataclasses
+- [ ] 4. RED: integration (set then get returns written value; show marks it file)
+- [ ] 5. GREEN: wire minimally
+- [ ] 6. REFACTOR: reuse Step 4 provenance + Step 1 schema
+- [ ] 7. Document: none here
+- [ ] 8. Verify: each action + config set write-safety coverage + `just check`
 
-## Section 2: The `material` theme
+### Step 6: `bartleby new site --full-config` (feature)
+- [ ] 1. RED: full-config tests (generated file covers every CONFIG_SCHEMA path; parses with no error/warning; each option carries description comment; minimal config is a subset)
+- [ ] 2. Document: new site --full-config argparse help
+- [ ] 3. GREEN: cli.py _cmd_new_site writes render_full_config(CONFIG_SCHEMA) when --full-config
+- [ ] 4. RED: integration (scaffold --full-config then build succeeds)
+- [ ] 5. GREEN: wire minimally
+- [ ] 6. REFACTOR: none expected
+- [ ] 7. Document: none here
+- [ ] 8. Verify: every-key test mutation-checked + `just check`
 
-### Step 7: Material design sources (task)
-- [x] 1. Scope: themes/material/{tailwind.config.js,tailwind.css,safelist.txt}
-- [x] 2. Tooling: frontend-design; theme compile on scratch project
-- [x] 3. Do: dark mode on [data-theme], Material-faithful palette/type via --bb-* tokens, typography plugin, component + layout classes
-- [x] 4. Verify: compile exits 0 with prose + component rules
-- [x] 5. Document: config comment block
+## Section 3: Content types on demand
 
-### Step 8: Material shell and content templates (task)
-- [x] 1. Scope: header, nav, footer, page, post, list under themes/material
-- [x] 2. Tooling: frontend-design; build docs
-- [x] 3. Do: classes, base blocks, prose wrappers, layout-prose/layout-docs; preserve variables + toggle
-- [x] 4. Verify: prose wrapper + header classes + excerpts present; exit 0; no UndefinedError
-- [x] 5. Document: none
+### Step 7: `enable` and `disable` content types (feature)
+- [ ] 1. RED: enabled parse (false/absent->True); build skips disabled (no listing/pages/feeds); enable adds blog-shaped type with feeds [rss,atom], idempotent; disable sets enabled false keeping block; enable preserves comments
+- [ ] 2. Document: ContentTypeConfig.enabled + enable/disable handler docstrings + help
+- [ ] 3. GREEN: config.py enabled field + parse; build.py skip disabled; cli.py enable/disable via config_edit.set_key
+- [ ] 4. RED: integration (enable + post + build -> listing + feeds exist; disable -> rebuild drops them)
+- [ ] 5. GREEN: wire minimally
+- [ ] 6. REFACTOR: one blog-shaped block reused by enable and scaffold --blog
+- [ ] 7. Document: none here
+- [ ] 8. Verify: skip path + idempotency coverage + `just check`
 
-### Step 9: Material docs layout: sidebar, TOC, tabs (task)
-- [x] 1. Scope: nav.html, sidebar.html, toc.html, page.html; navigation.py index pointer if needed
-- [x] 2. Tooling: frontend-design, python (navigation.py only); build docs with nav.sidebar on
-- [x] 3. Do: implement partials + blocks; update material theme.yml features
-- [x] 4. Verify: tabs + sidebar + TOC on concept page; no sidebar on listing; no warnings
-- [x] 5. Document: none
+### Step 8: An enabled type's feeds carry entries, plus the combined feed (feature)
+- [ ] 1. RED: per-type RSS + Atom carry exactly the published items; combined feed merges enabled-with-feeds types, excludes opt-out and disabled; site.feed.enabled false suppresses combined only
+- [ ] 2. Document: per-type-plus-combined guarantee in feeds.py docstring
+- [ ] 3. GREEN: feeds.py/build.py fix gaps (disabled exclusion, empty-feed suppression)
+- [ ] 4. RED: integration (two enabled types + one disabled; per-type feeds carry entries; combined merges enabled only)
+- [ ] 5. GREEN: wire minimally
+- [ ] 6. REFACTOR: reuse shared published-page selection
+- [ ] 7. Document: none here
+- [ ] 8. Verify: feeds carry real entries (item count + titles) + `just check`
 
-### Step 10: Material taxonomy, 404, search, and interactive partials (task)
-- [x] 1. Scope: taxonomy, taxonomy_index, 404, search, back_to_top, code_copy
-- [x] 2. Tooling: frontend-design; build docs
-- [x] 3. Do: classes; search.highlight gated; preserve Alpine/HTMX; manifest gains search.highlight
-- [x] 4. Verify: pages styled; highlight works; exit 0; no UndefinedError
-- [x] 5. Document: none
+## Section 4: markwright integration
 
-## Section 3: The `scrivener` theme
+### Step 9: The `markwright:` config section through markwright's public API (feature)
+- [ ] 1. RED: markwright section parses to raw mapping; no section -> default selected extensions; disable drops one; invalid option -> Bartleby ConfigError sourced to bartleby.yml markwright key; config_from_mapping + extension_configs used; stray markwright.toml/[tool.markwright] warns once
+- [ ] 2. Document: markdown_pipeline.py docstring (configs via markwright public API, never reimplement schema)
+- [ ] 3. GREEN: config.py carry markwright mapping; markdown_pipeline.py config_from_mapping + selected_extensions + extension_configs + exception translation; build.py ignored-file warning
+- [ ] 4. RED: integration (disable twitter -> raw fence; stray markwright.toml warning)
+- [ ] 5. GREEN: wire into build.py
+- [ ] 6. REFACTOR: markwright-config construction in one helper
+- [ ] 7. Document: none here
+- [ ] 8. Verify: enable/disable + option validation + ignored-file warning coverage + `just check`
 
-### Step 11: Scrivener design direction and sources (task)
-- [x] 1. Scope: themes/scrivener/{theme.yml,tailwind.config.js,tailwind.css,safelist.txt}; default theme -> scrivener; un-xfail test
-- [x] 2. Tooling: frontend-design (real design effort here)
-- [x] 3. Do: write sources; present direction (palette, type, three adjectives) for Mason
-- [x] 4. Verify: compile exits 0; `just check` green after default flip
-- [x] 5. Document: design-direction comment block
+### Step 10: Click-to-load host script and styles in both themes (task)
+- [ ] 1. Scope: base click-to-load swap script + conditional include; preview styles in base + material/scrivener skins
+- [ ] 2. Tooling: frontend-design; markwright Click-to-Load docs; build scratch site with a click embed
+- [ ] 3. Do: write base swap script to markwright's contract; include only when a click preview is present; style preview
+- [ ] 4. Verify: eager page has live embed + no swap script; click page has <template> preview + swap script; exit 0, no UndefinedError
+- [ ] 5. Document: none here
 
-### Step 12: Scrivener shell and content templates (task)
-- [x] 1. Scope: header, nav, footer, page, post, list under themes/scrivener
-- [x] 2. Tooling: frontend-design; build scratch scaffold on scrivener
-- [x] 3. Do: implement against base blocks; preserve variables + toggle
-- [x] 4. Verify: home/post/listing carry classes + prose; exit 0; no UndefinedError
-- [x] 5. Document: none
+### Step 11: Both themes style every markwright class hook (task)
+- [ ] 1. Scope: material + scrivener tailwind.css + safelist.txt component classes for every markwright hook; regenerated main.css
+- [ ] 2. Tooling: frontend-design; enumerated markwright class hooks; just theme-css; build + browser
+- [ ] 3. Do: enumerate hooks from rendered output; add classes to both themes; recompile
+- [ ] 4. Verify: all eight extensions styled in both themes, both modes, desktop + mobile; screenshots to Mason
+- [ ] 5. Document: CHANGELOG (markwright hooks styled in both themes)
 
-### Step 13: Scrivener docs layout: sidebar, TOC, tabs (task)
-- [x] 1. Scope: nav.html, sidebar.html, toc.html, page.html under themes/scrivener
-- [x] 2. Tooling: frontend-design; build docs on scrivener
-- [x] 3. Do: implement; no shared files with material
-- [x] 4. Verify: tabs + sidebar + TOC; no sidebar on listing; no warnings
-- [x] 5. Document: none
+## Section 5: The async dev server
 
-### Step 14: Scrivener taxonomy, 404, search, and interactive partials (task)
-- [x] 1. Scope: taxonomy, taxonomy_index, 404, search, back_to_top, code_copy
-- [x] 2. Tooling: frontend-design; build docs
-- [x] 3. Do: implement incl. search.highlight; preserve attributes
-- [x] 4. Verify: styled; highlight works; exit 0; no UndefinedError
-- [x] 5. Document: none
+### Step 12: Rewrite the dev server on Starlette and uvicorn with same-port reload (feature)
+- [ ] 1. RED: reload_snippet points at location.host + RELOAD_WS_PATH on serving port; Starlette app serves a built file + mounts reload WS on same app; robustness (idle socket does not block parallel request) on new server; existing is_watched/classify_change tests kept
+- [ ] 2. Document: server.py docstring + CLAUDE.md dev-server bullet (Starlette + uvicorn, one port, event filter unchanged)
+- [ ] 3. GREEN: add starlette + uvicorn deps + uv lock; rewrite server.py (static route + WS route on one app via uvicorn; watchdog -> classifier -> broadcast; reload_snippet same port); remove old ThreadingHTTPServer + separate-port hub
+- [ ] 4. RED: integration (serve on ephemeral port; fetch page + open WS same port; edit file -> reload message arrives)
+- [ ] 5. GREEN: wire into _cmd_serve preserving --host/--port/--events/--set/--base-url
+- [ ] 6. REFACTOR: keep change classifier exactly; only transport changes
+- [ ] 7. Document: CHANGELOG (dev server -> Starlette + uvicorn, same-port reload)
+- [ ] 8. Verify: robustness property + reload round-trip + `just check`
 
-## Section 4: Compile, ship, and browser-verify both themes
+## Section 6: Three-column docs layout
 
-### Step 15: Regenerate, ship, and visually verify `material` and `scrivener` (task)
-- [x] 1. Scope: both themes' static/css/main.css regenerated + committed; source fixes
-- [x] 2. Tooling: frontend-design, python; just theme-css, new/build/serve, run/claude-in-chrome
-- [x] 3. Do: regenerate; scaffold on each theme + docs on scrivener; screenshot 6 page types x 2 modes x 2 widths per theme; eject -> edit -> build -> inspect story; fix + recompile
-- [x] 4. Verify: `just check` green AND screenshots polished AND eject/inspect works; surface to Mason (surfacing pending: Mason's visual sign-off not yet given)
-- [x] 5. Document: CHANGELOG (system, three themes, eject/inspect, breaking config)
+### Step 13: Three-column layout with fold-TOC and tabs feature flags (task)
+- [ ] 1. Scope: theme_loader.py two new feature names + test; base + material/scrivener doc_layout + nav/toc partials for three columns and both flags; both themes tailwind + safelist; regenerated main.css
+- [ ] 2. Tooling: frontend-design (layout + responsive), python (THEME_FEATURES); mkdocs-material/Zensical for shape only; just theme-css; build docs + browser
+- [ ] 3. Do: add two features + test; implement three-column shell + fold + tabs in both themes; recompile
+- [ ] 4. Verify: default three columns, fold on, tabs on, both themes, both modes, desktop + mobile; no feature warnings; no UndefinedError; screenshots to Mason
+- [ ] 5. Document: CHANGELOG (three-column layout + fold/tabs flags)
 
-## Section 5: Theme docs and the docs showcase
+## Section 7: Scaffold and first-run output
 
-### Step 16: Catalog every docs rendering defect (task)
-- [x] 1. Scope: inventory in scratchpad
-- [x] 2. Tooling: diataxis, style-linting; build/lint/serve
-- [x] 3. Do: build + lint; walk pages; classify by Diataxis; flag old-config content
-- [x] 4. Verify: every entry has path + specific defect
-- [x] 5. Document: save inventory
+### Step 14: The docs-shaped scaffold and the feature tour (task)
+- [ ] 1. Scope: scaffold bartleby.yml (minimal, docs-shaped, no blog, no markwright section); index.md (what to do next); feature tour page (each markwright + pymdownx feature, source beside result); README quickstart with click-to-load opt-in; cli.py --blog
+- [ ] 2. Tooling: frontend-design, tutorial-writing, style-linting, python (--blog); new site/build/serve
+- [ ] 3. Do: rewrite scaffold for docs shape; author feature tour; add --blog reusing Step 7 block; README quickstart
+- [ ] 4. Verify: new site + build exits 0 no warnings, home + tour render, tour shows every feature; --blog adds blog type + builds; lint clean
+- [ ] 5. Document: scaffold README quickstart; add scaffold pages to nav
 
-### Step 17: Fix docs content and switch the docs to the Scrivener theme (task)
-- [x] 1. Scope: docs/content/**, docs/bartleby.yml, docs/.authors.yml
-- [x] 2. Tooling: diataxis, tutorial-writing, style-linting
-- [x] 3. Do: work inventory; reconcile nav; switch config to scrivener + native features; writing hard rules
-- [x] 4. Verify: build exits 0 no warnings AND lint clean
-- [x] 5. Document: route engine bugs to later sections
+### Step 15: Hugo-style first-run output for `new site` and `serve` (feature)
+- [ ] 1. RED: new site result lists created entries + next command (cd <dir> && bartleby serve), json carries same; serve startup summary has page count + bound URL + stop hint (formatter unit-tested)
+- [ ] 2. Document: new/updated output dataclass docstrings
+- [ ] 3. GREEN: output.py extend NewSiteOutput + serve-startup result (to_text/to_dict); cli.py populate both
+- [ ] 4. RED: integration (new site prints created entries + exact next command)
+- [ ] 5. GREEN: wire minimally
+- [ ] 6. REFACTOR: reuse resolved host/port from Step 4
+- [ ] 7. Document: none here
+- [ ] 8. Verify: summaries carry real values (page count + URL from build) + `just check`
 
-### Step 18: Write the theme-system documentation (task)
-- [x] 1. Scope: guides choose-and-customize-a-theme.md + write-a-theme.md; reference themes.md; update concepts customization-seams.md + templates.md
-- [x] 2. Tooling: diataxis, tutorial-writing, style-linting; real CLI output
-- [x] 3. Do: write against real code/manifests; worked example from a bundled theme.yml; eject-for-agents angle
-- [x] 4. Verify: build/lint clean; every flag/key in docs exists in code and vice versa
-- [x] 5. Document: add pages to docs nav
+## Section 8: Docs, acknowledgments, correctness, and the final gate
 
-### Step 19: Visual polish pass on the docs showcase (task)
-- [x] 1. Scope: docs/content/** copy/structure; docs/bartleby.yml features
-- [x] 2. Tooling: frontend-design, diataxis; build/serve/browser
-- [x] 3. Do: review all page types incl. theme pages, both modes, both widths; tune (theme CSS frozen unless defect)
-- [x] 4. Verify: screenshots show polished showcase; surface to Mason (screenshots done; surfacing to Mason is pending, shots in the step19 scratchpad)
-- [x] 5. Document: CHANGELOG if structure changed
+### Step 16: Document the config, enable, markwright, and layout surface from the schema (task)
+- [ ] 1. Scope: docs configuration.md (from schema), enable how-to, markwright + click-to-load how-to, CLI reference updates (--set/--base-url/config/enable/disable), three-column layout in theme docs; docs nav; schema-to-docs drift test
+- [ ] 2. Tooling: diataxis, tutorial-writing, style-linting, python (drift test); config schema --output json; build/lint docs
+- [ ] 3. Do: generate/write config reference from schema + drift test; write how-tos; update CLI reference; writing hard rules
+- [ ] 4. Verify: build/lint clean; drift test passes; both-way flag/command/section cross-check
+- [ ] 5. Document: add new pages to docs nav
 
-## Section 6: Developer experience
+### Step 17: Acknowledgments and the license compatibility check (task)
+- [ ] 1. Scope: ACKNOWLEDGMENTS.md (each borrowed source, what was taken, license, MIT-compatibility note); linked from README + docs
+- [ ] 2. Tooling: style-linting; upstream license files + web check for Zensical license + sun icon license
+- [ ] 3. Do: enumerate borrowings incl. theme-system visual inspirations; record license + verdict; resolve sun icon (credit or replace)
+- [ ] 4. Verify: every entry names source + license + verdict; no unconfirmed/incompatible asset remains (grep themes for the icon)
+- [ ] 5. Document: ACKNOWLEDGMENTS.md; link from README + docs
 
-### Step 20: Clear, actionable error messages (feature)
-- [x] 1. RED: config/author/metadata/theme-path/build error tests (file + key/id + hint; substring assertions)
-- [x] 2. Document: error-message contracts in docstrings
-- [x] 3. GREEN: enrich raise sites incl. theme_loader.py
-- [x] 4. RED: CLI integration asserts text + non-zero exit
-- [x] 5. GREEN: wire CLI/formatter
-- [x] 6. REFACTOR: one file+key+hint helper
-- [x] 7. Document: troubleshooting note if warranted
-- [x] 8. Verify: coverage + `just check`
+### Step 18: Correctness sweep for first-run claims (feature)
+- [ ] 1. RED: new site --blog feed carries sample post (RSS + Atom); feature tour HTML has output class for every claimed feature; highlighted code references highlight CSS (HTML + compiled theme CSS); docs feeds carry entries per enabled type
+- [ ] 2. Document: none beyond tests
+- [ ] 3. GREEN: fix any false claim (missing feed entry, unstyled highlight, non-rendering tour feature)
+- [ ] 4. RED: integration (scaffold + build: home links resolve, tour renders every feature, feeds carry entries)
+- [ ] 5. GREEN: wire minimally
+- [ ] 6. REFACTOR: reuse Step 8 feed-content assertions
+- [ ] 7. Document: none
+- [ ] 8. Verify: every first-run claim has a failing-if-broken test + `just check`
 
-### Step 21: Scaffolding that builds and renders well out of the box (feature)
-- [x] 1. RED: scaffold layout; theme.name scrivener + native features in manifest; build produces outputs with no warnings
-- [x] 2. Document: quickstart matches scaffold
-- [x] 3. GREEN: adjust scaffold defaults in cli.py
-- [x] 4. RED: e2e scaffold -> build asserts scrivener classes + no UndefinedError
-- [x] 5. GREEN: wire minimally
-- [x] 6. REFACTOR: remove dead starter assets
-- [x] 7. Document: refresh installation/quickstart incl. "theme.name: material" pointer
-- [x] 8. Verify: coverage + `just check`
-
-## Section 7: Agent surface consistency and correctness
-
-### Step 22: Every published page has a valid Markdown variant and JSON-LD (feature)
-- [x] 1. RED: index.md per published page; JSON-LD valid with required fields; drafts excluded; parametrized over both themes
-- [x] 2. Document: per-page guarantee in llm.py
-- [x] 3. GREEN: close gaps in llm.py / base jsonld partial
-- [x] 4. RED: integration counts + parse
-- [x] 5. GREEN: wire into build.py if needed
-- [x] 6. REFACTOR: share published-page set with sitemap/feeds
-- [x] 7. Document: agent-surface reference note
-- [x] 8. Verify: coverage + `just check`
-
-### Step 23: llms.txt, schema.json, and content-index.json are correct (feature)
-- [x] 1. RED: llms.txt/llms-full.txt; schema.json incl. theme block; content-index published only
-- [x] 2. Document: format/field contract per module
-- [x] 3. GREEN: fix defects; add theme block
-- [x] 4. RED: integration on docs fixture; theme block matches config
-- [x] 5. GREEN: wire into build.py
-- [x] 6. REFACTOR: share extraction with Step 22
-- [x] 7. Document: expand agent-surface reference
-- [x] 8. Verify: coverage + `just check`
-
-### Step 24: Generated skills reflect the real site shape (feature)
-- [x] 1. RED: determinism; real content types/fields; taxonomies/authors; ops skill mentions theme + theme commands
-- [x] 2. Document: contract in skills.py
-- [x] 3. GREEN: fix nondeterminism/placeholders; add theme facts
-- [x] 4. RED: integration vs schema.json
-- [x] 5. GREEN: wire minimally
-- [x] 6. REFACTOR: reuse schema_introspection
-- [x] 7. Document: generated-skill contract
-- [x] 8. Verify: coverage + `just check`
-
-## Section 8: Public interface documentation and final gate
-
-### Step 25: Document and stabilize the public interfaces (task)
-- [x] 1. Scope: reference pages incl. themes.md + agent-output-formats
-- [x] 2. Tooling: diataxis, python; schema/inspect introspection as cross-check
-- [x] 3. Do: enumerate real surfaces; correct pages; prefer generated lists; writing hard rules
-- [x] 4. Verify: both-way cross-check; build/lint docs clean
-- [x] 5. Document: stability statement in spec.md/README
-
-### Step 26: Final stabilization gate (task)
-- [x] 1. Scope: CHANGELOG, README, version (Mason: 0.1.x vs 0.2.0) (version: pending Mason)
-- [x] 2. Tooling: python; just check; clean-venv wheel install; browser
-- [x] 3. Do: `just check`; clean install; scaffold/build/serve on scrivener then material; wheel contains three themes; walk Success criteria
-- [x] 4. Verify: just check green AND clean-env serves good-looking site on both themes; checklist with evidence for Mason
-- [x] 5. Document: finalize CHANGELOG/README
+### Step 19: Final gate for Goal 8 (task)
+- [ ] 1. Scope: CHANGELOG (finalize Unreleased), README (first-run if drifted); no version bump
+- [ ] 2. Tooling: python; just check; clean-venv wheel install; browser
+- [ ] 3. Do: just check green; clean install; new site + serve -> three-column + tour from small config; --full-config lists every option; enable blog feeds carry entries; wheel bundles scaffold + both themes; walk Goal 8 success criteria
+- [ ] 4. Verify: just check green AND clean-env reproduces three-column site + tour + --full-config + working enable feeds; success-criteria checklist with evidence for Mason
+- [ ] 5. Document: finalize CHANGELOG + README

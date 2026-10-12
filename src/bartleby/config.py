@@ -154,10 +154,17 @@ class MetadataFieldSchema:
 
 @dataclass(slots=True)
 class ContentTypeConfig:
-    """Definition of one content type (e.g. ``blog``, ``tutorials``)."""
+    """Definition of one content type (e.g. ``blog``, ``tutorials``).
+
+    :ivar enabled: Whether the build produces this type's outputs. A disabled type
+        stays parsed and validated, but its content files, listing pages, and feeds
+        are skipped, and it drops out of the aggregate feed. ``bartleby disable``
+        sets this to ``False`` instead of deleting the block.
+    """
 
     name: str
     path: str
+    enabled: bool = True
     url_base: str | None = None
     url_format: str | None = None
     pagination: PaginationConfig = field(default_factory=PaginationConfig)
@@ -276,6 +283,10 @@ class BartlebyConfig:
     config_dir: Path
     output_dir: str = "site"
     disabled_plugins: set[str] = field(default_factory=set)
+
+    def enabled_content_types(self) -> dict[str, ContentTypeConfig]:
+        """The content types the build produces output for, in config order."""
+        return {name: kind for name, kind in self.content_types.items() if kind.enabled}
 
 
 OVERRIDE_SOURCE = "--set"
@@ -807,6 +818,7 @@ def _parse_content_type(type_name: str, raw: Any) -> ContentTypeConfig:
     return ContentTypeConfig(
         name=type_name,
         path=str(raw["path"]),
+        enabled=bool(raw.get("enabled", True)),
         url_base=_optional_str(raw.get("url_base")),
         url_format=_optional_str(raw.get("url_format")),
         pagination=_parse_pagination(raw.get("pagination"), key_path),

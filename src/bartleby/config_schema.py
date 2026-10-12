@@ -288,6 +288,12 @@ def _content_type_fields() -> tuple[ConfigField, ...]:
             required=True,
         ),
         _field(
+            f"{base}.enabled",
+            "boolean",
+            "Build this type's listing, pages, and feeds; false skips them but keeps the block.",
+            default=_default(content_type, "enabled"),
+        ),
+        _field(
             f"{base}.url_base",
             "string",
             "The URL prefix for this type.",

@@ -713,3 +713,18 @@ def test_file_section_error_stays_file_sourced_when_override_is_beneath(
     message = str(exc_info.value)
     assert "theme-clash.yml" in message
     assert not message.startswith("--set")
+
+
+def test_content_type_enabled_defaults_to_true_and_reads_false(tmp_path: Path) -> None:
+    """`enabled` is True when absent and False when `enabled: false` is written."""
+    config_path = tmp_path / "bartleby.yml"
+    config_path.write_text(
+        "site:\n  title: T\n  url: https://example.com\n"
+        "content_types:\n"
+        "  blog:\n    path: blog/posts\n"
+        "  notes:\n    path: notes\n    enabled: false\n",
+        encoding="utf-8",
+    )
+    config = load_config(config_path)
+    assert config.content_types["blog"].enabled is True
+    assert config.content_types["notes"].enabled is False

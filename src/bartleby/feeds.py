@@ -62,11 +62,13 @@ def compute_aggregate_types(config: BartlebyConfig) -> list[str]:
     An empty ``site.feed.include`` covers every content type that has its own
     ``feeds`` enabled (config order). A non-empty list restricts the aggregate to
     exactly those types (validated at load time to all have their own feeds).
+    A disabled content type is never in the aggregate.
     """
+    enabled = config.enabled_content_types()
     include = config.site.feed.include
     if include:
-        return list(include)
-    return [name for name, content_type in config.content_types.items() if content_type.feeds]
+        return [name for name in include if name in enabled]
+    return [name for name, content_type in enabled.items() if content_type.feeds]
 
 
 def generate_aggregate_rss(pages: list[Page], config: BartlebyConfig) -> str:
@@ -138,7 +140,7 @@ def generate_feeds(pages: list[Page], config: BartlebyConfig, output_dir: Path) 
         assert page.content_type_name is not None
         by_type.setdefault(page.content_type_name, []).append(page)
 
-    for content_type_name, content_type in config.content_types.items():
+    for content_type_name, content_type in config.enabled_content_types().items():
         type_pages = by_type.get(content_type_name, [])
         if not content_type.feeds:
             continue

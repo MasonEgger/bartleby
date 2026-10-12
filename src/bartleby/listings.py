@@ -61,7 +61,7 @@ def generate_listing_pages(
             continue
         pages_by_content_type.setdefault(page.content_type_name, []).append(page)
 
-    for content_type_name, content_type in config.content_types.items():
+    for content_type_name, content_type in config.enabled_content_types().items():
         ordered = _sort_posts_newest_first(pages_by_content_type.get(content_type_name, []))
         intro_content = _read_intro_content(content_dir, content_type_name, active_renderer)
         base_url = "/" + content_type_name + "/"

@@ -406,6 +406,50 @@ class ConfigGetOutput:
 
 
 @dataclass(slots=True)
+class ContentTypeToggleOutput:
+    """Result of ``bartleby enable SHAPE NAME`` and ``bartleby disable SHAPE NAME``.
+
+    ``action`` is ``enable`` or ``disable``. ``enabled`` is the state the type is left
+    in. ``changed`` is false when the config already held that state, so the file was
+    not rewritten. ``reenabled`` is true when ``enable`` flipped an existing disabled type on.
+    """
+
+    action: str
+    shape: str
+    name: str
+    enabled: bool
+    file: str
+    changed: bool
+    reenabled: bool = False
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_SUCCESS
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "status": "success",
+            "action": self.action,
+            "shape": self.shape,
+            "name": self.name,
+            "enabled": self.enabled,
+            "file": self.file,
+            "changed": self.changed,
+        }
+
+    def to_text(self) -> str:
+        if self.action == "enable":
+            if self.reenabled:
+                return f"Re-enabled content type {self.name!r} in {self.file}"
+            if self.changed:
+                return f"Added {self.shape} content type {self.name!r} to {self.file}"
+            return f"Content type {self.name!r} is already in {self.file}; left unchanged"
+        if self.changed:
+            return f"Disabled content type {self.name!r} in {self.file}"
+        return f"Content type {self.name!r} is already disabled in {self.file}"
+
+
+@dataclass(slots=True)
 class ConfigSetOutput:
     """Result of ``bartleby config set KEY VALUE``.
 

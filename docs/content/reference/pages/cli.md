@@ -240,6 +240,33 @@ List every key `bartleby.yml` accepts, with its type, default, allowed values, a
 The command reads no project file.
 With `--output json`, it returns `status` and `fields`, one object per key.
 
+## `bartleby enable`
+
+```
+bartleby enable SHAPE NAME
+```
+
+Add a content type to `bartleby.yml`.
+`SHAPE` is the kind of content type; `blog` is the only one.
+`NAME` is the type's name, such as `tutorials`, and the new block uses `NAME/posts` as its path.
+The block carries `feeds: [rss, atom]`, and the command adds the `tags` taxonomy when the site lacks it.
+A site may enable the same shape under several names.
+If the name is already defined and enabled, the command changes nothing and says so.
+If it is defined but disabled, the command sets `enabled: true` on it and leaves every other key as it was.
+
+## `bartleby disable`
+
+```
+bartleby disable SHAPE NAME
+```
+
+Stop building the content type `NAME` by setting `enabled: false` on it.
+`SHAPE` is the same value `enable` takes.
+The block stays in `bartleby.yml`.
+The build skips the type's pages, listing, and feeds, and the type drops out of the site feed.
+A name that `bartleby.yml` does not define exits with code `2`.
+To turn the type back on, run `bartleby enable SHAPE NAME` again.
+
 ## `bartleby theme`
 
 Work with the active theme.

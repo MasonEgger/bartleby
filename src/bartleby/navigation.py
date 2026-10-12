@@ -3,12 +3,15 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bartleby.config import BartlebyConfig
     from bartleby.content import Page
+
+_LOGGER = logging.getLogger("bartleby")
 
 
 @dataclass(slots=True)
@@ -40,6 +43,21 @@ def build_navigation(config: BartlebyConfig, pages: list[Page]) -> Navigation:
         items = _build_explicit_nav(config.nav, pages, listing_paths)
     else:
         items = _auto_generate_nav(pages, listing_paths)
+
+    # A disabled type has no listing page, so a nav link to it would be dead.
+    stack = list(items)
+    while stack:
+        item = stack.pop()
+        stack.extend(item.children)
+        for name, content_type in config.content_types.items():
+            if not content_type.enabled and item.url == f"/{name}/":
+                _LOGGER.warning(
+                    "nav entry %r links to the disabled content type %r; "
+                    "remove the entry or set content_types.%s.enabled to true",
+                    item.title,
+                    name,
+                    name,
+                )
     return Navigation(items=items, pages_flat=_flatten(items))
 
 

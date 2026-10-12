@@ -62,7 +62,8 @@ def build_taxonomies(pages: list[Page], config: BartlebyConfig) -> AllTaxonomies
     """Collect taxonomy terms across pages, honoring per-content-type opt-ins."""
     result = AllTaxonomies()
     opted_in_taxonomies: set[str] = set()
-    for content_type in config.content_types.values():
+    enabled_types = config.enabled_content_types()
+    for content_type in enabled_types.values():
         opted_in_taxonomies.update(content_type.taxonomies)
 
     for taxonomy_name in opted_in_taxonomies:
@@ -74,7 +75,7 @@ def build_taxonomies(pages: list[Page], config: BartlebyConfig) -> AllTaxonomies
         content_type_name = page.content_type_name
         if content_type_name is None:
             continue
-        content_type_optional = config.content_types.get(content_type_name)
+        content_type_optional = enabled_types.get(content_type_name)
         if content_type_optional is None:
             continue
         content_type = content_type_optional

@@ -109,6 +109,19 @@ def _trailing_slot(
         return node, index, 0
 
 
+def _round_trip(value: object) -> object:
+    """Convert plain dicts and lists, recursively, to ruamel containers.
+
+    ``_trailing_slot`` walks only ``CommentedMap`` and ``CommentedSeq``, so a plain
+    container appended as a value hides the comment slot of its own last leaf.
+    """
+    if isinstance(value, dict):
+        return CommentedMap((key, _round_trip(item)) for key, item in value.items())
+    if isinstance(value, list):
+        return CommentedSeq(_round_trip(item) for item in value)
+    return value
+
+
 def _append_key(holder: CommentedMap, key: str, value: object) -> None:
     """Add a new key at the end of ``holder``, leaving the next key's comment below it.
 
@@ -153,6 +166,7 @@ def set_key(text: str, dotted_path: str, value: object) -> str:
     :raises ConfigError: If the path is malformed or passes through a non-mapping value.
     """
     segments = split_path(dotted_path)
+    value = _round_trip(value)
     loaded: Any = _YAML.load(text) if text.strip() else None
     root = loaded if loaded is not None else CommentedMap()
     if not isinstance(root, CommentedMap):

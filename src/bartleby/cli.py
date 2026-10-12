@@ -44,6 +44,7 @@ from bartleby.content_query import (
     list_content,
     select_published,
 )
+from bartleby.content_shapes import CONTENT_SHAPES
 from bartleby.crossrefs import resolve_all_crossrefs, resolve_page_crossrefs
 from bartleby.errors import format_error
 from bartleby.export import export_content
@@ -57,6 +58,7 @@ from bartleby.output import (
     ConfigSetOutput,
     ConfigShowOutput,
     ConfigValue,
+    ContentTypeToggleOutput,
     DryRunOutput,
     ErrorOutput,
     GenerateSkillOutput,
@@ -509,6 +511,29 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     config_schema.set_defaults(_handler=_cmd_config_schema)
 
+    for verb, summary, handler in (
+        (
+            "enable",
+            "Add a content type of a given shape to bartleby.yml",
+            _cmd_enable,
+        ),
+        (
+            "disable",
+            "Stop building a content type, keeping its config",
+            _cmd_disable,
+        ),
+    ):
+        toggle = subparsers.add_parser(verb, help=summary, description=summary, parents=[flags])
+        toggle.add_argument(
+            "shape", choices=sorted(CONTENT_SHAPES), help="The shape of the content type"
+        )
+        toggle.add_argument(
+            "name",
+            type=_instance_name,
+            help="The content type's name, such as tutorials; one shape may be used many times",
+        )
+        toggle.set_defaults(_handler=handler)
+
     return parser
 
 
@@ -528,6 +553,15 @@ def _resolve_config_path(args: argparse.Namespace) -> Path:
             code="usage_error",
         )
     return config_path
+
+
+def _instance_name(value: str) -> str:
+    """Argparse type for a content-type instance name: letters, digits, ``-`` and ``_``."""
+    if not value or not value.isascii() or not value.replace("-", "").replace("_", "").isalnum():
+        raise argparse.ArgumentTypeError(
+            f"invalid content type name {value!r} (use letters, digits, '-' and '_')"
+        )
+    return value
 
 
 def _unknown_content_type(name: str, config: BartlebyConfig) -> UsageError:
@@ -1098,6 +1132,69 @@ def _cmd_config_set(args: argparse.Namespace) -> ConfigSetOutput:
     if changed:
         config_path.write_text(edited, encoding="utf-8")
     return ConfigSetOutput(args.key, value, config_path.name, changed)
+
+
+def _cmd_enable(args: argparse.Namespace) -> ContentTypeToggleOutput:
+    """Add a content type of shape ``args.shape`` named ``args.name`` to ``bartleby.yml``.
+
+    The block merges in only when the name is absent, so a type the site already
+    customized keeps every key. An existing disabled type is turned back on by setting
+    its ``enabled`` flag; an enabled one is left alone. Taxonomies the shape refers to
+    and the site lacks are added too. The edited text is validated in memory before it
+    is written.
+    """
+    config_path = _resolve_config_path(args)
+    config = load_config(config_path)
+    existing = config.content_types.get(args.name)
+    if existing is not None:
+        if existing.enabled:
+            return ContentTypeToggleOutput(
+                "enable", args.shape, args.name, True, config_path.name, False
+            )
+        reenabled = set_key(
+            config_path.read_text(encoding="utf-8"), f"content_types.{args.name}.enabled", True
+        )
+        validate_config_text(reenabled, config_path)
+        config_path.write_text(reenabled, encoding="utf-8")
+        return ContentTypeToggleOutput(
+            "enable", args.shape, args.name, True, config_path.name, True, reenabled=True
+        )
+
+    shape = CONTENT_SHAPES[args.shape]
+    edited = set_key(
+        config_path.read_text(encoding="utf-8"),
+        f"content_types.{args.name}",
+        shape.content_type(args.name),
+    )
+    for taxonomy, block in shape.taxonomies.items():
+        if taxonomy not in config.taxonomies:
+            edited = set_key(edited, f"taxonomies.{taxonomy}", dict(block))
+    validate_config_text(edited, config_path)
+
+    config_path.write_text(edited, encoding="utf-8")
+    return ContentTypeToggleOutput("enable", args.shape, args.name, True, config_path.name, True)
+
+
+def _cmd_disable(args: argparse.Namespace) -> ContentTypeToggleOutput:
+    """Set ``enabled: false`` on the content type ``args.name``, keeping its config.
+
+    :raises UsageError: When ``bartleby.yml`` defines no content type with that name.
+    """
+    config_path = _resolve_config_path(args)
+    config = load_config(config_path)
+    if args.name not in config.content_types:
+        raise _unknown_content_type(args.name, config)
+
+    current = config_path.read_text(encoding="utf-8")
+    edited = set_key(current, f"content_types.{args.name}.enabled", False)
+    validate_config_text(edited, config_path)
+
+    changed = edited != current
+    if changed:
+        config_path.write_text(edited, encoding="utf-8")
+    return ContentTypeToggleOutput(
+        "disable", args.shape, args.name, False, config_path.name, changed
+    )
 
 
 def _cmd_config_schema(args: argparse.Namespace) -> ConfigSchemaOutput:

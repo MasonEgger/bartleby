@@ -136,7 +136,8 @@ def build_schema_json(
     """
     published = select_published(pages)
     content_types = [
-        derive_content_type_schema(name, config).to_dict() for name in config.content_types
+        derive_content_type_schema(name, config).to_dict()
+        for name in config.enabled_content_types()
     ]
     taxonomies = derive_taxonomies_schema(published, config).to_dict()["taxonomies"]
     author_entries = derive_authors_schema(authors).to_dict()["authors"]
@@ -230,7 +231,7 @@ def _check_collisions(pages: list[Page]) -> None:
 def _resource_locations(config: BartlebyConfig) -> dict[str, object]:
     """Build the absolute-URL resource map (sitemap, llms.txt, content-index, feeds)."""
     feeds: list[dict[str, object]] = []
-    for type_name, content_type in config.content_types.items():
+    for type_name, content_type in config.enabled_content_types().items():
         if "rss" in content_type.feeds:
             feeds.append(
                 {

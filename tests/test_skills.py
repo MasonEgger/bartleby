@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import re
 import shlex
@@ -440,3 +441,23 @@ def test_docs_skills_commands_parse_and_are_identical_across_runs(docs_site: Pat
             parser.parse_args(shlex.split(command)[1:])
     second = _docs_skills(docs_site)
     assert [skill.content for skill in first] == [skill.content for skill in second]
+
+
+def test_disabled_type_is_absent_from_every_generated_skill() -> None:
+    """A disabled content type appears in none of the write, review, or ops skills."""
+    config = _config()
+    config.content_types["tutorials"] = dataclasses.replace(
+        config.content_types["tutorials"], enabled=False
+    )
+
+    skills = generate_skills([], config, _authors(), _theme())
+
+    assert {skill.name for skill in skills} == {
+        "bartleby-write",
+        "bartleby-review",
+        "bartleby-ops",
+    }
+    for skill in skills:
+        assert "tutorials" not in skill.content, skill.name
+    write = next(skill for skill in skills if skill.name == "bartleby-write")
+    assert "blog" in write.content

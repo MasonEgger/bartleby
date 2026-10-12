@@ -99,6 +99,7 @@ content_types:
 | Key | Default | Purpose |
 |-----|---------|---------|
 | `path` | required | Directory under `content/` that holds the type's pages |
+| `enabled` | `true` | Build the type's pages, listing, and feeds. `false` skips them and keeps the block. |
 | `url_base` | none | URL prefix for the type's pages |
 | `url_format` | none | URL template. Placeholders: `{slug}`, `{date:FORMAT}` (strftime), `{title}`, `{categories}` |
 | `readtime` | `false` | Compute `page.readtime` |

@@ -69,14 +69,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 ## Section 3: Content types on demand
 
 ### Step 7: `enable` and `disable` content types (feature)
-- [ ] 1. RED: enabled parse (false/absent->True); build skips disabled (no listing/pages/feeds); enable adds blog-shaped type with feeds [rss,atom], idempotent; disable sets enabled false keeping block; enable preserves comments
-- [ ] 2. Document: ContentTypeConfig.enabled + enable/disable handler docstrings + help
-- [ ] 3. GREEN: config.py enabled field + parse; build.py skip disabled; cli.py enable/disable via config_edit.set_key
-- [ ] 4. RED: integration (enable + post + build -> listing + feeds exist; disable -> rebuild drops them)
-- [ ] 5. GREEN: wire minimally
-- [ ] 6. REFACTOR: one blog-shaped block reused by enable and scaffold --blog
-- [ ] 7. Document: none here
-- [ ] 8. Verify: skip path + idempotency coverage + `just check`
+- [x] 1. RED: enabled parse (false/absent->True); build skips disabled (no listing/pages/feeds); enable adds blog-shaped type with feeds [rss,atom], idempotent; disable sets enabled false keeping block; enable preserves comments
+- [x] 2. Document: ContentTypeConfig.enabled + enable/disable handler docstrings + help
+- [x] 3. GREEN: config.py enabled field + parse; build.py skip disabled; cli.py enable/disable via config_edit.set_key
+- [x] 4. RED: integration (enable + post + build -> listing + feeds exist; disable -> rebuild drops them)
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: one blog-shaped block reused by enable and scaffold --blog
+- [x] 7. Document: none here
+- [x] 8. Verify: skip path + idempotency coverage + `just check`
 
 ### Step 8: An enabled type's feeds carry entries, plus the combined feed (feature)
 - [ ] 1. RED: per-type RSS + Atom carry exactly the published items; combined feed merges enabled-with-feeds types, excludes opt-out and disabled; site.feed.enabled false suppresses combined only

@@ -136,7 +136,7 @@ def _write_skill(
     lines += ["", "## Creating a post", "", "```bash"]
     lines += [
         f'bartleby new post "Title" --type {type_name} --output json'
-        for type_name in sorted(config.content_types)
+        for type_name in sorted(config.enabled_content_types())
     ]
     lines += ["```"]
     return "\n".join(lines) + "\n"
@@ -209,7 +209,8 @@ def _ops_skill(pages: list[Page], config: BartlebyConfig, theme: ResolvedTheme) 
         lines.append(f"bartleby content get {first_path} --output json")
     lines += ["```", "", "## Schema introspection", "", "```bash"]
     lines += [
-        f"bartleby schema {type_name} --output json" for type_name in sorted(config.content_types)
+        f"bartleby schema {type_name} --output json"
+        for type_name in sorted(config.enabled_content_types())
     ]
     lines += [
         "bartleby schema taxonomies --output json",
@@ -279,7 +280,7 @@ def _joined(names: list[str]) -> str:
 def _content_type_section(config: BartlebyConfig) -> list[str]:
     """Render each content type's required/optional fields, sorted by name."""
     lines: list[str] = []
-    for type_name in sorted(config.content_types):
+    for type_name in sorted(config.enabled_content_types()):
         schema = derive_content_type_schema(type_name, config)
         lines.append(f"### {type_name}")
         lines.append("")

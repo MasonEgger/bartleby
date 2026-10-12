@@ -217,3 +217,14 @@ def test_set_key_new_content_type_keeps_the_scaffold_comment_position() -> None:
             assert result_lines.index(line) > 0
             before = result_lines[result_lines.index(line) - 1]
             assert before == original_lines[index - 1], line
+
+
+def test_set_key_nested_dict_value_keeps_the_next_comment_above_its_key() -> None:
+    """A dict value is written as a mapping whose trailing comment slot is still found."""
+    text = "site:\n  url: a\n\n# Theme choice.\ntheme:\n  name: x\n"
+    block = {"path": "notes", "taxonomies": ["tags"], "feed": {"limit": 5}}
+    lines = set_key(text, "site.extra", block).splitlines()
+
+    assert lines[lines.index("theme:") - 1] == "# Theme choice."
+    assert lines[lines.index("# Theme choice.") - 1] == ""
+    assert lines.index("      limit: 5") < lines.index("# Theme choice.")

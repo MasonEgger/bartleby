@@ -225,12 +225,22 @@ def discover_content(
     assets: list[ColocatedAsset] = []
     taxonomy_names = set(config.taxonomies.keys())
 
+    # A disabled content type contributes no pages or assets: its whole path is excluded.
+    excluded = [
+        *config.exclude_patterns,
+        *(
+            f"{content_type.path.rstrip('/')}/**"
+            for content_type in config.content_types.values()
+            if not content_type.enabled
+        ),
+    ]
+
     for abs_path in sorted(content_dir.rglob("*")):
         if not abs_path.is_file():
             continue
         relative = abs_path.relative_to(content_dir)
         rel_posix = relative.as_posix()
-        if should_exclude(rel_posix, config.exclude_patterns):
+        if should_exclude(rel_posix, excluded):
             continue
 
         if abs_path.suffix == ".md":

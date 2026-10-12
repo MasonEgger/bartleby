@@ -338,3 +338,21 @@ def test_taxonomy_links_have_no_url_for_unlisted_terms() -> None:
     result = build_taxonomies([page], config)
     links = taxonomy_links_for(page, result.global_taxonomies, result.content_type_taxonomies)
     assert [(link.term, link.url) for link in links["categories"]] == [("news", None)]
+
+
+def test_taxonomy_opted_in_only_by_a_disabled_type_is_not_collected() -> None:
+    """A disabled type's opt-in creates no taxonomy data, hence no generated pages."""
+    config = _config(blog_taxonomies=["tags"])
+    config.content_types["tutorials"] = ContentTypeConfig(
+        name="tutorials",
+        path="tutorials/posts",
+        pagination=PaginationConfig(),
+        taxonomies=["categories"],
+        enabled=False,
+    )
+
+    result = build_taxonomies([], config)
+
+    assert set(result.global_taxonomies) == {"tags"}
+    urls = {page.output_url for page in generate_taxonomy_pages(result, config)}
+    assert not any(url.startswith("/categories/") for url in urls)

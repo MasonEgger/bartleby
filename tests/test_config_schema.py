@@ -10,7 +10,13 @@ import pytest
 
 from bartleby import config, theme_loader
 from bartleby.config import OVERRIDE_SOURCE, ConfigError, load_config
-from bartleby.config_schema import CONFIG_SCHEMA, ConfigField, resolve_with_sources, schema_field
+from bartleby.config_schema import (
+    CONFIG_SCHEMA,
+    ConfigField,
+    resolve_parsed_with_sources,
+    resolve_with_sources,
+    schema_field,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures" / "configs"
 
@@ -234,3 +240,36 @@ def test_resolve_with_sources_validates_like_load_config() -> None:
     with pytest.raises(ConfigError) as exc_info:
         resolve_with_sources(FIXTURES / "minimal.yml", overrides=["dev_server.port=notaport"])
     assert str(exc_info.value).startswith("--set: dev_server.port")
+
+
+def test_resolve_with_sources_drops_an_empty_section_that_defaults_fill_beneath(
+    tmp_path: Path,
+) -> None:
+    """``feed: {}`` and a bare ``theme:`` give no parent row beside their default children."""
+    config_path = tmp_path / "bartleby.yml"
+    config_path.write_text(
+        "site:\n  title: T\n  url: https://x.test\n  feed: {}\ntheme:\n", encoding="utf-8"
+    )
+
+    resolved = resolve_with_sources(config_path)
+
+    assert "site.feed" not in resolved
+    assert "theme" not in resolved
+    assert resolved["site.feed.limit"] == (50, "default")
+    assert resolved["theme.name"][1] == "default"
+
+
+def test_resolve_parsed_with_sources_reports_the_coerced_value(tmp_path: Path) -> None:
+    """A quoted feed limit is a string raw and an int once parsed; sources are unchanged."""
+    config_path = tmp_path / "bartleby.yml"
+    config_path.write_text(
+        'site:\n  title: T\n  url: https://x.test\n  feed:\n    limit: "30"\n',
+        encoding="utf-8",
+    )
+
+    raw = resolve_with_sources(config_path)
+    parsed = resolve_parsed_with_sources(config_path)
+
+    assert raw["site.feed.limit"] == ("30", "file")
+    assert parsed["site.feed.limit"] == (30, "file")
+    assert parsed.keys() == raw.keys()

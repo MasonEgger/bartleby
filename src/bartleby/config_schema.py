@@ -498,7 +498,9 @@ def resolve_with_sources(
     so the dependency stays one-directional. File and ``--set`` tags come from
     :func:`bartleby.config.source_tags`; a key neither supplied is filled from the
     schema and tagged :data:`bartleby.config.SOURCE_DEFAULT`. Keys under a user-chosen
-    name (``content_types.<name>...``) get no default entry.
+    name (``content_types.<name>...``) get no default entry. A null or empty-mapping
+    section in the file gives no row of its own when schema entries sit beneath it, so
+    the result holds only real leaves.
 
     :param config_path: Path to the ``bartleby.yml`` file.
     :param overrides: ``key.path=value`` strings, as for :func:`bartleby.config.load_config`.
@@ -506,7 +508,18 @@ def resolve_with_sources(
     :raises FileNotFoundError: If ``config_path`` does not exist.
     :raises ConfigError: If the file or an override fails validation.
     """
-    resolved = config.source_tags(config_path, overrides)
+    tagged = config.source_tags(config_path, overrides)
+
+    # An empty or null section (`feed: {}`, a bare `theme:`) is a leaf in the file, but
+    # the defaults beneath it are filled below, so the section itself is not a real value.
+    resolved = {
+        path: tagged_value
+        for path, tagged_value in tagged.items()
+        if not (
+            (tagged_value[0] is None or tagged_value[0] == {})
+            and any(entry.path.startswith(f"{path}.") for entry in CONFIG_SCHEMA)
+        )
+    }
 
     for entry in CONFIG_SCHEMA:
         if entry.repeatable:
@@ -514,3 +527,52 @@ def resolve_with_sources(
         if not any(config.same_branch(path, entry.path) for path in resolved):
             resolved[entry.path] = (entry.default, config.SOURCE_DEFAULT)
     return dict(sorted(resolved.items()))
+
+
+_MISSING = object()
+
+
+def _parsed_value(parsed: config.BartlebyConfig, path: str, raw: Any) -> Any:
+    """Read ``path`` off the loaded config, or return ``raw`` when it has no parsed form.
+
+    A segment is looked up as a mapping key (on a dict) or an attribute (on a dataclass);
+    a path that continues past any other value keeps the raw value. A path that does not
+    resolve (``theme.color_mode.default`` when unset, a design-token name containing a
+    dot) or that lands on a whole dataclass keeps the raw value.
+    """
+    node: object = parsed
+    for segment in path.split("."):
+        if isinstance(node, dict):
+            node = node.get(segment, _MISSING)
+        elif dataclasses.is_dataclass(node):
+            node = getattr(node, segment, _MISSING)
+        else:
+            return raw
+        if node is _MISSING:
+            return raw
+    return raw if dataclasses.is_dataclass(node) else node
+
+
+def resolve_parsed_with_sources(
+    config_path: Path, overrides: list[str] | None = None
+) -> dict[str, tuple[Any, str]]:
+    """Resolve every config value as the build sees it, with where it came from.
+
+    :func:`resolve_with_sources` carries raw YAML values (a quoted feed limit ``"25"`` is
+    the string there). This keeps its sources and takes each value from the loaded
+    :class:`bartleby.config.BartlebyConfig` where a parsed value exists (``25`` as an
+    int), so ``config show`` and ``config get`` print what the build uses. The keys and
+    sources are those of :func:`resolve_with_sources`.
+
+    :param config_path: Path to the ``bartleby.yml`` file.
+    :param overrides: ``key.path=value`` strings, as for :func:`bartleby.config.load_config`.
+    :returns: Dotted path to ``(parsed value, source)``, sorted by path.
+    :raises FileNotFoundError: If ``config_path`` does not exist.
+    :raises ConfigError: If the file or an override fails validation.
+    """
+    resolved = resolve_with_sources(config_path, overrides)
+    parsed = config.load_config(config_path, overrides)
+    return {
+        path: (_parsed_value(parsed, path, raw), source)
+        for path, (raw, source) in resolved.items()
+    }

@@ -5,7 +5,10 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from bartleby.config_schema import ConfigField
 
 # Meaningful exit codes (spec.md "Global Flags"): 0 success, 1 error, 2 usage error.
 EXIT_SUCCESS = 0
@@ -342,6 +345,136 @@ class LintOutput:
             for issue in self.issues
         ]
         lines.append(f"{self.errors} error(s), {self.warnings} warning(s), {self.info} info")
+        return "\n".join(lines)
+
+
+def format_config_value(value: object) -> str:
+    """Show a config value as ``config get`` prints it: strings bare, anything else as JSON."""
+    return value if isinstance(value, str) else json.dumps(value)
+
+
+@dataclass(slots=True)
+class ConfigValue:
+    """One resolved config value and where it came from."""
+
+    path: str
+    value: object
+    source: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {"path": self.path, "value": self.value, "source": self.source}
+
+
+@dataclass(slots=True)
+class ConfigShowOutput:
+    """Result of ``bartleby config show``: every resolved value with its source."""
+
+    values: list[ConfigValue]
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_SUCCESS
+
+    def to_dict(self) -> dict[str, object]:
+        return {"status": "success", "values": [entry.to_dict() for entry in self.values]}
+
+    def to_text(self) -> str:
+        width = max((len(entry.path) for entry in self.values), default=0)
+        return "\n".join(
+            f"{entry.path:<{width}} = {json.dumps(entry.value)}  ({entry.source})"
+            for entry in self.values
+        )
+
+
+@dataclass(slots=True)
+class ConfigGetOutput:
+    """Result of ``bartleby config get KEY``: one resolved value."""
+
+    key: str
+    value: object
+    source: str
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_SUCCESS
+
+    def to_dict(self) -> dict[str, object]:
+        return {"status": "success", "key": self.key, "value": self.value, "source": self.source}
+
+    def to_text(self) -> str:
+        return format_config_value(self.value)
+
+
+@dataclass(slots=True)
+class ConfigSetOutput:
+    """Result of ``bartleby config set KEY VALUE``.
+
+    ``changed`` is false when the file already held the value, so it was not rewritten.
+    """
+
+    key: str
+    value: object
+    file: str
+    changed: bool
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_SUCCESS
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "status": "success",
+            "key": self.key,
+            "value": self.value,
+            "file": self.file,
+            "changed": self.changed,
+        }
+
+    def to_text(self) -> str:
+        shown = format_config_value(self.value)
+        if self.changed:
+            return f"Set {self.key} to {shown} in {self.file}"
+        return f"{self.key} is already {shown} in {self.file}"
+
+
+@dataclass(slots=True)
+class ConfigSchemaOutput:
+    """Result of ``bartleby config schema``: every accepted key from the config schema."""
+
+    fields: list[ConfigField]
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_SUCCESS
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "status": "success",
+            "fields": [
+                {
+                    "path": entry.path,
+                    "type": entry.type_name,
+                    "default": entry.default,
+                    "choices": list(entry.choices) if entry.choices is not None else None,
+                    "repeatable": entry.repeatable,
+                    "required": entry.required,
+                    "description": entry.description,
+                }
+                for entry in self.fields
+            ],
+        }
+
+    def to_text(self) -> str:
+        lines: list[str] = []
+        for entry in self.fields:
+            detail = [entry.type_name]
+            if entry.required:
+                detail.append("required")
+            elif entry.default is not None:
+                detail.append(f"default {json.dumps(entry.default)}")
+            if entry.choices:
+                detail.append(f"one of {', '.join(entry.choices)}")
+            lines.append(f"{entry.path} ({'; '.join(detail)}): {entry.description}")
         return "\n".join(lines)
 
 

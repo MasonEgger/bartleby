@@ -47,14 +47,14 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 8. Verify: all three sources + --base-url mapping coverage + `just check`
 
 ### Step 5: The `config` command group (feature)
-- [ ] 1. RED: command tests (show lists values + sources, json stable; get prints value, unknown key non-zero; set writes keeping comments, idempotent; set rejects invalid without writing; schema json one object per field)
-- [ ] 2. Document: show/get/set/schema handler docstrings + argparse help
-- [ ] 3. GREEN: cli.py config parser + handlers (set validates in memory before writing via config_edit.set_key); output.py result dataclasses
-- [ ] 4. RED: integration (set then get returns written value; show marks it file)
-- [ ] 5. GREEN: wire minimally
-- [ ] 6. REFACTOR: reuse Step 4 provenance + Step 1 schema
-- [ ] 7. Document: none here
-- [ ] 8. Verify: each action + config set write-safety coverage + `just check`
+- [x] 1. RED: command tests (show lists values + sources, json stable; get prints value, unknown key non-zero; set writes keeping comments, idempotent; set rejects invalid without writing; schema json one object per field)
+- [x] 2. Document: show/get/set/schema handler docstrings + argparse help
+- [x] 3. GREEN: cli.py config parser + handlers (set validates in memory before writing via config_edit.set_key); output.py result dataclasses
+- [x] 4. RED: integration (set then get returns written value; show marks it file)
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: reuse Step 4 provenance + Step 1 schema
+- [x] 7. Document: none here
+- [x] 8. Verify: each action + config set write-safety coverage + `just check`
 
 ### Step 6: `bartleby new site --full-config` (feature)
 - [ ] 1. RED: full-config tests (generated file covers every CONFIG_SCHEMA path; parses with no error/warning; each option carries description comment; minimal config is a subset)

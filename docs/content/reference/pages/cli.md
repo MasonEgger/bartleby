@@ -195,6 +195,50 @@ The command writes `bartleby-write.md`, `bartleby-review.md`, and `bartleby-ops.
 The output is deterministic, so `--force` changes nothing.
 See [Agent output formats](agent-surface.md#generated-skills) for what each skill contains.
 
+## `bartleby config`
+
+Inspect and edit `bartleby.yml`.
+
+### `bartleby config show`
+
+```
+bartleby config show [--set KEY.PATH=VALUE] [--base-url URL]
+```
+
+Print every resolved config value with its source: `default`, `file`, or `--set`.
+Values are the parsed ones the build uses.
+With `--output json`, the command returns `status` and `values`, a list sorted by `path` of objects with `path`, `value`, and `source`.
+
+### `bartleby config get`
+
+```
+bartleby config get KEY [--set KEY.PATH=VALUE] [--base-url URL]
+```
+
+Print one resolved value, such as `site.title`.
+A string prints bare; any other value prints as JSON.
+An unknown key exits with code `2` and names the key.
+
+### `bartleby config set`
+
+```
+bartleby config set KEY VALUE
+```
+
+Write one value into `bartleby.yml`, keeping its comments and key order.
+`VALUE` is parsed as YAML, so `9000` is an integer.
+The command validates the edited config before it writes, so a rejected value leaves the file untouched.
+
+### `bartleby config schema`
+
+```
+bartleby config schema
+```
+
+List every key `bartleby.yml` accepts, with its type, default, allowed values, and description.
+The command reads no project file.
+With `--output json`, it returns `status` and `fields`, one object per key.
+
 ## `bartleby theme`
 
 Work with the active theme.

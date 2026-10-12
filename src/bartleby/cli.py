@@ -27,7 +27,14 @@ from bartleby.build import (
     format_page_error,
     render_content,
 )
-from bartleby.config import ConfigError, load_config
+from bartleby.config import (
+    ConfigError,
+    load_config,
+    parse_override_value,
+    validate_config_text,
+)
+from bartleby.config_edit import set_key
+from bartleby.config_schema import CONFIG_SCHEMA, resolve_parsed_with_sources
 from bartleby.content import ContentError, discover_content
 from bartleby.content_query import (
     ContentGet,
@@ -45,6 +52,11 @@ from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
 from bartleby.metadata import validate_all_metadata
 from bartleby.output import (
     BuildOutput,
+    ConfigGetOutput,
+    ConfigSchemaOutput,
+    ConfigSetOutput,
+    ConfigShowOutput,
+    ConfigValue,
     DryRunOutput,
     ErrorOutput,
     GenerateSkillOutput,
@@ -465,6 +477,32 @@ def _build_parser() -> argparse.ArgumentParser:
         parents=[flags],
     )
     theme_inspect.set_defaults(_handler=_cmd_theme_inspect)
+
+    config_parser = subparsers.add_parser("config", help="Inspect and edit bartleby.yml")
+    config_sub = config_parser.add_subparsers(dest="config_command")
+    config_show = config_sub.add_parser(
+        "show", help="Print every resolved config value with its source", parents=[flags]
+    )
+    _add_set_flag(config_show)
+    _add_base_url_flag(config_show)
+    config_show.set_defaults(_handler=_cmd_config_show)
+    config_get = config_sub.add_parser(
+        "get", help="Print one resolved config value", parents=[flags]
+    )
+    config_get.add_argument("key", help="Dotted key path, such as site.title")
+    _add_set_flag(config_get)
+    _add_base_url_flag(config_get)
+    config_get.set_defaults(_handler=_cmd_config_get)
+    config_set = config_sub.add_parser(
+        "set", help="Validate a value and write it to bartleby.yml", parents=[flags]
+    )
+    config_set.add_argument("key", help="Dotted key path, such as site.title")
+    config_set.add_argument("value", help="New value, parsed as YAML (42 is an integer)")
+    config_set.set_defaults(_handler=_cmd_config_set)
+    config_schema = config_sub.add_parser(
+        "schema", help="List every accepted config key with its type and default", parents=[flags]
+    )
+    config_schema.set_defaults(_handler=_cmd_config_schema)
 
     return parser
 
@@ -1002,6 +1040,61 @@ def _cmd_theme_inspect(args: argparse.Namespace) -> InspectResult:
     config = load_config(config_path)
     theme = select_theme(config.theme, project_dir)
     return inspect_chain(theme, project_dir)
+
+
+def _cmd_config_show(args: argparse.Namespace) -> ConfigShowOutput:
+    """Print the resolved config, each value tagged ``default``, ``file``, or ``--set``.
+
+    Values are the parsed ones the build uses, not the raw YAML text, so a quoted
+    ``"25"`` for an integer key shows as ``25``.
+    """
+    resolved = resolve_parsed_with_sources(_resolve_config_path(args), _config_overrides(args))
+    return ConfigShowOutput(
+        [ConfigValue(path, value, source) for path, (value, source) in resolved.items()]
+    )
+
+
+def _cmd_config_get(args: argparse.Namespace) -> ConfigGetOutput:
+    """Print one resolved value: a string bare, anything else as JSON.
+
+    :raises UsageError: When ``key`` is not a resolved leaf; the hint points at ``config show``.
+    """
+    resolved = resolve_parsed_with_sources(_resolve_config_path(args), _config_overrides(args))
+    if args.key not in resolved:
+        raise UsageError(
+            format_error(
+                f"no config value at {args.key!r}",
+                key_path=args.key,
+                hint="run `bartleby config show` for every value, or "
+                "`bartleby config schema` for every accepted key",
+            )
+        )
+    value, source = resolved[args.key]
+    return ConfigGetOutput(args.key, value, source)
+
+
+def _cmd_config_set(args: argparse.Namespace) -> ConfigSetOutput:
+    """Write one value into ``bartleby.yml``, keeping its comments, after validating it.
+
+    The edited text is validated in memory first, so a rejected value leaves the file
+    untouched; a value the file already holds is not rewritten.
+    """
+    config_path = _resolve_config_path(args)
+    value = parse_override_value(args.key, args.value)
+
+    current = config_path.read_text(encoding="utf-8")
+    edited = set_key(current, args.key, value)
+    validate_config_text(edited, config_path)
+
+    changed = edited != current
+    if changed:
+        config_path.write_text(edited, encoding="utf-8")
+    return ConfigSetOutput(args.key, value, config_path.name, changed)
+
+
+def _cmd_config_schema(args: argparse.Namespace) -> ConfigSchemaOutput:
+    """List every key ``bartleby.yml`` accepts; reads no project file."""
+    return ConfigSchemaOutput(list(CONFIG_SCHEMA))
 
 
 def _cmd_serve(args: argparse.Namespace) -> None:

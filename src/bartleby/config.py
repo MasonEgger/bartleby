@@ -328,6 +328,26 @@ def existing_prefix[Mapping: dict[str, Any]](
     return node, len(segments) - 1
 
 
+def parse_override_value(dotted_path: str, text: str) -> Any:
+    """Parse the text of a ``--set`` or ``config set`` value as YAML.
+
+    ``42`` is an int, ``true`` a bool, ``[a, b]`` a list, and empty text null.
+
+    :param dotted_path: The key the value is for; named in the error.
+    :param text: The value as the user typed it.
+    :returns: The parsed value.
+    :raises ConfigError: If ``text`` is not valid YAML.
+    """
+    try:
+        return yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise ConfigError(
+            f"value {text!r} is not valid YAML{_yaml_location(exc)}",
+            key_path=dotted_path,
+            hint="wrap the value in quotes, such as '\"Hello: World\"'",
+        ) from exc
+
+
 def apply_overrides(raw: dict[str, Any], sets: list[str]) -> dict[str, Any]:
     """Apply ``key.path=value`` overrides to a raw config mapping, in order.
 
@@ -352,15 +372,7 @@ def apply_overrides(raw: dict[str, Any], sets: list[str]) -> dict[str, Any]:
                 source=OVERRIDE_SOURCE,
             )
         try:
-            value: Any = yaml.safe_load(text)
-        except yaml.YAMLError as exc:
-            raise ConfigError(
-                f"value {text!r} is not valid YAML{_yaml_location(exc)}",
-                key_path=dotted_path,
-                hint="quote the value, such as --set site.title='\"Hello: World\"'",
-                source=OVERRIDE_SOURCE,
-            ) from exc
-        try:
+            value = parse_override_value(dotted_path, text)
             segments = split_path(dotted_path)
             holder, depth = existing_prefix(raw, segments)
         except ConfigError as exc:
@@ -452,6 +464,25 @@ def load_config(config_path: Path, overrides: list[str] | None = None) -> Bartle
         raise
 
 
+def validate_config_text(text: str, config_path: Path) -> None:
+    """Validate candidate ``bartleby.yml`` text in memory, exactly as :func:`load_config` would.
+
+    ``config set`` calls this on the edited text before writing it, so a rejected
+    value never reaches the file.
+
+    :param text: The candidate file contents.
+    :param config_path: Where the text would be written; it names the error source and
+        gives the directory relative paths resolve against.
+    :raises ConfigError: If the text is empty, malformed, or fails validation.
+    """
+    try:
+        _validate_raw(_parse_raw_text(text), config_path.parent)
+    except ConfigError as exc:
+        if exc.source is None:
+            exc.source = config_path
+        raise
+
+
 def same_branch(key_path: str | None, override_path: str) -> bool:
     """Whether ``key_path`` equals ``override_path`` or sits under it."""
     if not key_path:
@@ -461,7 +492,11 @@ def same_branch(key_path: str | None, override_path: str) -> bool:
 
 def _read_raw_config(config_path: Path) -> dict[str, Any]:
     """Read ``config_path`` as a YAML mapping; the caller attaches the source."""
-    raw_text = config_path.read_text(encoding="utf-8")
+    return _parse_raw_text(config_path.read_text(encoding="utf-8"))
+
+
+def _parse_raw_text(raw_text: str) -> dict[str, Any]:
+    """Parse config text as a YAML mapping; the caller attaches the source."""
     try:
         parsed: Any = yaml.safe_load(raw_text)
     except yaml.YAMLError as exc:
@@ -487,8 +522,13 @@ def _load_config_text(config_path: Path, overrides: list[str]) -> BartlebyConfig
     """Parse and validate the file at ``config_path``; the caller attaches the source."""
     parsed = _read_raw_config(config_path)
     apply_overrides(parsed, overrides)
+    return _validate_raw(parsed, config_path.parent)
+
+
+def _validate_raw(parsed: dict[str, Any], config_dir: Path) -> BartlebyConfig:
+    """Reject unknown keys, parse ``parsed`` into a config, and run the cross-field checks."""
     _reject_unknown_top_level_keys(parsed)
-    config = _parse_config(parsed, config_path.parent)
+    config = _parse_config(parsed, config_dir)
     _validate_config(config)
     return config
 

@@ -101,11 +101,11 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 8. Verify: enable/disable + option validation + ignored-file warning coverage + `just check`
 
 ### Step 10: Click-to-load host script and styles in both themes (task)
-- [ ] 1. Scope: base click-to-load swap script + conditional include; preview styles in base + material/scrivener skins
-- [ ] 2. Tooling: frontend-design; markwright Click-to-Load docs; build scratch site with a click embed
-- [ ] 3. Do: write base swap script to markwright's contract; include only when a click preview is present; style preview
-- [ ] 4. Verify: eager page has live embed + no swap script; click page has <template> preview + swap script; exit 0, no UndefinedError
-- [ ] 5. Document: none here
+- [x] 1. Scope: base click-to-load swap script + conditional include; preview styles in base + material/scrivener skins
+- [x] 2. Tooling: frontend-design; markwright Click-to-Load docs; build scratch site with a click embed
+- [x] 3. Do: write base swap script to markwright's contract; include only when a click preview is present; style preview
+- [x] 4. Verify: eager page has live embed + no swap script; click page has <template> preview + swap script; exit 0, no UndefinedError
+- [x] 5. Document: none here
 
 ### Step 11: Both themes style every markwright class hook (task)
 - [ ] 1. Scope: material + scrivener tailwind.css + safelist.txt component classes for every markwright hook; regenerated main.css

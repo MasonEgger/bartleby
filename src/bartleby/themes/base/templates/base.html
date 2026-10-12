@@ -23,6 +23,28 @@
   {% if feature is defined and feature('search') %}
   <script defer src="/js/search.js" data-highlight="{{ (feature('search.highlight')) | tojson }}"></script>
   {% endif %}
+  {# markwright marks a click-to-load preview with data-mw-load="click"; eager-only pages load nothing.
+     The flag covers the page body, a listing intro, and every excerpt a listing or term page prints. #}
+  {% set click_marker = 'data-mw-load="click"' %}
+  {% set click = namespace(found=click_marker in (page.content or "")) %}
+  {% set click_meta = page.custom_metadata or {} %}
+  {% if not click.found and click_meta.intro_content is string and click_marker in click_meta.intro_content %}
+    {% set click.found = true %}
+  {% endif %}
+  {# Front matter shares custom_metadata, so every value is type-checked before it is iterated. #}
+  {% if not click.found %}
+    {% set paginator = click_meta.paginator %}
+    {% set listed = paginator.items if paginator else click_meta.posts %}
+    {% if listed is iterable and listed is not string and listed is not mapping %}
+      {% for post in listed %}
+        {% if post.excerpt_html is string and click_marker in post.excerpt_html %}{% set click.found = true %}{% endif %}
+      {% endfor %}
+    {% endif %}
+  {% endif %}
+  {% if click.found %}
+  <link rel="stylesheet" href="/css/click_to_load.css">
+  <script defer src="/js/click_to_load.js"></script>
+  {% endif %}
   <script defer src="/js/alpine.min.js"></script>
   <script defer src="/js/htmx.min.js"></script>
   <script defer src="/js/lunr.min.js"></script>

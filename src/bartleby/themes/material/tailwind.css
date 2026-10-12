@@ -897,4 +897,39 @@
     outline: 2px solid var(--bm-accent);
     outline-offset: -2px;
   }
+
+  /* Click-to-load embeds (markwright's preview). Layout comes from base's click_to_load.css;
+     this skins it: a filled primary button on a surface card, as material does elsewhere. */
+  .mw-embed .mw-embed-preview {
+    border: 1px solid var(--bm-border);
+    border-radius: calc(var(--bm-radius) * 2);
+    background: var(--bm-surface);
+    color: var(--bm-text);
+  }
+  .mw-embed .mw-embed-provider {
+    color: var(--bm-text-muted);
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+  .mw-embed .mw-embed-load {
+    border: 0;
+    border-radius: var(--bm-radius);
+    background: var(--bm-primary);
+    color: var(--bm-on-primary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+  .mw-embed .mw-embed-load:hover {
+    background: var(--bm-primary-dark);
+    color: var(--bm-on-primary);
+  }
+  .mw-embed .mw-embed-load:focus-visible,
+  .mw-embed .mw-embed-link:focus-visible {
+    outline: 2px solid var(--bm-accent);
+    outline-offset: 2px;
+  }
+  .mw-embed .mw-embed-link {
+    color: var(--bm-link);
+  }
 }

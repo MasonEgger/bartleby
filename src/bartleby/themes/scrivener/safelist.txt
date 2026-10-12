@@ -93,6 +93,13 @@ tabbed-labels
 tabbed-content
 tabbed-block
 tabbed-alternate
+# Click-to-load embeds (markwright preview hooks)
+mw-embed
+mw-embed-preview
+mw-embed-provider
+mw-embed-load
+mw-embed-link
+mw-embed-live
 # Utilities toggled at runtime or by Markdown attributes
 hidden
 block

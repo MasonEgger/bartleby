@@ -130,3 +130,136 @@ def test_disabled_twitter_leaves_the_raw_fence_and_stray_file_warns(
     assert _TWEET in html
     assert "twitter-tweet" not in html
     assert len(_ignored_warnings(caplog)) == 1
+
+
+_CLICK_SCRIPT = '<script defer src="/js/click_to_load.js"></script>'
+_CLICK_STYLES = '<link rel="stylesheet" href="/css/click_to_load.css">'
+
+
+@pytest.mark.parametrize("theme_name", ["scrivener", "material"])
+def test_click_embed_page_loads_the_swap_script_and_styles(
+    make_project: ProjectFactory, theme_name: str
+) -> None:
+    """A page with a `load: click` embed keeps markwright's preview and links the host assets."""
+    project = make_project(
+        f"theme:\n  name: {theme_name}\nmarkwright:\n  twitter: {{load: click}}\n"
+    )
+
+    build(project / "bartleby.yml")
+
+    html = _embed_html(project)
+    assert 'data-mw-load="click"' in html
+    assert '<template class="mw-embed-content">' in html
+    assert _CLICK_SCRIPT in html
+    assert _CLICK_STYLES in html
+    assert (project / "site" / "js" / "click_to_load.js").is_file()
+    assert (project / "site" / "css" / "click_to_load.css").is_file()
+
+
+@pytest.mark.parametrize("theme_name", ["scrivener", "material"])
+def test_eager_embed_page_loads_no_click_assets(
+    make_project: ProjectFactory, theme_name: str
+) -> None:
+    """Embeds are eager by default, so the page carries the live markup and no swap script."""
+    project = make_project(f"theme:\n  name: {theme_name}\n")
+
+    build(project / "bartleby.yml")
+
+    html = _embed_html(project)
+    assert "twitter-tweet" in html
+    assert "mw-embed" not in html
+    assert "click_to_load" not in html
+
+
+_LISTING_POST = """---
+title: Welcome
+description: A post with a video in its excerpt.
+date: 2026-10-12
+tags: [news]
+---
+
+A post with a video up top.
+
+{excerpt_body}
+
+<!-- more -->
+
+The rest of the post.
+"""
+
+
+def _make_blog(root: Path, theme_name: str, *, excerpt_body: str, load: str) -> Path:
+    """Write a blog-shaped site whose one post has `excerpt_body` above the separator."""
+    (root / "content" / "blog" / "posts").mkdir(parents=True)
+    (root / "content" / "index.md").write_text(
+        "---\ntitle: Home\n---\n\nHello.\n", encoding="utf-8"
+    )
+    (root / "content" / "blog" / "posts" / "welcome.md").write_text(
+        _LISTING_POST.format(excerpt_body=excerpt_body), encoding="utf-8"
+    )
+    (root / "bartleby.yml").write_text(
+        "site:\n  title: Listing\n  url: https://example.com\n"
+        f"theme:\n  name: {theme_name}\n"
+        "content_types:\n  blog:\n    path: blog/posts\n"
+        '    excerpt_separator: "<!-- more -->"\n    taxonomies:\n      - tags\n'
+        'taxonomies:\n  tags:\n    slug_format: "{slug}"\n'
+        f"markwright:\n  youtube: {{load: {load}}}\n",
+        encoding="utf-8",
+    )
+    return root / "bartleby.yml"
+
+
+@pytest.mark.parametrize("theme_name", ["scrivener", "material"])
+def test_listing_and_tag_pages_load_click_assets_for_a_click_excerpt(
+    tmp_path: Path, theme_name: str
+) -> None:
+    """A listing or term page that prints a click embed's preview links the swap assets."""
+    config = _make_blog(tmp_path, theme_name, excerpt_body="[youtube dQw4w9WgXcQ]", load="click")
+
+    build(config)
+
+    site = tmp_path / "site"
+    pages = [
+        site / "blog" / "index.html",
+        site / "blog" / "tags" / "news" / "index.html",
+        site / "tags" / "news" / "index.html",
+        site / "blog" / "posts" / "welcome" / "index.html",
+    ]
+    for page in pages:
+        html = page.read_text(encoding="utf-8")
+        assert 'data-mw-load="click"' in html, page
+        assert _CLICK_SCRIPT in html, page
+        assert _CLICK_STYLES in html, page
+
+
+@pytest.mark.parametrize("theme_name", ["scrivener", "material"])
+def test_listing_without_a_click_excerpt_loads_no_click_assets(
+    tmp_path: Path, theme_name: str
+) -> None:
+    """A listing whose excerpts hold no click embed carries neither asset tag."""
+    config = _make_blog(tmp_path, theme_name, excerpt_body="Just text.", load="click")
+
+    build(config)
+
+    site = tmp_path / "site"
+    for page in (site / "blog" / "index.html", site / "blog" / "tags" / "news" / "index.html"):
+        html = page.read_text(encoding="utf-8")
+        assert "click_to_load" not in html, page
+
+
+@pytest.mark.parametrize("theme_name", ["scrivener", "material"])
+def test_front_matter_named_like_listing_keys_neither_crashes_nor_loads_assets(
+    make_project: ProjectFactory, theme_name: str
+) -> None:
+    """User front matter `posts`, `intro_content`, and `paginator` is data, not listing state."""
+    project = make_project(f"theme:\n  name: {theme_name}\n")
+    (project / "content" / "plain.md").write_text(
+        "---\ntitle: Plain\ndescription: A plain page\n"
+        "posts: 5\nintro_content: 5\npaginator: 5\n---\n\nHello.\n",
+        encoding="utf-8",
+    )
+
+    build(project / "bartleby.yml")
+
+    html = (project / "site" / "plain" / "index.html").read_text(encoding="utf-8")
+    assert "click_to_load" not in html

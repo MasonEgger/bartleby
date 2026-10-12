@@ -1,0 +1,63 @@
+/* ABOUTME: Theme-neutral layout for markwright's click-to-load preview, loaded only on pages that have one.
+   ABOUTME: Colors derive from currentColor so light and dark both work; themes skin it with .mw-embed .mw-embed-* rules. */
+
+.mw-embed {
+  margin: 1.5em 0;
+}
+.mw-embed-preview {
+  display: grid;
+  justify-items: start;
+  gap: 0.75em;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-height: 9rem;
+  padding: 1.25em 1.5em;
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+}
+.mw-embed-provider {
+  margin: 0;
+  font-weight: 600;
+}
+.mw-embed-load {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 0.5em 1em;
+  border: 1px solid currentColor;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+/* A play triangle drawn in CSS, so the affordance needs no icon file. */
+.mw-embed-load::before {
+  content: "";
+  border-style: solid;
+  border-width: 0.4em 0 0.4em 0.65em;
+  border-color: transparent transparent transparent currentColor;
+}
+.mw-embed-load:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.mw-embed-load:focus-visible,
+.mw-embed-link:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+.mw-embed-link {
+  font-size: 0.9em;
+}
+.mw-embed-live {
+  margin: 1.5em 0;
+}
+.mw-embed-live:focus {
+  outline: none;
+}
+.mw-embed-live iframe {
+  max-width: 100%;
+}

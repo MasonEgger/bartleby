@@ -998,4 +998,40 @@
     outline: 2px solid var(--sc-margin);
     outline-offset: -2px;
   }
+
+  /* Click-to-load embeds (markwright's preview). Layout comes from base's click_to_load.css;
+     this skins it: hairline border, surface wash, an outlined button that fills with the accent. */
+  .mw-embed .mw-embed-preview {
+    border: 1px solid var(--sc-ruling);
+    border-radius: var(--sc-radius);
+    background: var(--sc-surface);
+    color: var(--sc-ink);
+    font-family: var(--sc-font-ui);
+  }
+  .mw-embed .mw-embed-provider {
+    color: var(--sc-muted);
+    font-size: 0.8125rem;
+    font-weight: 400;
+  }
+  .mw-embed .mw-embed-load {
+    border: 1px solid var(--sc-ink);
+    border-radius: var(--sc-radius);
+    color: var(--sc-ink);
+    font-family: var(--sc-font-ui);
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+  .mw-embed .mw-embed-load:hover {
+    border-color: var(--sc-margin);
+    background: var(--sc-margin);
+    color: var(--sc-paper);
+  }
+  .mw-embed .mw-embed-load:focus-visible,
+  .mw-embed .mw-embed-link:focus-visible {
+    outline: 2px solid var(--sc-margin);
+    outline-offset: 2px;
+  }
+  .mw-embed .mw-embed-link {
+    color: var(--sc-link);
+  }
 }

@@ -1104,3 +1104,104 @@ def test_missing_content_directory_names_the_path_and_a_fix(project: Path) -> No
     assert str(project / "content") in message
     assert "fix:" in message
     assert "bartleby new site" in message
+
+
+# --- Output directory handling: guards, symlinks, modes, and the swap --------
+
+
+def test_build_refuses_to_replace_an_output_dir_holding_the_project(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The swap refuses an output directory that holds bartleby.yml, and the project survives.
+
+    The config layer rejects such a value first; this is the last guard for a
+    config that reached the build another way (a plugin's ``on_config``, say).
+    """
+    import dataclasses
+
+    import bartleby.build as build_module
+    from bartleby.config import BartlebyConfig
+
+    real_load_config = build_module.load_config
+
+    def load_with_project_output(
+        config_path: Path, overrides: list[str] | None = None
+    ) -> BartlebyConfig:
+        return dataclasses.replace(real_load_config(config_path, overrides), output_dir=".")
+
+    monkeypatch.setattr(build_module, "load_config", load_with_project_output)
+    with pytest.raises(BuildError) as excinfo:
+        build(project / "bartleby.yml")
+
+    assert "bartleby.yml" in str(excinfo.value)
+    assert (project / "bartleby.yml").is_file()
+    assert (project / "content" / "index.md").is_file()
+    assert _leftover_temp_dirs(project) == []
+
+
+def test_build_follows_a_symlinked_output_dir(project: Path, tmp_path: Path) -> None:
+    """A ``site/`` symlink keeps pointing at its target, and the target gets the new build."""
+    target = tmp_path / "served-from-elsewhere"
+    target.mkdir()
+    (target / "stale.html").write_text("old", encoding="utf-8")
+    (project / "site").symlink_to(target, target_is_directory=True)
+
+    build(project / "bartleby.yml")
+
+    assert (project / "site").is_symlink()
+    assert (project / "site").resolve() == target.resolve()
+    assert (target / "index.html").is_file()
+    assert not (target / "stale.html").exists()
+
+
+def test_output_dir_mode_matches_a_plain_mkdir(project: Path) -> None:
+    """The output directory gets the umask's mode, not mkdtemp's private 0700."""
+    build(project / "bartleby.yml")
+    sibling = project / "mode-probe"
+    sibling.mkdir()
+
+    assert (project / "site").stat().st_mode & 0o777 == sibling.stat().st_mode & 0o777
+
+
+def test_failed_swap_restores_the_previous_output(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the new tree cannot move into place, the old output is back and intact."""
+    site_dir = project / "site"
+    site_dir.mkdir()
+    sentinel = site_dir / "sentinel.html"
+    sentinel.write_text("previous good build", encoding="utf-8")
+    real_move = shutil.move
+
+    def move_refusing_the_build_tree(src: Path, dst: Path) -> str:
+        if src.name.startswith(".bartleby-build-"):
+            raise OSError("disk full")
+        return real_move(src, dst)
+
+    monkeypatch.setattr(shutil, "move", move_refusing_the_build_tree)
+    with pytest.raises(OSError, match="disk full"):
+        build(project / "bartleby.yml")
+
+    assert sentinel.read_text(encoding="utf-8") == "previous good build"
+    assert not (site_dir / "index.html").exists()
+    assert [child.name for child in project.iterdir() if child.name.startswith(".bartleby")] == []
+
+
+def test_build_result_reports_the_output_dir_as_written(project: Path, tmp_path: Path) -> None:
+    """``output_dir`` is project-relative when under the project and absolute otherwise."""
+    config_path = project / "bartleby.yml"
+    outside = tmp_path / "elsewhere" / "out"
+    replace_top_level_keys(config_path, f"output_dir: {str(outside)!r}\n")
+    assert build(config_path).output_dir == f"{outside}/"
+
+    replace_top_level_keys(config_path, "output_dir: build/site\n")
+    assert build(config_path).output_dir == "build/site/"
+
+
+def test_build_accepts_a_runtime_dry_run_flag(project: Path) -> None:
+    """``dry_run`` typed as a plain ``bool`` returns either result without a narrowing assert."""
+    flag: bool = True
+    assert isinstance(build(project / "bartleby.yml", dry_run=flag), DryRunResult)
+    flag = False
+    assert isinstance(build(project / "bartleby.yml", dry_run=flag), BuildResult)
+    assert isinstance(build_dry_run(project / "bartleby.yml"), DryRunResult)

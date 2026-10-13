@@ -9,10 +9,12 @@ The page's reload snippet therefore connects to ``location.host`` and needs
 no second port. Because uvicorn is async, an idle connection a browser opened
 ahead of time cannot hold up other requests.
 
-The build stays synchronous. A watchdog observer thread runs each rebuild
-(one at a time, since the observer dispatches on a single thread), then hands
-the reload broadcast to the server's event loop. The event filter is
-unchanged: :func:`is_watched` and :func:`classify_change` decide what matters.
+The build stays synchronous. The watchdog observer thread only queues the
+paths that change; one worker thread drains the queue after a short quiet
+window and runs a single rebuild per burst (an editor's save is several
+events), then hands the reload broadcast to the server's event loop. The
+event filter is unchanged: :func:`is_watched` and :func:`classify_change`
+decide what matters, and the resolved theme's directories count too.
 
 HTML is served through a small :class:`~starlette.staticfiles.StaticFiles`
 subclass that rewrites each ``.html`` response with the reload snippet. That
@@ -29,11 +31,13 @@ import logging
 import os
 import socket
 import sys
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import uvicorn
 from starlette.applications import Starlette
+from starlette.exceptions import HTTPException
 from starlette.responses import FileResponse, HTMLResponse
 from starlette.routing import Mount, WebSocketRoute
 from starlette.staticfiles import StaticFiles
@@ -55,11 +59,12 @@ from bartleby.config import ConfigError, load_config
 from bartleby.content import ContentError
 from bartleby.output import BuildOutput, ServeStartOutput, render
 from bartleby.plugins import PluginCollection, discover_hooks, discover_plugins
-from bartleby.theme_loader import ThemeError
+from bartleby.theme_loader import ThemeError, select_theme
+from bartleby.themes import bundled_theme_root
 
 if TYPE_CHECKING:
     import concurrent.futures
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
     from starlette.responses import Response
     from starlette.types import Scope
@@ -68,6 +73,7 @@ if TYPE_CHECKING:
 
     from bartleby.build import BuildResult
     from bartleby.config import BartlebyConfig
+    from bartleby.theme_loader import ResolvedTheme
 
 
 logger = logging.getLogger(__name__)
@@ -96,11 +102,14 @@ class ServeBindError(OSError):
 _REPORTED_ERRORS: tuple[type[Exception], ...] = (ValueError, *LABELED_ERRORS)
 
 _CONTENT_PREFIXES: tuple[str, ...] = ("content/",)
-_TEMPLATE_PREFIXES: tuple[str, ...] = ("templates/", "overrides/", "theme/")
+_TEMPLATE_PREFIXES: tuple[str, ...] = ("templates/", "overrides/")
+_STATIC_PREFIXES: tuple[str, ...] = ("static/",)
 _CONFIG_FILES: tuple[str, ...] = ("bartleby.yml", ".authors.yml")
 
 # Every root or file the dev server watches, per spec's Development Server
 # section. Entries ending in ``/`` are directory roots; the rest are exact files.
+# The resolved theme's directories are watched as well; they come from config,
+# so :class:`DevServer` adds them per project.
 WATCHED_PATHS: tuple[str, ...] = (
     "content/",
     "templates/",
@@ -118,6 +127,9 @@ WATCHED_PATHS: tuple[str, ...] = (
 # snippet below and the WebSocket route that serves it are built from this
 # constant so the route is never hardcoded twice.
 RELOAD_WS_PATH = "/__bartleby_reload"
+
+# How long the change queue stays quiet before one rebuild runs for the burst.
+DEFAULT_QUIET_WINDOW = 0.1
 
 
 def reload_snippet() -> str:
@@ -140,14 +152,17 @@ def reload_snippet() -> str:
     )
 
 
-def is_watched(rel_path: str) -> bool:
-    """Return whether ``rel_path`` falls under any watched root or file.
+def is_watched(rel_path: str, theme_dirs: Sequence[str] = ()) -> bool:
+    """Return whether ``rel_path`` falls under any watched root, file, or theme directory.
 
-    :param rel_path: A project-relative path (POSIX or Windows separators).
+    :param rel_path: A project-relative path (POSIX or Windows separators), or
+        an absolute POSIX path for a theme directory outside the project.
+    :param theme_dirs: The resolved theme's directories as ``/``-terminated
+        prefixes in the same form (see :meth:`DevServer.watch_theme`).
     :returns: ``True`` when a change to the path should trigger a rebuild.
     """
     normalised = rel_path.replace("\\", "/")
-    for entry in WATCHED_PATHS:
+    for entry in (*WATCHED_PATHS, *theme_dirs):
         if entry.endswith("/"):
             if normalised == entry.rstrip("/") or normalised.startswith(entry):
                 return True
@@ -156,71 +171,114 @@ def is_watched(rel_path: str) -> bool:
     return False
 
 
-def classify_change(rel_path: str) -> str:
-    """Classify a changed path into ``content``, ``template``, ``config``, or ``other``."""
+def classify_change(rel_path: str, theme_dirs: Sequence[str] = ()) -> str:
+    """Classify a changed path as ``content``, ``template``, ``static``, ``config``, or ``other``.
+
+    A theme file is a ``static`` change under the theme's ``static/`` tree and a
+    ``template`` change anywhere else in the theme (its manifest included).
+
+    :param rel_path: The changed path, in the form :func:`is_watched` takes.
+    :param theme_dirs: The resolved theme's directories as ``/``-terminated prefixes.
+    """
     normalised = rel_path.replace("\\", "/")
-    if normalised in _CONFIG_FILES:
+    for theme_dir in theme_dirs:
+        if normalised.startswith(theme_dir):
+            inside_theme = normalised.removeprefix(theme_dir)
+            return "static" if inside_theme.startswith(_STATIC_PREFIXES) else "template"
+    if normalised in _CONFIG_FILES or normalised.startswith(_CONFIG_FILES):
         return "config"
-    for prefix in _CONFIG_FILES:
-        if normalised.startswith(prefix):
-            return "config"
-    for prefix in _TEMPLATE_PREFIXES:
-        if normalised.startswith(prefix):
-            return "template"
-    for prefix in _CONTENT_PREFIXES:
-        if normalised.startswith(prefix):
-            return "content"
+    if normalised.startswith(_TEMPLATE_PREFIXES):
+        return "template"
+    if normalised.startswith(_CONTENT_PREFIXES):
+        return "content"
+    if normalised.startswith(_STATIC_PREFIXES):
+        return "static"
     return "other"
 
 
-def inject_reload_snippet(html: str) -> str:
+def inject_reload_snippet(html: bytes) -> bytes:
     """Insert the live-reload snippet just before ``</body>`` (or append it).
 
-    :param html: The rendered page HTML served by the dev server.
-    :returns: The HTML with the reload snippet added. Serve-mode only.
+    The page is handled as bytes so a file in any encoding is served as it
+    was written; only the ASCII ``</body>`` marker is searched for.
+
+    :param html: The rendered page served by the dev server.
+    :returns: The page with the reload snippet added. Serve-mode only.
     """
-    snippet = reload_snippet()
-    marker = "</body>"
+    snippet = reload_snippet().encode("ascii")
+    marker = b"</body>"
     if marker in html:
         return html.replace(marker, snippet + marker, 1)
     return html + snippet
+
+
+def url_host(host: str) -> str:
+    """Return ``host`` as it appears in a URL: an IPv6 address goes in brackets."""
+    return f"[{host}]" if ":" in host else host
+
+
+def theme_watch_roots(theme: ResolvedTheme) -> list[Path]:
+    """The directories of a resolved theme chain worth watching: every non-bundled layer.
+
+    :param theme: The resolved chain.
+    :returns: The resolved roots of the path and package layers, leaf-first.
+    """
+    bundled = bundled_theme_root("base").parent.resolve()
+    return [
+        layer.root.resolve()
+        for layer in theme.chain
+        if not layer.root.resolve().is_relative_to(bundled)
+    ]
 
 
 # Watchdog event types that mean a file's contents or existence changed.
 _CHANGE_EVENT_TYPES = frozenset(
     {EVENT_TYPE_CREATED, EVENT_TYPE_MODIFIED, EVENT_TYPE_MOVED, EVENT_TYPE_DELETED}
 )
+# For a directory only a delete or a move matters: a whole tree left the
+# project in one event. A directory's own modify event only mirrors a file event.
+_DIRECTORY_EVENT_TYPES = frozenset({EVENT_TYPE_MOVED, EVENT_TYPE_DELETED})
 
 
 class _ProjectChangeHandler(FileSystemEventHandler):
-    """Translate watchdog filesystem events into project-relative change paths.
+    """Translate watchdog filesystem events into change paths under one watched root.
 
-    Every non-directory create, modify, move, or delete under the watched
-    root is forwarded to ``on_change``; a move forwards both of its paths.
-    Opens and closes are dropped, since a rebuild reads every file and would
-    otherwise trigger the next rebuild. This handler makes no decision about
-    whether a path matters; :meth:`DevServer.dispatch_change` (via
-    :func:`is_watched`) is the single place that decides.
+    Every file create, modify, move, or delete under the root is forwarded to
+    ``on_change``, and so is a directory delete or move; a move forwards both
+    of its paths. Opens and closes are dropped, since a rebuild reads every
+    file and would otherwise trigger the next rebuild. This handler makes no
+    decision about whether a path matters; :meth:`DevServer.dispatch_change`
+    (via :func:`is_watched`) is the single place that decides.
     """
 
-    def __init__(self, project_dir: Path, on_change: Callable[[str], None]) -> None:
+    def __init__(self, root: Path, on_change: Callable[[str], None], prefix: str = "") -> None:
+        """Watch ``root`` and report each change as ``prefix`` plus the root-relative path.
+
+        :param root: The directory the observer watches with this handler.
+        :param on_change: Receives each changed path as ``prefix`` plus the
+            root-relative POSIX path.
+        :param prefix: Empty for the project root; a theme directory outside
+            the project passes its own ``/``-terminated POSIX path.
+        """
         super().__init__()
-        self._project_dir = project_dir
+        self._root = root
         self._on_change = on_change
+        self._prefix = prefix
 
     def on_any_event(self, event: FileSystemEvent) -> None:
-        """Forward the paths of one content-changing event as project-relative POSIX paths."""
-        if event.is_directory or event.event_type not in _CHANGE_EVENT_TYPES:
+        """Forward the paths of one content-changing event."""
+        relevant = _DIRECTORY_EVENT_TYPES if event.is_directory else _CHANGE_EVENT_TYPES
+        if event.event_type not in relevant:
             return
         for raw_path in (event.src_path, event.dest_path):
             if not raw_path:
                 continue
             changed_path = Path(os.fsdecode(raw_path))
             try:
-                rel_path = changed_path.relative_to(self._project_dir).as_posix()
+                rel_path = changed_path.relative_to(self._root).as_posix()
             except ValueError:
                 continue
-            self._on_change(rel_path)
+            self._on_change(self._prefix + rel_path)
 
 
 def _start_watcher(project_dir: Path, on_change: Callable[[str], None]) -> BaseObserver:
@@ -244,9 +302,9 @@ class _ReloadChannel:
     """The set of connected reload sockets, owned by the server's event loop.
 
     The WebSocket endpoint adds and removes sockets on the loop thread.
-    :meth:`broadcast_reload` is called from the watchdog thread and hands the
-    send to the loop with ``run_coroutine_threadsafe``, so the client set is
-    only ever read or changed on the loop thread.
+    :meth:`broadcast_reload` is called from the rebuild worker thread and hands
+    the send to the loop with ``run_coroutine_threadsafe``, so the client set
+    is only ever read or changed on the loop thread.
     """
 
     def __init__(self) -> None:
@@ -297,18 +355,36 @@ class _ReloadInjectingFiles(StaticFiles):
     """
 
     async def get_response(self, path: str, scope: Scope) -> Response:
-        """Serve ``path`` as StaticFiles would, with the snippet injected into HTML."""
+        """Serve ``path`` as StaticFiles would, with the snippet injected into HTML.
+
+        The page is read as bytes, so its encoding does not matter. A page that
+        vanished between StaticFiles' stat and the read (a swap in progress) is a 404.
+        """
         response = await super().get_response(path, scope)
-        if isinstance(response, FileResponse) and Path(response.path).suffix == ".html":
-            html = await asyncio.to_thread(Path(response.path).read_text, encoding="utf-8")
-            return HTMLResponse(inject_reload_snippet(html), status_code=response.status_code)
-        return response
+        if not (isinstance(response, FileResponse) and Path(response.path).suffix == ".html"):
+            return response
+        try:
+            html = await asyncio.to_thread(Path(response.path).read_bytes)
+        except OSError as exc:
+            raise HTTPException(status_code=404) from exc
+        return HTMLResponse(inject_reload_snippet(html), status_code=response.status_code)
+
+    def serve_from(self, directory: Path) -> bool:
+        """Point this app at ``directory``; returns whether that is a change.
+
+        :param directory: The output directory the latest build wrote.
+        """
+        if Path(str(self.directory)).resolve() == directory.resolve():
+            return False
+        self.directory = directory
+        self.all_directories = self.get_directories(directory, self.packages)
+        return True
 
 
-def build_app(site_dir: Path, channel: _ReloadChannel) -> Starlette:
+def build_app(files: StaticFiles, channel: _ReloadChannel) -> Starlette:
     """Return the dev server's ASGI app: the reload WebSocket plus the built site.
 
-    :param site_dir: The built output directory to serve.
+    :param files: The static app serving the built output directory.
     :param channel: The reload channel whose endpoint is mounted at
         :data:`RELOAD_WS_PATH`.
     :returns: A Starlette app serving pages and the reload socket on one port.
@@ -316,9 +392,26 @@ def build_app(site_dir: Path, channel: _ReloadChannel) -> Starlette:
     return Starlette(
         routes=[
             WebSocketRoute(RELOAD_WS_PATH, channel.endpoint),
-            Mount("/", app=_ReloadInjectingFiles(directory=site_dir, html=True)),
+            Mount("/", app=files),
         ]
     )
+
+
+def _bind(host: str, port: int) -> socket.socket:
+    """Bind the listening socket, in the address family ``host`` resolves to.
+
+    An IPv4 address is preferred when the host has both, so ``localhost`` keeps
+    binding ``127.0.0.1``; a host with only an IPv6 address (``::1``) binds that.
+
+    :raises ServeBindError: When the host does not resolve or the port is busy.
+    """
+    try:
+        resolved = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        families = [family for family, *_rest in resolved]
+        family = socket.AF_INET if socket.AF_INET in families else families[0]
+        return socket.create_server((host, port), family=family)
+    except OSError as exc:
+        raise ServeBindError(host, port, exc.strerror or str(exc)) from exc
 
 
 class DevServer:
@@ -328,6 +421,10 @@ class DevServer:
     we use the synchronous helpers (:meth:`build_once`, :meth:`rebuild`,
     :meth:`dispatch_change`) which exercise the rebuild path without touching
     the network.
+
+    :ivar quiet_window: Seconds the change queue must stay quiet before the
+        worker runs one rebuild for everything queued.
+    :ivar last_result: The most recent successful build's summary.
     """
 
     def __init__(
@@ -338,23 +435,38 @@ class DevServer:
         port: int,
         events: bool = False,
         overrides: list[str] | None = None,
+        quiet_window: float = DEFAULT_QUIET_WINDOW,
     ) -> None:
         self.config_path = config_path
         self.overrides = overrides
         self.host = host
         self.port = port
         self.events = events
+        self.quiet_window = quiet_window
+        self.last_result: BuildResult | None = None
         # Set by :meth:`run`; stay ``None`` outside serve mode (the synchronous
         # helpers used by tests and by ``bartleby build`` never touch them).
         self._channel: _ReloadChannel | None = None
         self._uvicorn: uvicorn.Server | None = None
+        self._files: _ReloadInjectingFiles | None = None
+        self._observer: BaseObserver | None = None
+        # The change queue: the observer thread appends, the worker drains.
+        self._pending: list[str] = []
+        self._pending_lock = threading.Lock()
+        self._wake = threading.Event()
+        self._stop_worker = threading.Event()
+        # The resolved theme's directories as watched prefixes (see :meth:`watch_theme`).
+        self._theme_dirs: tuple[str, ...] = ()
+        self._outside_theme_roots: set[Path] = set()
 
     def build_once(self) -> BuildResult:
         """Run a full build with drafts included.
 
         :returns: The finished build's summary.
         """
-        return build(self.config_path, include_drafts=True, overrides=self.overrides)
+        result = build(self.config_path, include_drafts=True, overrides=self.overrides)
+        self.last_result = result
+        return result
 
     def rebuild(self) -> list[PageError]:
         """Run a full rebuild, retaining the last good output on failure.
@@ -365,38 +477,56 @@ class DevServer:
         build (page render errors or metadata validation) leaves the existing
         ``site/`` untouched and the collected errors are returned instead of
         raising, so the server keeps serving the previous good build. The labeled
-        author-facing errors (:data:`bartleby.cli.LABELED_ERRORS`) are returned the same way.
+        author-facing errors (:data:`bartleby.cli.LABELED_ERRORS`) are returned the
+        same way, and so is any other exception (a hook that fails to import, a
+        config file missing mid-save), reported with its type and message.
 
         :returns: The collected page errors, or an empty list on success.
         """
         try:
-            build(self.config_path, include_drafts=True, overrides=self.overrides)
+            self.build_once()
         except BuildError as exc:
             return list(exc.errors)
         except _REPORTED_ERRORS as exc:
-            # Broken front matter, config, authors, or theme in the middle of a
-            # serve must be reported, not kill the watcher thread.
-            # ``str(exc)`` already leads with the error's own source, so report that
-            # source (relative to the project, like a ContentError path) as the path
-            # and strip it from the message rather than print it twice.
-            message = str(exc)
-            source: Path | str | None = None
-            if isinstance(exc, ContentError) and exc.source_path:
-                source = exc.source_path
-            elif isinstance(exc, ConfigError | AuthorError | ThemeError) and exc.source:
-                source = exc.source
-                message = message.removeprefix(f"{source}: ")
-            elif isinstance(exc, AgentSurfaceError):
-                source = f"content/{exc.source_path}"
-                message = message.removeprefix(f"{source}: ")
-            if source is None:
-                file_path = str(self.config_path)
-            elif isinstance(source, Path):
-                file_path = os.path.relpath(source, self.config_path.parent)
-            else:
-                file_path = source
-            return [PageError(file_path=file_path, message=message)]
+            return [self._labeled_page_error(exc)]
+        except Exception as exc:
+            # Anything else is a defect in the project, not in Bartleby, and
+            # must be reported rather than kill the rebuild worker.
+            logger.debug("rebuild failed", exc_info=exc)
+            source = getattr(exc, "filename", None)
+            file_path = source if isinstance(source, str) else str(self.config_path)
+            return [
+                PageError(
+                    file_path=os.path.relpath(file_path, self.config_path.parent),
+                    message=f"{type(exc).__name__}: {exc}",
+                )
+            ]
         return []
+
+    def _labeled_page_error(self, exc: Exception) -> PageError:
+        """Turn a labeled author-facing error into one page error.
+
+        ``str(exc)`` already leads with the error's own source, so report that
+        source (relative to the project, like a ContentError path) as the path
+        and strip it from the message rather than print it twice.
+        """
+        message = str(exc)
+        source: Path | str | None = None
+        if isinstance(exc, ContentError) and exc.source_path:
+            source = exc.source_path
+        elif isinstance(exc, ConfigError | AuthorError | ThemeError) and exc.source:
+            source = exc.source
+            message = message.removeprefix(f"{source}: ")
+        elif isinstance(exc, AgentSurfaceError):
+            source = f"content/{exc.source_path}"
+            message = message.removeprefix(f"{source}: ")
+        if source is None:
+            file_path = str(self.config_path)
+        elif isinstance(source, Path):
+            file_path = os.path.relpath(source, self.config_path.parent)
+        else:
+            file_path = source
+        return PageError(file_path=file_path, message=message)
 
     def maybe_recompile_theme(self) -> str:
         """Recompile theme CSS when the Tailwind binary is already cached.
@@ -414,7 +544,6 @@ class DevServer:
             default_cache_dir,
             resolve_tailwind_binary,
         )
-        from bartleby.theme_loader import select_theme
 
         project_dir = self.config_path.parent
         cache_dir = default_cache_dir()
@@ -438,7 +567,7 @@ class DevServer:
         :param rel_path: The project-relative path that changed.
         :param rebuild: Callback fired once for a watched change.
         """
-        if is_watched(rel_path):
+        if is_watched(rel_path, self._theme_dirs):
             rebuild()
 
     def dispatch_on_serve(self, server: object, *, config: BartlebyConfig | None = None) -> None:
@@ -461,7 +590,7 @@ class DevServer:
 
     def handle_change(self, rel_path: str) -> None:
         """React to a single file change by re-running the appropriate build."""
-        kind = classify_change(rel_path)
+        kind = classify_change(rel_path, self._theme_dirs)
         if kind == "other":
             return
         # Every watched change runs a full build; incremental builds are a non-goal.
@@ -476,71 +605,135 @@ class DevServer:
         sys.stdout.flush()
 
     def rebuild_with_events(self, rel_path: str) -> list[PageError]:
-        """Rebuild for a watched change and emit structured ``--events`` output.
-
-        Emits a ``change`` event for the path, then either a ``rebuild`` event
-        with the page count or an ``error`` event listing the collected
-        failures.
+        """Rebuild for one watched change and emit structured ``--events`` output.
 
         :param rel_path: The watched path that triggered the rebuild.
         :returns: The collected page errors, or an empty list on success.
         """
-        self.emit_event({"type": "change", "path": rel_path})
+        return self._rebuild_for([rel_path], events=True)
+
+    def _rebuild_for(self, rel_paths: Sequence[str], *, events: bool) -> list[PageError]:
+        """Rebuild once for a burst of watched changes and report the outcome.
+
+        Under ``events`` this emits a ``change`` event per path, then either a
+        ``rebuild`` event carrying the output directory or an ``error`` event
+        listing the collected failures. In text mode each error goes to stderr
+        as ``error: <path>: <message>`` and a success prints one summary line.
+
+        :param rel_paths: The watched paths that changed, in order, without repeats.
+        :param events: Whether to report as JSON events or as text.
+        :returns: The collected page errors, or an empty list on success.
+        """
+        if events:
+            for rel_path in rel_paths:
+                self.emit_event({"type": "change", "path": rel_path})
+
         errors = self.rebuild()
         if errors:
-            self.emit_event(
-                {
-                    "type": "error",
-                    "errors": [format_page_error(error) for error in errors],
-                }
-            )
-        else:
-            self.emit_event({"type": "rebuild", "status": "ok"})
+            if events:
+                lines = [format_page_error(error) for error in errors]
+                self.emit_event({"type": "error", "errors": lines})
+            else:
+                for error in errors:
+                    print(f"error: {format_page_error(error)}", file=sys.stderr, flush=True)
+            return errors
+
+        # A rebuild that collected no errors stored its result; narrow for the type checker.
+        if (result := self.last_result) is not None:
+            self._follow_output_dir(result, events=events)
+            self.watch_theme(result.config)
+            if events:
+                self.emit_event(
+                    {"type": "rebuild", "status": "ok", "output_dir": result.output_dir}
+                )
+            else:
+                duration_ms = round(result.duration_seconds * 1000)
+                print(f"Rebuilt {result.page_count} pages in {duration_ms} ms", flush=True)
         return errors
 
+    def _follow_output_dir(self, result: BuildResult, *, events: bool) -> None:
+        """Serve from the output directory the latest build wrote, if it moved.
+
+        ``output_dir`` can change in ``bartleby.yml`` while serving; the static
+        app follows it so pages and reloads never point at a stale tree.
+        """
+        if self._files is None:
+            return
+        site_dir = self.config_path.parent / result.config.output_dir
+        if self._files.serve_from(site_dir) and not events:
+            print(f"Output directory changed to {result.output_dir}", flush=True)
+
+    def watch_theme(self, config: BartlebyConfig) -> None:
+        """Watch the directories of the theme ``config`` selects.
+
+        A theme directory under the project is covered by the project observer
+        and only needs its prefix recorded; one outside the project gets its
+        own scheduled watch. Bundled themes are not watched.
+
+        :param config: The config the latest build ran with.
+        """
+        project_dir = self.config_path.parent.resolve()
+        prefixes: list[str] = []
+        for root in theme_watch_roots(select_theme(config.theme, self.config_path.parent)):
+            if root.is_relative_to(project_dir):
+                prefixes.append(f"{root.relative_to(project_dir).as_posix()}/")
+                continue
+            prefix = f"{root.as_posix()}/"
+            prefixes.append(prefix)
+            if self._observer is not None and root not in self._outside_theme_roots:
+                handler = _ProjectChangeHandler(root, self._on_watched_change, prefix)
+                self._observer.schedule(handler, str(root), recursive=True)
+                self._outside_theme_roots.add(root)
+        self._theme_dirs = tuple(prefixes)
+
     def _on_watched_change(self, rel_path: str) -> None:
-        """Route one filesystem change through :meth:`dispatch_change`.
+        """Queue one filesystem change when :meth:`dispatch_change` says it is watched.
 
-        :meth:`dispatch_change` (via :func:`is_watched`) is the single
-        decision point for whether ``rel_path`` triggers a rebuild; this
-        method only picks which rebuild callback to use.
-
-        :param rel_path: The project-relative POSIX path that changed.
+        :param rel_path: The project-relative POSIX path that changed, or the
+            absolute path of a file in a theme directory outside the project.
         """
-        if self.events:
+        self.dispatch_change(rel_path, rebuild=lambda: self._enqueue(rel_path))
 
-            def emit_and_rebuild() -> list[PageError]:
-                return self.rebuild_with_events(rel_path)
+    def _enqueue(self, rel_path: str) -> None:
+        """Add a watched change to the queue and wake the rebuild worker."""
+        with self._pending_lock:
+            if rel_path not in self._pending:
+                self._pending.append(rel_path)
+        self._wake.set()
 
-            self.dispatch_change(
-                rel_path, rebuild=lambda: self._rebuild_and_broadcast(emit_and_rebuild)
-            )
-        else:
-            self.dispatch_change(
-                rel_path, rebuild=lambda: self._rebuild_and_broadcast(self.rebuild)
-            )
+    def _drain_changes(self) -> None:
+        """Run one rebuild per burst of queued changes until :meth:`stop` is called.
 
-    def _rebuild_and_broadcast(self, perform_rebuild: Callable[[], list[PageError]]) -> None:
-        """Run ``perform_rebuild`` and push a reload signal only on success.
-
-        A failed rebuild keeps serving the last good build (see
-        :meth:`rebuild`), so it must not falsely tell the browser to reload.
-
-        :param perform_rebuild: Either :meth:`rebuild` or
-            :meth:`rebuild_with_events` bound to the current watched path.
+        A burst ends once the queue has been quiet for :attr:`quiet_window`
+        seconds, so an editor's probe, rename, write, and unlink are one
+        rebuild and one reload.
         """
-        errors = perform_rebuild()
-        if not errors and self._channel is not None:
-            self._channel.broadcast_reload()
+        while True:
+            self._wake.wait()
+            if self._stop_worker.is_set():
+                return
+            while True:
+                self._wake.clear()
+                if not self._wake.wait(timeout=self.quiet_window):
+                    break
+            with self._pending_lock:
+                rel_paths = list(self._pending)
+                self._pending.clear()
+            if self._stop_worker.is_set():
+                return
+            errors = self._rebuild_for(rel_paths, events=self.events)
+            if not errors and self._channel is not None:
+                self._channel.broadcast_reload()
 
     def run(self, *, ready: Callable[[int], None] | None = None) -> None:
         """Serve the site and reload socket on one port until stopped or interrupted.
 
         A watchdog Observer watches the whole project tree; every change is
         routed through :meth:`dispatch_change`, so only paths under
-        :data:`WATCHED_PATHS` trigger a rebuild (see :meth:`_on_watched_change`).
-        :meth:`rebuild` retains the last good build on a failed rebuild, so a
-        watcher-triggered failure keeps serving the previous good output.
+        :data:`WATCHED_PATHS` or the theme's directories reach the rebuild
+        queue (see :meth:`_on_watched_change`). :meth:`rebuild` retains the
+        last good build on a failed rebuild, so a watcher-triggered failure
+        keeps serving the previous good output.
 
         The listening socket is bound here, before the initial build and before
         uvicorn starts, so a port already in use raises :class:`ServeBindError` and port ``0``
@@ -553,25 +746,22 @@ class DevServer:
         channel = _ReloadChannel()
         try:
             # Bind first so a busy port fails before the initial build runs.
-            try:
-                listener = socket.create_server((self.host, self.port))
-            except OSError as exc:
-                raise ServeBindError(self.host, self.port, exc.strerror or str(exc)) from exc
+            listener = _bind(self.host, self.port)
             with listener, contextlib.suppress(KeyboardInterrupt):
                 built = self.build_once()
-                config = load_config(self.config_path, self.overrides)
-                site_dir = self.config_path.parent / config.output_dir
+                site_dir = self.config_path.parent / built.config.output_dir
+                files = _ReloadInjectingFiles(directory=site_dir, html=True)
                 uvicorn_server = uvicorn.Server(
-                    uvicorn.Config(
-                        build_app(site_dir, channel), log_config=None, log_level="warning"
-                    )
+                    uvicorn.Config(build_app(files, channel), log_config=None, log_level="warning")
                 )
                 self._channel = channel
                 self._uvicorn = uvicorn_server
-                asyncio.run(self._serve(uvicorn_server, channel, listener, config, built, ready))
+                self._files = files
+                asyncio.run(self._serve(uvicorn_server, channel, listener, built, ready))
         finally:
             self._channel = None
             self._uvicorn = None
+            self._files = None
 
     def stop(self) -> None:
         """Ask a running :meth:`run` to shut down; safe to call from another thread."""
@@ -583,23 +773,26 @@ class DevServer:
         uvicorn_server: uvicorn.Server,
         channel: _ReloadChannel,
         listener: socket.socket,
-        config: BartlebyConfig,
         built: BuildResult,
         ready: Callable[[int], None] | None,
     ) -> None:
-        """Run uvicorn on ``listener`` with the project watcher alive around it.
+        """Run uvicorn on ``listener`` with the project watcher and rebuild worker alive.
 
         Once the watcher is running, prints the startup summary (build counts, the
         bound URL, how to stop): one ``ready`` JSON object line under ``--events``,
         text otherwise.
         """
         channel.loop = asyncio.get_running_loop()
-        observer = _start_watcher(self.config_path.parent, self._on_watched_change)
+        self._stop_worker.clear()
+        self._observer = _start_watcher(self.config_path.parent, self._on_watched_change)
+        self.watch_theme(built.config)
+        worker = threading.Thread(target=self._drain_changes, name="bartleby-rebuild", daemon=True)
+        worker.start()
         try:
-            self.dispatch_on_serve(uvicorn_server, config=config)
+            self.dispatch_on_serve(uvicorn_server, config=built.config)
             port = listener.getsockname()[1]
             startup = ServeStartOutput(
-                url=f"http://{self.host}:{port}/", build=BuildOutput.from_result(built)
+                url=f"http://{url_host(self.host)}:{port}/", build=BuildOutput.from_result(built)
             )
             if self.events:
                 self.emit_event(startup.to_dict())
@@ -609,7 +802,12 @@ class DevServer:
                 ready(port)
             await uvicorn_server.serve(sockets=[listener])
         finally:
-            observer.stop()
+            self._observer.stop()
+            self._stop_worker.set()
+            self._wake.set()
             # Join off the loop: a rebuild in flight may still broadcast to it.
-            await asyncio.to_thread(observer.join)
+            await asyncio.to_thread(self._observer.join)
+            await asyncio.to_thread(worker.join)
+            self._observer = None
+            self._outside_theme_roots.clear()
             channel.loop = None

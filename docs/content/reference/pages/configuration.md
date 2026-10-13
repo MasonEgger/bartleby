@@ -216,8 +216,12 @@ authors_file: ".authors.yml"
 
 ## `output_dir`
 
-Directory for the built site, relative to the project root.
+Directory for the built site, relative to the project root; an absolute path works too.
 Defaults to `site`.
+
+The build replaces this directory whole on every run, so it may not be the project directory, a directory above it, or a directory the build reads: `content`, `static`, `templates`, `overrides`, `hooks`, `data`, `shortcodes`, `partials`, or a `theme.path` directory.
+Such a value is a `config_error` with a fix hint, from the file and from `--set`.
+A symlink is followed: the link stays and its target gets the new build.
 
 ## `exclude_patterns`
 

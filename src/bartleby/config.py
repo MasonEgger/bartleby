@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import datetime
 import difflib
+import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
@@ -76,6 +77,18 @@ DOTTED_KEY_SECTIONS: tuple[str, ...] = ("theme.tokens",)
 
 MARKWRIGHT_KEY = "markwright"
 """The top-level key that carries markwright's own config table."""
+
+BUILD_INPUT_DIRS: tuple[str, ...] = (
+    "content",
+    "static",
+    "templates",
+    "overrides",
+    "hooks",
+    "data",
+    "shortcodes",
+    "partials",
+)
+"""The project directories a build reads, which ``output_dir`` may not overlap."""
 
 
 class ConfigError(Exception):
@@ -1275,6 +1288,8 @@ def _validate_config(config: BartlebyConfig) -> None:
                     ),
                 )
 
+    _validate_output_dir(config)
+
     for include_name in config.site.feed.include:
         included_type = config.content_types.get(include_name)
         if included_type is None:
@@ -1288,6 +1303,40 @@ def _validate_config(config: BartlebyConfig) -> None:
                 f"content type {include_name!r} has no feeds of its own to aggregate",
                 key_path="site.feed.include",
                 hint=f"add `feeds: [rss]` under content_types.{include_name}, or drop it here",
+            )
+
+
+def _validate_output_dir(config: BartlebyConfig) -> None:
+    """Reject an ``output_dir`` the build would delete before reading from it.
+
+    The build replaces the output directory whole, so it may not be the project
+    directory, an ancestor of it, or any directory under the project that the
+    build reads (:data:`BUILD_INPUT_DIRS` and a path theme), nor hold one of them.
+
+    :param config: The parsed config to validate.
+    :raises ConfigError: If ``output_dir`` overlaps a directory the build reads.
+    """
+    project_dir = config.config_dir.resolve()
+    output_dir = (project_dir / config.output_dir).resolve()
+    hint = "set output_dir to a directory the build does not read, such as site"
+
+    if project_dir.is_relative_to(output_dir):
+        raise ConfigError(
+            f"{config.output_dir!r} holds the project itself, which the build would delete",
+            key_path="output_dir",
+            hint=hint,
+        )
+
+    input_dirs = [project_dir / name for name in BUILD_INPUT_DIRS]
+    if config.theme.path is not None:
+        input_dirs.append((project_dir / config.theme.path).resolve())
+    for input_dir in input_dirs:
+        if output_dir.is_relative_to(input_dir) or input_dir.is_relative_to(output_dir):
+            overlapped = os.path.relpath(input_dir, project_dir)
+            raise ConfigError(
+                f"{config.output_dir!r} overlaps {overlapped}/, which the build reads",
+                key_path="output_dir",
+                hint=hint,
             )
 
 

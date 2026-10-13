@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import os
 import re
 import shutil
 import tempfile
@@ -90,6 +91,7 @@ class _BuildState:
 
     plugins: PluginCollection
     config: BartlebyConfig
+    config_path: Path
     project_dir: Path
     content_dir: Path
     authors: dict[str, Author]
@@ -225,6 +227,18 @@ def build(
     theme: ResolvedTheme | None = None,
     overrides: list[str] | None = None,
 ) -> DryRunResult: ...
+
+
+@overload
+def build(
+    config_path: Path,
+    *,
+    include_drafts: bool = False,
+    strict: bool = False,
+    dry_run: bool,
+    theme: ResolvedTheme | None = None,
+    overrides: list[str] | None = None,
+) -> BuildResult | DryRunResult: ...
 
 
 def build(
@@ -378,6 +392,7 @@ def _load_inputs(
         return _BuildState(
             plugins=plugins,
             config=config,
+            config_path=config_path,
             project_dir=project_dir,
             content_dir=content_dir,
             authors=authors,
@@ -497,6 +512,9 @@ def _filter_and_validate(state: _BuildState, *, include_drafts: bool) -> None:
             f"make {state.project_dir} writable (chmod u+w); the build is staged inside it",
             exc,
         ) from exc
+    # mkdtemp creates the directory 0700 and the swap keeps that mode, so give
+    # the output the mode a plain mkdir would under the current umask.
+    state.output_dir.chmod(0o777 & ~_current_umask())
 
 
 def _render_page_bodies(state: _BuildState, *, strict: bool) -> None:
@@ -740,7 +758,9 @@ def _finish_build(
         plugins.run_lifecycle("on_shutdown")
         return diff
 
-    _swap_output_into_place(build_dir, final_output_dir)
+    _swap_output_into_place(
+        build_dir, final_output_dir, must_keep=(state.config_path, state.content_dir)
+    )
     plugins.run_event("on_post_build", config)
     plugins.run_lifecycle("on_shutdown")
 
@@ -753,8 +773,30 @@ def _finish_build(
         duration_seconds=duration,
         config=config,
         static_file_count=state.static_file_count,
-        output_dir=f"{final_output_dir.name}/",
+        output_dir=f"{display_output_dir(final_output_dir, state.project_dir)}/",
     )
+
+
+def display_output_dir(output_dir: Path, project_dir: Path) -> str:
+    """Name the output directory the way the build reports it.
+
+    :param output_dir: The directory the site was written to.
+    :param project_dir: The directory holding ``bartleby.yml``.
+    :returns: The path relative to the project when it sits under the project,
+        otherwise the absolute path.
+    """
+    resolved = output_dir.resolve()
+    project = project_dir.resolve()
+    if resolved.is_relative_to(project) and resolved != project:
+        return resolved.relative_to(project).as_posix()
+    return str(resolved)
+
+
+def _current_umask() -> int:
+    """Read the process umask, which the standard library only exposes by setting it."""
+    umask = os.umask(0)
+    os.umask(umask)
+    return umask
 
 
 def _apply_compiled_theme_css(project_dir: Path, output_dir: Path, theme: ResolvedTheme) -> None:
@@ -902,12 +944,9 @@ async def async_build(
     """
     import asyncio
 
-    result = await asyncio.to_thread(
+    return await asyncio.to_thread(
         build, config_path, include_drafts=include_drafts, strict=strict, overrides=overrides
     )
-    # async_build never requests a dry run, so the result is always a BuildResult.
-    assert isinstance(result, BuildResult)
-    return result
 
 
 def extract_excerpt(markdown_source: str, separator: str | None) -> str:
@@ -956,15 +995,13 @@ def build_dry_run(
     :param overrides: Forwarded to :func:`build`.
     :returns: The :class:`DryRunResult` describing added/modified/unchanged/deleted output.
     """
-    result = build(
+    return build(
         config_path,
         include_drafts=include_drafts,
         strict=strict,
         dry_run=True,
         overrides=overrides,
     )
-    assert isinstance(result, DryRunResult)
-    return result
 
 
 def _diff_output_trees(new_dir: Path, current_dir: Path) -> DryRunResult:
@@ -1001,27 +1038,66 @@ def _relative_files(root: Path) -> set[str]:
     return {path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file()}
 
 
-def _swap_output_into_place(build_dir: Path, final_output_dir: Path) -> None:
+def _swap_output_into_place(
+    build_dir: Path, final_output_dir: Path, *, must_keep: tuple[Path, ...]
+) -> None:
     """Replace ``final_output_dir`` with the freshly built ``build_dir``.
 
-    The previous output is removed only after the new build is complete, so an
-    interrupted or failed build can never leave a half-written ``site/``. The
-    new directory is renamed into place (an atomic operation on the same
-    filesystem) once the old one is gone.
+    The previous output is moved aside into a sibling holding directory, the
+    new tree is moved into place, and only then is the old one deleted, so
+    there is no moment with no output to serve. When the second move fails
+    (another filesystem that ran out of space, say), the old output is moved
+    back and the error is raised. A symlinked output directory keeps the link
+    and swaps its target.
 
     :param build_dir: The temp directory holding the completed build output.
     :param final_output_dir: The destination ``site/`` directory to swap in.
+    :param must_keep: Paths the build reads (the config file and ``content/``);
+        an output directory holding any of them is refused rather than deleted.
+    :raises BuildError: If the output directory holds a path in ``must_keep``, or
+        the operating system refuses to replace it.
     """
+    target = final_output_dir.resolve()
+    for kept in must_keep:
+        if kept.resolve().is_relative_to(target):
+            message = format_error(
+                f"refusing to replace {final_output_dir.name}: it holds {kept.name}",
+                hint="set output_dir in bartleby.yml to a directory the build does not read",
+            )
+            raise BuildError([PageError(file_path=str(final_output_dir), message=message)])
+
+    hint = (
+        f"make {final_output_dir} writable (chmod u+w), "
+        "or set output_dir in bartleby.yml elsewhere"
+    )
+    retired: Path | None = None
     try:
-        if final_output_dir.exists():
-            shutil.rmtree(final_output_dir)
-        shutil.move(build_dir, final_output_dir)
+        if target.exists():
+            holding = Path(tempfile.mkdtemp(prefix=".bartleby-old-", dir=target.parent))
+            retired = holding / target.name
+            shutil.move(target, retired)
     except PermissionError as exc:
-        hint = (
-            f"make {final_output_dir} writable (chmod u+w), "
-            "or set output_dir in bartleby.yml elsewhere"
-        )
         raise _unwritable_output(final_output_dir, "replace", hint, exc) from exc
+
+    try:
+        shutil.move(build_dir, target)
+    except OSError as exc:
+        # A cross-filesystem move copies first, so drop any partial copy before
+        # the old output goes back where it was.
+        if target.exists():
+            shutil.rmtree(target, ignore_errors=True)
+        if retired is not None:
+            shutil.move(retired, target)
+            retired.parent.rmdir()
+        if isinstance(exc, PermissionError):
+            raise _unwritable_output(final_output_dir, "replace", hint, exc) from exc
+        raise
+
+    if retired is not None:
+        try:
+            shutil.rmtree(retired.parent)
+        except PermissionError as exc:
+            raise _unwritable_output(retired, "remove the previous", hint, exc) from exc
 
 
 def _unwritable_output(path: Path, action: str, hint: str, exc: PermissionError) -> BuildError:

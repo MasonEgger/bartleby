@@ -13,11 +13,15 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 from starlette.routing import Mount, WebSocketRoute
 from watchdog.events import (
+    DirDeletedEvent,
+    DirModifiedEvent,
+    DirMovedEvent,
     FileClosedEvent,
     FileClosedNoWriteEvent,
     FileModifiedEvent,
@@ -30,8 +34,10 @@ from bartleby.server import (
     RELOAD_WS_PATH,
     WATCHED_PATHS,
     DevServer,
+    ServeBindError,
     _ProjectChangeHandler,
     _ReloadChannel,
+    _ReloadInjectingFiles,
     build_app,
     classify_change,
     inject_reload_snippet,
@@ -41,7 +47,7 @@ from bartleby.server import (
 from tests.server_helpers import start_running_server, stop_running_server
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from collections.abc import Callable
 
     from watchdog.events import FileSystemEvent
 
@@ -51,20 +57,8 @@ if TYPE_CHECKING:
 @pytest.fixture
 def project(tmp_path: Path) -> Path:
     """Copy the fixture site into a temp dir so server tests can run builds."""
-    source = tmp_path.parent / "fixtures-source"
-    if source.exists():
-        shutil.rmtree(source)
-    fixture = (
-        tmp_path.parent.parent
-        if False  # placeholder branch to silence unused-import linters
-        else tmp_path
-    )
-    del fixture
-    from pathlib import Path as _Path
-
-    site_src = _Path(__file__).parent / "fixtures" / "site"
     destination = tmp_path / "project"
-    shutil.copytree(site_src, destination)
+    shutil.copytree(Path(__file__).parent / "fixtures" / "site", destination)
     return destination
 
 
@@ -253,10 +247,10 @@ def test_watcher_forwards_the_destination_of_a_move(tmp_path: Path) -> None:
 
 def test_reload_snippet_injected_only_in_serve_mode(project: Path) -> None:
     """The reload snippet is injected on serve but never in ``bartleby build`` output."""
-    page = "<html><head></head><body><p>Hi</p></body></html>"
+    page = b"<html><head></head><body><p>Hi</p></body></html>"
     served = inject_reload_snippet(page)
-    assert reload_snippet() in served
-    assert "</body>" in served
+    assert reload_snippet().encode() in served
+    assert b"</body>" in served
 
     # A plain build must not contain the snippet anywhere in its output.
     from bartleby.build import build
@@ -275,7 +269,7 @@ def test_events_stream_emits_one_json_object_per_line(
     lines = [line for line in capsys.readouterr().out.splitlines() if line.strip()]
     events = [json.loads(line) for line in lines]
     assert events[0] == {"type": "change", "path": "content/index.md"}
-    assert events[-1] == {"type": "rebuild", "status": "ok"}
+    assert events[-1] == {"type": "rebuild", "status": "ok", "output_dir": "site/"}
 
 
 def test_events_stream_emits_error_object_on_failed_rebuild(
@@ -399,8 +393,7 @@ def test_run_rebuilds_on_watched_content_change(project: Path) -> None:
             try:
                 body = _fetch(port)
             except OSError as error:
-                # rebuild() rewrites the output dir in place, so a request that
-                # lands mid-rebuild can get a 404 or a reset. Keep polling.
+                # The first fetch can land before the rebuild finished. Keep polling.
                 last_error = error
             else:
                 if "Watcher rebuild marker." in body:
@@ -469,7 +462,7 @@ def test_reload_snippet_targets_the_serving_port() -> None:
 
 def test_app_mounts_the_reload_socket_beside_the_site(project: Path) -> None:
     """One app carries both the reload WebSocket route and the static site mount."""
-    app = build_app(project, _ReloadChannel())
+    app = build_app(_ReloadInjectingFiles(directory=project, html=True), _ReloadChannel())
     paths = {route.path for route in app.routes if isinstance(route, WebSocketRoute)}
     assert paths == {RELOAD_WS_PATH}
     assert any(isinstance(route, Mount) and route.path == "" for route in app.routes)
@@ -606,12 +599,13 @@ def test_broadcast_survives_concurrent_client_churn(
 
 
 def test_run_raises_when_the_port_is_in_use(project: Path) -> None:
-    """A bound port fails loudly with ``OSError`` instead of serving nothing."""
+    """A bound port fails loudly with ``ServeBindError`` instead of serving nothing."""
     with socket.create_server(("127.0.0.1", 0)) as occupied:
         port = occupied.getsockname()[1]
         server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=port)
-        with pytest.raises(OSError):
+        with pytest.raises(ServeBindError) as excinfo:
             server.run()
+    assert excinfo.value.port == port
 
 
 def test_run_survives_broken_front_matter_and_rebuilds_on_the_fix(
@@ -681,3 +675,321 @@ def test_run_retains_last_good_build_after_watcher_triggered_failure(project: Pa
         assert _fetch(port) == good_body
     finally:
         stop_running_server(server, worker)
+
+
+# --- Rebuild reporting, coalescing, theme watching, and output handling ------
+
+
+def _events_until(capsys: pytest.CaptureFixture[str], marker: str, timeout: float = 10) -> str:
+    """Collect stdout until ``marker`` appears in it or ``timeout`` seconds pass."""
+    deadline = time.monotonic() + timeout
+    seen = ""
+    while time.monotonic() < deadline and marker not in seen:
+        seen += capsys.readouterr().out
+        time.sleep(0.05)
+    return seen
+
+
+def _wait_for(condition: Callable[[], bool], timeout: float = 10) -> bool:
+    """Poll ``condition`` until it holds or ``timeout`` seconds pass."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if condition():
+            return True
+        time.sleep(0.05)
+    return condition()
+
+
+def _count_rebuilds(server: DevServer) -> list[list[PageError]]:
+    """Wrap ``server.rebuild`` so a test can count the rebuilds the watcher ran."""
+    calls: list[list[PageError]] = []
+    original_rebuild = server.rebuild
+
+    def counting_rebuild() -> list[PageError]:
+        result = original_rebuild()
+        calls.append(result)
+        return result
+
+    server.rebuild = counting_rebuild  # type: ignore[method-assign]
+    return calls
+
+
+def test_rebuild_reports_a_hook_syntax_error_as_a_page_error(project: Path) -> None:
+    """An exception outside the labeled set becomes a page error naming its type."""
+    hooks_dir = project / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "broken.py").write_text("def on_post_page(html, **_)\n    return html\n")
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
+
+    errors = server.rebuild()
+
+    assert len(errors) == 1
+    assert "SyntaxError" in errors[0].message
+    assert errors[0].file_path == "hooks/broken.py"
+
+
+def test_run_survives_a_hook_syntax_error_and_rebuilds_on_the_fix(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A hook that fails to import is an ``error`` event, and the fixed hook rebuilds."""
+    from websockets.sync.client import connect
+
+    hooks_dir = project / "hooks"
+    hooks_dir.mkdir()
+    hook = hooks_dir / "marker.py"
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, events=True)
+    worker, port = start_running_server(server)
+    try:
+        hook.write_text("def on_post_page(html, **_)\n    return html\n", encoding="utf-8")
+        events_seen = _events_until(capsys, '"type": "error"')
+        assert "SyntaxError" in events_seen
+        assert "Welcome" in _fetch(port)
+
+        with connect(f"ws://127.0.0.1:{port}{RELOAD_WS_PATH}", open_timeout=10) as client:
+            hook.write_text(
+                "def on_post_page(html, **_):\n    return html + '<!--HOOK-FIXED-->'\n",
+                encoding="utf-8",
+            )
+            assert client.recv(timeout=10) == "reload"
+        assert "<!--HOOK-FIXED-->" in _fetch(port)
+    finally:
+        stop_running_server(server, worker)
+
+
+def test_run_survives_a_briefly_missing_config(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A config file that vanishes mid-save is an ``error`` event; its return rebuilds."""
+    config_path = project / "bartleby.yml"
+    config_text = config_path.read_text(encoding="utf-8")
+    server = DevServer(config_path, host="127.0.0.1", port=0, events=True)
+    worker, port = start_running_server(server)
+    try:
+        config_path.unlink()
+        events_seen = _events_until(capsys, '"type": "error"')
+        assert "bartleby.yml" in events_seen
+        assert "Welcome" in _fetch(port)
+
+        config_path.write_text(config_text, encoding="utf-8")
+        events_seen = _events_until(capsys, '"type": "rebuild"')
+        assert '"type": "rebuild"' in events_seen
+    finally:
+        stop_running_server(server, worker)
+
+
+def test_run_prints_rebuild_outcomes_in_text_mode(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Without ``--events``, a failed rebuild prints its errors and a good one prints a summary."""
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
+    worker, _port = start_running_server(server)
+    page = project / "content" / "index.md"
+    try:
+        page.write_text("---\ntitle: [unclosed\n---\n\nBody.\n", encoding="utf-8")
+        deadline = time.monotonic() + 10
+        stderr_seen = ""
+        while time.monotonic() < deadline and "error: " not in stderr_seen:
+            stderr_seen += capsys.readouterr().err
+            time.sleep(0.05)
+        assert stderr_seen.startswith("error: index.md: ")
+        assert "fix:" in stderr_seen
+
+        page.write_text("---\ntitle: Home\n---\n\nFixed again.\n", encoding="utf-8")
+        stdout_seen = _events_until(capsys, "Rebuilt ")
+        assert "Rebuilt " in stdout_seen
+        assert " pages in " in stdout_seen
+        assert " ms" in stdout_seen
+    finally:
+        stop_running_server(server, worker)
+
+
+def test_served_html_that_is_not_utf8_still_gets_the_snippet(project: Path) -> None:
+    """A Latin-1 page is served as its bytes with the snippet, not a 500."""
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
+    worker, port = start_running_server(server)
+    try:
+        (project / "site" / "latin.html").write_bytes(b"<html><body>caf\xe9</body></html>")
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/latin.html", timeout=10) as page:
+            assert page.status == 200
+            body = page.read()
+        assert b"caf\xe9" in body
+        assert reload_snippet().encode() in body
+    finally:
+        stop_running_server(server, worker)
+
+
+def test_html_removed_between_stat_and_read_is_a_404(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A page that vanishes mid-swap after StaticFiles found it is a 404, not a 500."""
+    real_read_bytes = Path.read_bytes
+
+    def vanish_then_read(path: Path) -> bytes:
+        if path.name == "index.html":
+            path.unlink(missing_ok=True)
+        return real_read_bytes(path)
+
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
+    worker, port = start_running_server(server)
+    try:
+        monkeypatch.setattr(Path, "read_bytes", vanish_then_read)
+        with pytest.raises(urllib.error.HTTPError) as missing:
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=10)
+        assert missing.value.code == 404
+    finally:
+        monkeypatch.undo()
+        stop_running_server(server, worker)
+
+
+def _ipv6_loopback_available() -> bool:
+    try:
+        with socket.socket(socket.AF_INET6) as probe:
+            probe.bind(("::1", 0))
+    except OSError:
+        return False
+    return True
+
+
+@pytest.mark.skipif(not _ipv6_loopback_available(), reason="no IPv6 loopback on this host")
+def test_run_binds_an_ipv6_host_and_prints_it_in_brackets(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--host ::1`` binds an IPv6 socket and the printed URL is ``http://[::1]:PORT/``."""
+    server = DevServer(project / "bartleby.yml", host="::1", port=0, events=True)
+    worker, port = start_running_server(server)
+    try:
+        ready = json.loads(_events_until(capsys, '"type": "ready"').splitlines()[0])
+        assert ready["url"] == f"http://[::1]:{port}/"
+        with urllib.request.urlopen(f"http://[::1]:{port}/", timeout=10) as response:
+            assert "Welcome" in response.read().decode("utf-8")
+    finally:
+        stop_running_server(server, worker)
+
+
+def test_a_burst_of_writes_rebuilds_once(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Five writes inside the quiet window are one rebuild and one ``rebuild`` event."""
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, events=True)
+    calls = _count_rebuilds(server)
+    worker, _port = start_running_server(server)
+    try:
+        page = project / "content" / "index.md"
+        for index in range(5):
+            page.write_text(f"---\ntitle: Home\n---\n\nBurst {index}.\n", encoding="utf-8")
+        assert _wait_for(lambda: bool(calls)), "the burst never rebuilt"
+        time.sleep(server.quiet_window * 5 + 1.0)
+        assert len(calls) == 1, f"a burst of writes ran {len(calls)} rebuilds"
+        events = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line]
+        assert [event["type"] for event in events].count("rebuild") == 1
+        assert [event["path"] for event in events if event["type"] == "change"] == [
+            "content/index.md"
+        ]
+    finally:
+        stop_running_server(server, worker)
+
+
+def _write_path_theme(theme_dir: Path) -> Path:
+    """Create a theme that extends scrivener with its own footer partial; return the partial."""
+    partial = theme_dir / "templates" / "partials" / "footer.html"
+    partial.parent.mkdir(parents=True)
+    (theme_dir / "theme.yml").write_text("name: own\nextends: scrivener\n", encoding="utf-8")
+    partial.write_text("<footer>own footer</footer>\n", encoding="utf-8")
+    return partial
+
+
+@pytest.mark.parametrize("location", ["inside", "outside"])
+def test_run_rebuilds_when_a_path_theme_template_changes(
+    project: Path, tmp_path: Path, location: str
+) -> None:
+    """Editing a template of a ``theme.path`` theme, in or out of the project, rebuilds."""
+    theme_dir = project / "themes" / "own" if location == "inside" else tmp_path / "own-theme"
+    partial = _write_path_theme(theme_dir)
+    config_path = project / "bartleby.yml"
+    theme_path = "themes/own" if location == "inside" else str(theme_dir)
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8") + f"\ntheme:\n  path: {theme_path!r}\n",
+        encoding="utf-8",
+    )
+    server = DevServer(config_path, host="127.0.0.1", port=0)
+    worker, port = start_running_server(server)
+    try:
+        assert "own footer" in _fetch(port)
+        partial.write_text("<footer>edited footer</footer>\n", encoding="utf-8")
+        assert _wait_for(lambda: "edited footer" in _fetch(port)), "the theme edit never rebuilt"
+    finally:
+        stop_running_server(server, worker)
+
+
+def test_theme_files_classify_as_template_or_static_changes() -> None:
+    """A theme's files are template changes, except its ``static/`` tree, which is static."""
+    theme_dirs = ("themes/own/", "/elsewhere/own-theme/")
+    assert classify_change("themes/own/templates/page.html", theme_dirs) == "template"
+    assert classify_change("themes/own/theme.yml", theme_dirs) == "template"
+    assert classify_change("themes/own/static/css/main.css", theme_dirs) == "static"
+    assert classify_change("/elsewhere/own-theme/templates/page.html", theme_dirs) == "template"
+    assert classify_change("static/css/custom.css") == "static"
+    assert classify_change("theme/page.html") == "other"
+
+
+def test_run_follows_an_output_dir_change(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Changing ``output_dir`` while serving moves both the rebuilds and the serving."""
+    config_path = project / "bartleby.yml"
+    server = DevServer(config_path, host="127.0.0.1", port=0, events=True)
+    worker, port = start_running_server(server)
+    try:
+        assert "Welcome" in _fetch(port)
+        config_path.write_text(
+            config_path.read_text(encoding="utf-8") + "\noutput_dir: public\n", encoding="utf-8"
+        )
+        events_seen = _events_until(capsys, '"output_dir": "public/"')
+        rebuilt = [json.loads(line) for line in events_seen.splitlines() if '"rebuild"' in line]
+        assert rebuilt and rebuilt[-1]["output_dir"] == "public/"
+        assert (project / "public" / "index.html").is_file()
+
+        shutil.rmtree(project / "site")
+        assert "Welcome" in _fetch(port)
+    finally:
+        stop_running_server(server, worker)
+
+
+def test_run_prints_the_output_dir_change_in_text_mode(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """In text mode one line says where the output moved to."""
+    config_path = project / "bartleby.yml"
+    server = DevServer(config_path, host="127.0.0.1", port=0)
+    worker, _port = start_running_server(server)
+    try:
+        config_path.write_text(
+            config_path.read_text(encoding="utf-8") + "\noutput_dir: public\n", encoding="utf-8"
+        )
+        assert "public/" in _events_until(capsys, "Output directory changed")
+    finally:
+        stop_running_server(server, worker)
+
+
+def test_run_rebuilds_when_a_content_directory_moves_out(project: Path, tmp_path: Path) -> None:
+    """Moving a content directory out of the project is one directory event, and it rebuilds."""
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
+    calls = _count_rebuilds(server)
+    worker, _port = start_running_server(server)
+    try:
+        shutil.move(project / "content" / "blog", tmp_path / "elsewhere")
+        assert _wait_for(lambda: bool(calls)), "the directory move never rebuilt"
+    finally:
+        stop_running_server(server, worker)
+
+
+def test_watcher_forwards_directory_deletes_and_moves_only(tmp_path: Path) -> None:
+    """A directory delete or move is a change; a directory modify is noise."""
+    changes: list[str] = []
+    handler = _ProjectChangeHandler(tmp_path, changes.append)
+    handler.dispatch(DirDeletedEvent(str(tmp_path / "content" / "articles")))
+    handler.dispatch(
+        DirMovedEvent(str(tmp_path / "content" / "guides"), str(tmp_path.parent / "guides"))
+    )
+    handler.dispatch(DirModifiedEvent(str(tmp_path / "content")))
+    assert changes == ["content/articles", "content/guides"]

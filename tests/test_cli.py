@@ -260,11 +260,30 @@ def test_serve_on_a_busy_port_fails_fast_with_a_labeled_error(
             main(["serve", "--host", "127.0.0.1", "--port", str(port)])
 
     stderr = capsys.readouterr().err
-    assert exit_info.value.code not in (0, None)
+    assert exit_info.value.code == 2, "a busy port is a usage error"
     assert f"127.0.0.1:{port}" in stderr
     assert "fix: pass --port with a free port, or --port 0 to pick one" in stderr
     assert "Traceback" not in stderr
     assert not (project / "site").exists(), "the port check must run before the build"
+
+
+@pytest.mark.parametrize("port", ["70000", "-1", "eighty"])
+def test_serve_rejects_a_port_outside_the_range_as_a_usage_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], port: str
+) -> None:
+    """``--port`` must be 0 to 65535; anything else is an argparse usage error, exit 2."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    monkeypatch.chdir(tmp_path / "mysite")
+    capsys.readouterr()
+
+    with pytest.raises(SystemExit) as exit_info:
+        main(["serve", "--port", port])
+
+    stderr = capsys.readouterr().err
+    assert exit_info.value.code == 2
+    assert "0 to 65535" in stderr
+    assert "Traceback" not in stderr
 
 
 def test_serve_build_time_oserror_is_not_labeled_a_port_problem(

@@ -144,15 +144,24 @@ bartleby serve [--host HOST] [--port PORT] [--events] [--set KEY.PATH=VALUE] [--
 ```
 
 - `--host` defaults to `dev_server.host` from the config, which defaults to `127.0.0.1`.
+  An IPv6 address such as `::1` binds an IPv6 socket, and the printed URL puts it in brackets.
 - `--port` defaults to `dev_server.port`, which defaults to `8000`.
-- `--events` prints one JSON object per line on stdout: a `ready` object once, then one object for each change and rebuild.
+  It must be 0 to 65535; 0 picks a free port, and anything else is a usage error.
+- `--events` prints one JSON object per line on stdout: a `ready` object once, then objects for each burst of changes and its rebuild.
   See [the event stream](#the-event-stream).
 - `--set KEY.PATH=VALUE` overrides one config value for the whole session, rebuilds included.
 - `--base-url URL` overrides `site.url` for the whole session.
 
 The server always includes drafts.
 Every change triggers a full rebuild, because Bartleby has no incremental build.
-A failed rebuild keeps serving the last good output.
+Changes that land within 100 ms of each other (an editor's save is several filesystem events) are one rebuild and one reload.
+A failed rebuild keeps serving the last good output, and in text mode prints each error to stderr as `error: <path>: <message>`.
+A rebuild that fails outside the usual labeled errors, such as a hook file with a syntax error or a `bartleby.yml` that is missing mid-save, is reported the same way with the exception's type and message, and the next good edit rebuilds.
+A successful rebuild prints `Rebuilt N pages in X ms` on stdout.
+
+The watcher covers the project directories in the configuration reference plus the selected theme's directories, both a `theme.path` inside the project and one outside it.
+Deleting or moving a whole directory out of the project rebuilds too.
+Changing `output_dir` in `bartleby.yml` while serving moves the output and the serving to the new directory, and text mode prints one line saying so.
 
 Once the initial build finishes and the server is listening, the command prints the build summary, the address, and how to stop:
 
@@ -171,15 +180,16 @@ With `--events`, the command prints these objects in place of the text above, on
 | `type` | When | Fields |
 |--------|------|--------|
 | `ready` | Once, after the first build, when the server is listening | `url`, `pages`, `static_files`, `output_dir`, `stop_hint` |
-| `change` | A watched file changed | `path`, relative to the project |
-| `rebuild` | The rebuild after a change succeeded | `status`, always `ok` |
-| `error` | The rebuild after a change failed | `errors`, a list of messages |
+| `change` | A watched file changed | `path`, relative to the project, or absolute for a theme directory outside it |
+| `rebuild` | The rebuild after a burst of changes succeeded | `status`, always `ok`, and `output_dir`, the directory it wrote |
+| `error` | The rebuild after a burst of changes failed | `errors`, a list of messages |
 
 ```
 {"type": "ready", "url": "http://127.0.0.1:8000/", "pages": 9, "static_files": 12, "output_dir": "site/", "stop_hint": "Press Ctrl+C to stop"}
 ```
 
-A `change` object is always followed by a `rebuild` or an `error`.
+One or more `change` objects, one per path in the burst, are always followed by one `rebuild` or one `error`.
+`output_dir` in `ready` and `rebuild` is relative to the project when the directory sits under it and absolute otherwise.
 
 ## `bartleby render`
 

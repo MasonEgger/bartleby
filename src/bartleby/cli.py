@@ -358,7 +358,10 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     serve_parser.add_argument("--host", default=None, help="Bind host (default from config)")
     serve_parser.add_argument(
-        "--port", type=int, default=None, help="Bind port (default from config)"
+        "--port",
+        type=_port_number,
+        default=None,
+        help="Bind port, 0 to 65535, where 0 picks a free one (default from config)",
     )
     serve_parser.add_argument(
         "--events",
@@ -1286,6 +1289,21 @@ def _cmd_config_schema(args: argparse.Namespace) -> ConfigSchemaOutput:
     return ConfigSchemaOutput(list(CONFIG_SCHEMA))
 
 
+def _port_number(text: str) -> int:
+    """Parse a ``--port`` value: an integer from 0 to 65535.
+
+    :raises argparse.ArgumentTypeError: For anything else, which argparse reports
+        as a usage error.
+    """
+    try:
+        port = int(text)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a port number (0 to 65535)") from exc
+    if not 0 <= port <= 65535:
+        raise argparse.ArgumentTypeError(f"{port} is outside the port range 0 to 65535")
+    return port
+
+
 def _cmd_serve(args: argparse.Namespace) -> None:
     """Start the development server (HTTP + initial build + change-driven rebuilds).
 
@@ -1295,7 +1313,7 @@ def _cmd_serve(args: argparse.Namespace) -> None:
     :raises UsageError: When the host and port cannot be bound.
     """
     config_path = _resolve_config_path(args)
-    from bartleby.server import DevServer, ServeBindError
+    from bartleby.server import DevServer, ServeBindError, url_host
 
     config = load_config(config_path, _config_overrides(args))
     host = args.host or config.dev_server.host
@@ -1312,7 +1330,7 @@ def _cmd_serve(args: argparse.Namespace) -> None:
     except ServeBindError as exc:
         raise UsageError(
             format_error(
-                f"cannot serve on {host}:{port} ({exc.reason})",
+                f"cannot serve on {url_host(host)}:{port} ({exc.reason})",
                 hint="pass --port with a free port, or --port 0 to pick one",
             )
         ) from exc

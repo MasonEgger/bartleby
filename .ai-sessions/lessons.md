@@ -2,6 +2,9 @@
 
 ## Recent
 <!-- 10 most recent lessons, newest first -->
+- An output-directory guard must check overlap in both directions: the output inside an input directory, and an input directory inside the output (`output_dir: themes` with `theme.path: themes/own`). One `is_relative_to` only catches the first (2026-10-13)
+- Replace a directory by moving the old one aside, moving the new one in, then deleting the old one. Delete-first leaves a window with no output and nothing to restore when the move fails (2026-10-13)
+- A watchdog handler must only enqueue; one worker that drains after a quiet window turns an editor's probe, rename, write, and unlink into one build. Catch `Exception` in that worker and report it, because a hook `SyntaxError` or a config file missing mid-save otherwise kills the thread in silence (2026-10-13)
 - ruamel writes YAML 1.2 and PyYAML reads 1.1, so a string ruamel leaves plain (`Yes`, `on`, `1e3`) comes back a boolean or number through the loader. Before dumping a string, ask PyYAML's implicit resolver for its tag and double-quote anything that is not `str` (2026-10-12)
 - Rejecting duplicate YAML keys surfaces every fixture that appends a second `theme:` or `nav:` block to a config and relied on last-key-wins; twelve tests did. Grep for `read_text(...) + "\ntheme:` before tightening the loader, and build fixtures with `set_key` through a shared helper (2026-10-12)
 - A Python heredoc whose replacement strings are not raw turns `\ufeff` and `\n` into the literal characters in the edited file. Grep the touched files for `\x{FEFF}` and other non-keyboard characters after a scripted edit (2026-10-12)
@@ -9,9 +12,6 @@
 - Labeling a parent-key error (`theme: set only one of name, path, or package`) as `--set` by ancestry alone relabels a file-only clash. Decide by reloading with the overrides beneath that key dropped: if the same error persists it is the file's, otherwise the override's (2026-10-12)
 - ruamel hangs the next key's comment on the last item of a sequence too, so appending to `nav` needs the same detach-and-reattach of the trailing comment token that `set_key` does for a mapping key; share the two helpers (2026-10-12)
 - A final gate's evidence file is itself a claim and gets audited like any other. A verdict that rests on a judgment (fit to show, stable enough to build on) is "met with a note" that names whose judgment it is (2026-10-12)
-- A clean-install walk is proof only when a second party repeats it with their own wheel and venv from outside the repo. The executor's walk and the validator's independent one both passed for Goal 8 (2026-10-12)
-- Start a correctness sweep from a grep for every bare coercion (`int(`, bool reads, list iteration) on raw config values. One unguarded `int()` was reported in Step 16 and fourteen more sites of the same shape sat beside it (2026-10-12)
-- A fix hint is itself a claim and must be true for its case. Two hints in Step 18 named fixes that could not work (an output_dir clause for a failure inside the project dir; shell quoting missing from a slug hint), so test that the hinted fix works (2026-10-12)
 
 ## Architecture
 - A printed "next command" is a claim the user will paste, so build it with `shlex.quote` and test a site name with a space and one with a trailing slash. Step 15's first draft printed an unquoted path that broke on a space (2026-10-12)
@@ -31,6 +31,8 @@
 - Before refreshing a README "Status"/test-count section, pull live facts (`git log --reverse` for the first-commit date, `pytest --co | tail -1` for the test count) and cross-check the "deferred items" list against plan.md "Out of scope" rather than copying the stale original forward; the v1 hardening had already closed half the originally-listed deferrals (2026-06-23)
 
 ## Workflow
+- A clean-install walk is proof only when a second party repeats it with their own wheel and venv from outside the repo. The executor's walk and the validator's independent one both passed for Goal 8 (2026-10-12)
+- Start a correctness sweep from a grep for every bare coercion (`int(`, bool reads, list iteration) on raw config values. One unguarded `int()` was reported in Step 16 and fourteen more sites of the same shape sat beside it (2026-10-12)
 - Writing honest docs is a correctness pass. Stating exactly what an error does turned up a bare `ValueError` traceback from `int()` on `site.feed.limit` that the suite never caught, so write the docs claim before deciding the behavior is fine (2026-10-12)
 - A feature tour is a test of the themes and the pipeline, not only of content. Step 14's tour exposed three features that rendered broken for every user who wrote them (content tabs in a shape neither theme styled, the critic source block processed itself, emoji as 64px blocks), so render every tour section in both themes before calling it done (2026-10-12)
 - A "source beside result" page must guard its source blocks from preprocessors that run before fences are protected. `pymdownx.critic` rewrote its own example, so the source is a raw HTML pre with entity-escaped markers (2026-10-12)
@@ -97,6 +99,7 @@
 - Adding a second loop over the same collection inside one function and reusing the prior loop's variable name trips mypy: the first loop types the variable non-optional, so reassigning a `... | None` from `dict.get()` is an incompatible-assignment error. Pick a fresh variable name for the new loop (2026-06-23)
 
 ## Testing
+- A fix hint is itself a claim and must be true for its case. Two hints in Step 18 named fixes that could not work (an output_dir clause for a failure inside the project dir; shell quoting missing from a slug hint), so test that the hinted fix works (2026-10-12)
 - A reference page tied to a schema should hold a generated block between markers (`<!-- config-schema:begin/end -->`) that a test regenerates from `CONFIG_SCHEMA` and compares byte for byte. A hand-written table with a row-count test lets a default drift. Step 16 mutated the schema three ways to prove the test bites (2026-10-12)
 - A theme that ships code highlighting must ship the token CSS. Two cycles of screenshot review missed it because monochrome code still looks like code; pin every token pair with a contrast test (2026-10-12)
 - A transport rewrite's acceptance test is a real end-to-end probe: scaffold a site, serve it, curl a page, open the WebSocket, hold an idle socket, make a bad edit, make a fixed edit, bind a busy port. Step 12's probe found two robustness defects that predated the rewrite (a labeled build error killed the watchdog thread silently; a busy port printed a raw traceback after a full build) and the unit suite had caught neither (2026-10-12)

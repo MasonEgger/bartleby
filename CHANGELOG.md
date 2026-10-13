@@ -148,9 +148,14 @@ The themes reference documents the three-column layout, `nav.toc-fold`, and the 
 
 The dev server now runs on Starlette and uvicorn.
 Pages and the live-reload WebSocket share one port, so the reload script connects to the page's own host and port.
-A busy port fails fast with a `--port` hint before any build runs.
+A busy port fails fast with a `--port` hint before any build runs, and `--port` must be 0 to 65535.
 A rebuild that hits a labeled error reports it and keeps the watcher alive.
 `serve` takes `--set` and `--base-url` along with the flags it had before.
+Changes that land within 100 ms of each other are one rebuild and one reload, so an editor's save (probe, rename, write, unlink) no longer runs seven builds.
+The `rebuild` event carries `output_dir`, and `output_dir` in `ready`, `rebuild`, and `bartleby build` is the path the build wrote: relative to the project when under it (`build/site/`), absolute otherwise, instead of the directory's bare name.
+The server watches the selected theme's directories, a `theme.path` inside or outside the project, and rebuilds when a theme template, static file, or manifest changes.
+In text mode a failed rebuild prints each error to stderr and a good one prints `Rebuilt N pages in X ms`.
+Changing `output_dir` while serving moves the output and the serving to the new directory.
 
 `pymdownx.tabbed` now defaults to `alternate_style`, so content tabs render in the shape both themes style.
 The tour's Critic Markup source block prints the literal markers instead of being processed itself.
@@ -188,6 +193,25 @@ The docs site builds on the Scrivener theme, with a corrected listing, excerpt, 
 
 ### Fixed
 
+- `output_dir` set to `.`, `..`, `content`, or any other directory the build reads is a `config_error` with a fix, from the file and from `--set`.
+  Before, the build deleted the project before failing on the missing staging directory.
+  The build itself refuses to replace an output directory that holds `bartleby.yml` or `content/`, as a last guard.
+- The output swap moves the old output aside, moves the new one in, and only then deletes the old one, so a failed move leaves the previous output in place and no request lands on an empty directory.
+  Before, the old output was deleted first.
+- A symlinked `output_dir` keeps the link and replaces its target.
+  Before, the build died on "Cannot call rmtree on a symbolic link".
+- The output directory gets the mode a plain `mkdir` would under the current umask.
+  Before, it was always `0700`, because the staging directory came from `mkdtemp`.
+- A rebuild that fails outside the labeled errors, such as a hook file with a syntax error or a `bartleby.yml` missing mid-save, is reported with the exception's type and message and the watcher stays alive.
+  Before, the watcher thread died and `serve` never rebuilt again, in silence.
+  The `--events` contract holds: a `change` is always followed by a `rebuild` or an `error`.
+- The dev server serves a page in any encoding and returns 404 when a page vanishes between the lookup and the read.
+  Before, a Latin-1 file and a mid-swap request were each a 500 with a traceback.
+- `serve --port 70000` is a usage error, and `--host ::1` binds an IPv6 socket.
+  Before, the first was an `OverflowError` traceback and the second failed with a wrong port hint.
+- Deleting or moving a whole directory out of the project rebuilds.
+  Before, directory events were dropped.
+- `build(..., dry_run=flag)` accepts a `bool` variable under mypy; only literal `True` and `False` were typed before.
 - Every published page has a Markdown variant, including pages with an empty body.
   The `text/markdown` alternate link renders only when the variant exists, so `ai.markdown_variants: false` no longer leaves a link that returns 404.
 - JSON-LD is `Article` for posts, `CollectionPage` for generated listing and taxonomy pages, and `WebPage` otherwise.

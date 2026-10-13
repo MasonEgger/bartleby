@@ -925,3 +925,41 @@ def test_markwright_override_error_is_labeled_set() -> None:
     message = str(exc_info.value)
     assert message.startswith("--set: markwright")
     assert "bogus" in message
+
+
+@pytest.mark.parametrize(
+    "output_dir",
+    [".", "..", "content", "content/sub", "static", "templates", "overrides", "hooks", "data"],
+)
+def test_output_dir_inside_a_directory_the_build_reads_is_rejected(
+    tmp_path: Path, output_dir: str
+) -> None:
+    """An ``output_dir`` the build would delete and then read from is a labeled error."""
+    config_path = _write_config(tmp_path, _BASE_CONFIG + f"output_dir: {output_dir!r}\n")
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(config_path)
+    message = str(excinfo.value)
+    assert excinfo.value.key_path == "output_dir"
+    assert "fix:" in message
+
+
+def test_output_dir_holding_a_path_theme_is_rejected(tmp_path: Path) -> None:
+    """The theme directory under the project is read by the build, so it is off limits."""
+    theme = tmp_path / "themes" / "own"
+    theme.mkdir(parents=True)
+    (theme / "theme.yml").write_text("name: own\nextends: base\n", encoding="utf-8")
+    config_path = _write_config(
+        tmp_path, _BASE_CONFIG + "theme:\n  path: themes/own\noutput_dir: themes\n"
+    )
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(config_path)
+    assert excinfo.value.key_path == "output_dir"
+
+
+def test_output_dir_beside_the_project_or_elsewhere_is_allowed(tmp_path: Path) -> None:
+    """A sibling of the project and an absolute path outside it are both fine."""
+    project = tmp_path / "project"
+    project.mkdir()
+    for output_dir in ("site", "build/site", "../project-site", str(tmp_path / "out")):
+        config_path = _write_config(project, _BASE_CONFIG + f"output_dir: {output_dir!r}\n")
+        assert load_config(config_path).output_dir == output_dir

@@ -43,6 +43,8 @@ from bartleby.llm import (
 )
 from bartleby.markdown_pipeline import (
     create_markdown_renderer,
+    disallowed_environments,
+    fence_environment_limits,
     html_to_plain_text,
     render_markdown,
 )
@@ -533,6 +535,7 @@ def _render_page_bodies(state: _BuildState, *, strict: bool) -> None:
     assert state.build_info is not None
     env = state.env
     build_info = state.build_info
+    allowed_environments = fence_environment_limits(config)
 
     page_errors: list[PageError] = []
     for page in state.all_pages:
@@ -544,6 +547,18 @@ def _render_page_bodies(state: _BuildState, *, strict: bool) -> None:
         try:
             source = process_shortcodes(raw_source, {"build": build_info, "page": page}, env)
             source = plugins.run_event("on_page_markdown", source, page=page, config=config)
+            # markwright leaves a directive outside allowed_environments in the block as
+            # text and says nothing, so the build names it once per page.
+            for environment in disallowed_environments(source, allowed_environments):
+                _LOGGER.warning(
+                    "%s",
+                    format_error(
+                        f"[environment {environment}] is not in"
+                        " markwright.fence.allowed_environments and stays as text",
+                        source=str(page.source_path),
+                        hint=f"add {environment!r} to the list, or set markwright.warn to false",
+                    ),
+                )
             rendered = render_markdown(source, state.md_renderer)
             html_content = plugins.run_event(
                 "on_page_content", rendered.html, page=page, config=config

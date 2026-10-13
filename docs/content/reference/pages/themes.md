@@ -133,7 +133,7 @@ Both `theme.features` in `bartleby.yml` and `features` in a manifest accept only
 | `search.highlight` | Highlight the search terms on the page a result opens |
 | `nav.tabs` | Top-level sections render as tabs in the header |
 | `nav.sidebar` | The section tree renders as a sidebar |
-| `nav.toc-fold` | The page's headings move into the sidebar and the right-hand table of contents goes away. The fold applies when the page is in the sidebar tree, and other pages keep the right-hand table of contents. |
+| `nav.toc-fold` | The page's headings move into the sidebar and the right-hand table of contents goes away. The fold applies when the page is in the sidebar tree, and other pages keep the right-hand table of contents. With `nav.tabs` and `nav.section-index`, a section's index page folds its headings under the section title at the top of the sidebar. |
 | `nav.section-index` | A section's index page is the section's own nav entry |
 | `nav.back-to-top` | A back-to-top button appears after scrolling |
 | `content.code.copy` | Code blocks get a copy button |
@@ -158,6 +158,10 @@ Two features change the layout:
 - `nav.toc-fold` folds the page's headings into the left tree, under the page's own entry, and removes the right column.
   The fold applies only when the page is in the sidebar tree.
   Other pages, such as a page outside the nav, keep the right-hand table of contents.
+  With `nav.tabs` and `nav.section-index` on, the sidebar title is the section's index page, and that page's headings fold under the title.
+
+Both themes style the Markdown extension output that has no template of its own: content tabs, collapsible sections, task lists, Critic Markup, and math.
+A math block (`div.arithmatex`) is centered on its own line and scrolls sideways when it is wider than the column; inline math keeps the text's own style.
 
 `nav.tabs` is the header-tabs flag, and there is no second flag for that layout.
 A header nav item for a section with no URL of its own links to the section's first page, with or without `nav.tabs`.

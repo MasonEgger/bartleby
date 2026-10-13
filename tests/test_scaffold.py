@@ -42,7 +42,7 @@ TOUR_HOOKS: dict[str, str] = {
         r".*?<ins class=\"critic\">added text</ins>"
     ),
     "smartsymbols": "&copy;",
-    "emoji": 'class="emojione"',
+    "emoji": "\U0001f604 \U0001f389 \U0001f680",
     "arithmatex": 'class="arithmatex"',
     "tabbed": 'class="tabbed-set tabbed-alternate"',
     "details": "<details",
@@ -185,6 +185,14 @@ def test_tour_html_carries_the_output_of_every_feature_it_claims(scaffold: Path)
     assert _missing_tour_hooks(html) == []
 
 
+def test_tour_emoji_are_text_and_fetch_nothing_from_a_cdn(scaffold: Path) -> None:
+    """Emoji are the characters themselves, so the tour page loads no image from a CDN."""
+    main(["build"])
+    html = (scaffold / "site" / "tour" / "index.html").read_text(encoding="utf-8")
+    assert re.search(r'<img[^>]*src="https?://[^"]*cdn', html) is None
+    assert "emojione" not in html
+
+
 def test_tour_critic_source_prints_the_literal_markers_inside_a_pre(scaffold: Path) -> None:
     """The Critic Markup source is inert text: its braces and markers survive in a pre."""
     main(["build"])
@@ -203,7 +211,12 @@ def test_bundled_theme_css_styles_extension_output_the_tour_shows(theme: str) ->
     """Emoji, Critic Markup comments, and task items need rules the compiled CSS keeps."""
     css_path = Path(__file__).parent.parent / "src" / "bartleby" / "themes" / theme
     css = (css_path / "static" / "css" / "main.css").read_text(encoding="utf-8")
-    for selector in (".emojione", ".critic.comment", ".task-list-item", ".tabbed-labels"):
+    for selector in (
+        ".arithmatex",
+        ".critic.comment",
+        ".task-list-item",
+        ".tabbed-labels",
+    ):
         assert selector in css, selector
 
 

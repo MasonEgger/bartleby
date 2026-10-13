@@ -24,6 +24,7 @@ from bartleby.config import (
 from bartleby.markdown_pipeline import (
     RenderedContent,
     create_markdown_renderer,
+    disallowed_environments,
     html_to_plain_text,
     render_markdown,
 )
@@ -287,7 +288,7 @@ def test_markwright_option_error_for_a_bad_value_is_translated() -> None:
 def test_section_goes_to_config_from_mapping_and_options_reach_the_extensions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The section reaches config_from_mapping as written; its option tables reach Markdown."""
+    """The section reaches config_from_mapping with warn defaulted on; options reach Markdown."""
     section: dict[str, object] = {"youtube": {"load": "click"}}
     seen_tables: list[Mapping[str, object]] = []
 
@@ -300,7 +301,7 @@ def test_section_goes_to_config_from_mapping_and_options_reach_the_extensions(
     renderer = create_markdown_renderer(_config(markwright=section))
     html = render_markdown("[youtube dQw4w9WgXcQ]", renderer).html
 
-    assert seen_tables == [section]
+    assert seen_tables == [{"warn": True, **section}]
     # `load: click` only takes effect when extension_configs reaches the youtube extension.
     assert 'data-mw-load="click"' in html
     assert "<template" in html
@@ -356,3 +357,79 @@ def test_markdown_extensions_still_configure_non_markwright_extensions(
         _config(markdown_extensions=overrides, markwright={"disable": ["youtube"]})
     )
     assert "pymdownx.snippets" in loaded
+
+
+def test_tabs_override_with_an_unrelated_key_keeps_the_alternate_style() -> None:
+    """A ``pymdownx.tabbed`` override merges over the bundled options instead of replacing them."""
+    overrides: list[dict[str, object] | str] = [
+        {"name": "pymdownx.tabbed", "config": {"separator": "_"}}
+    ]
+    renderer = create_markdown_renderer(_config(markdown_extensions=overrides))
+    html = render_markdown(_TABS_SOURCE, renderer).html
+    assert '<div class="tabbed-labels">' in html
+
+
+def test_math_renders_with_the_delimiters_mathjax_and_katex_read() -> None:
+    """Arithmatex runs in generic mode: ``\\(...\\)`` inline and ``\\[...\\]`` for a block."""
+    renderer = create_markdown_renderer(_config())
+    html = render_markdown("Inline $x = 1$ here.\n\n$$\nE = mc^2\n$$\n", renderer).html
+    assert '<span class="arithmatex">\\(x = 1\\)</span>' in html
+    assert '<div class="arithmatex">\\[\nE = mc^2\n\\]</div>' in html
+    assert "math/tex" not in html
+
+
+def test_emoji_render_as_text_with_no_remote_image() -> None:
+    """The bundled emoji config writes the character itself, so the page fetches nothing."""
+    renderer = create_markdown_renderer(_config())
+    html = render_markdown(":smile: :rocket:", renderer).html
+    assert "\U0001f604" in html
+    assert "\U0001f680" in html
+    assert "<img" not in html
+
+
+def test_emoji_override_names_a_generator_by_dotted_path() -> None:
+    """A string ``emoji_generator`` or ``emoji_index`` in bartleby.yml resolves to the callable."""
+    overrides: list[dict[str, object] | str] = [
+        {"name": "pymdownx.emoji", "config": {"emoji_generator": "pymdownx.emoji.to_svg"}}
+    ]
+    renderer = create_markdown_renderer(_config(markdown_extensions=overrides))
+    html = render_markdown(":smile:", renderer).html
+    assert '<img alt="\U0001f604" class="twemoji"' in html
+
+
+def test_emoji_override_with_an_unknown_dotted_path_is_a_config_error() -> None:
+    """A dotted path that names nothing is a ConfigError with the key path and a fix."""
+    overrides: list[dict[str, object] | str] = [
+        {"name": "pymdownx.emoji", "config": {"emoji_index": "pymdownx.emoji.nope"}}
+    ]
+    with pytest.raises(ConfigError, match="markdown_extensions.*pymdownx.emoji.nope.*fix"):
+        create_markdown_renderer(_config(markdown_extensions=overrides))
+
+
+_ENVIRONMENT_SOURCE = (
+    "Prose with [environment third] in it.\n\n"
+    "```\n[label app.py]\n[environment third]\nssh host\n```\n\n"
+    "````\n```\n[environment third]\nnested source\n```\n````\n\n"
+    "```\n[environment local]\nssh host\n```\n\n"
+    "```\n[environment third]\nssh again\n```\n"
+)
+
+
+def test_disallowed_environments_names_each_directive_a_fence_would_drop() -> None:
+    """Only a leading directive in a fenced block counts, and each name is reported once."""
+    assert disallowed_environments(_ENVIRONMENT_SOURCE, ["local", "second"]) == ["third"]
+    assert disallowed_environments(_ENVIRONMENT_SOURCE, None) == []
+    assert disallowed_environments(_ENVIRONMENT_SOURCE, ["third"]) == ["local"]
+
+
+def test_pygments_long_classes_carry_the_short_class_the_palette_styles() -> None:
+    """A token outside Pygments' short-name table still gets its ancestor's short class."""
+    renderer = create_markdown_renderer(_config())
+    html = render_markdown("```yaml\nsite:\n  title: Bartleby\n```\n", renderer).html
+    assert '<span class="l l-Scalar l-Scalar-Plain">Bartleby</span>' in html
+    assert '<span class="p p-Indicator">' in html or '<span class="p">:</span>' in html
+    themes = Path(__file__).parent.parent / "src" / "bartleby" / "themes"
+    for theme in ("scrivener", "material"):
+        css = (themes / theme / "static" / "css" / "main.css").read_text(encoding="utf-8")
+        assert ".highlight .l" in css, theme
+        assert ".highlight .p" in css, theme

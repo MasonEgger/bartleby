@@ -79,3 +79,59 @@ def test_header_nav_section_without_url_links_to_its_first_page(
     header = re.search(r"<header.*?</header>", html, re.DOTALL)
     assert header is not None
     assert re.search(r'<a [^>]*href="/guide/install/"[^>]*>\s*Guide\s*</a>', header.group(0))
+
+
+SECTION_INDEX_BODY = "---\ntitle: Guide\n---\n\n## Overview\n\nText.\n\n## Setup\n\nMore.\n"
+
+
+def _build_tabbed_section_site(root: Path, theme_name: str) -> Path:
+    """Build a site whose Guide section has an index page, under all four nav features.
+
+    Args:
+        root: Empty directory that becomes the project.
+        theme_name: Bundled theme to build with.
+
+    Returns:
+        The build output directory.
+    """
+    content = root / "content"
+    (content / "guide").mkdir(parents=True)
+    (content / "index.md").write_text(PAGE_BODY.format(title="Home"), encoding="utf-8")
+    (content / "guide" / "index.md").write_text(SECTION_INDEX_BODY, encoding="utf-8")
+    (content / "guide" / "install.md").write_text(
+        PAGE_BODY.format(title="Install"), encoding="utf-8"
+    )
+    (root / "bartleby.yml").write_text(
+        'site:\n  title: "Layout Site"\n  url: "https://layout.example.com"\n'
+        "nav:\n  - Home: index.md\n  - Guide: guide/\n"
+        f"theme:\n  name: {theme_name}\n  features:\n"
+        "    - nav.tabs\n    - nav.sidebar\n    - nav.section-index\n    - nav.toc-fold\n",
+        encoding="utf-8",
+    )
+    build(root / "bartleby.yml")
+    return root / "site"
+
+
+@pytest.mark.parametrize("theme_name", ["material", "scrivener"])
+def test_section_index_page_keeps_its_folded_toc_under_tabs(
+    tmp_path: Path, theme_name: str
+) -> None:
+    """With tabs, section-index, and toc-fold, the index page's headings print exactly once."""
+    site = _build_tabbed_section_site(tmp_path, theme_name)
+    html = (site / "guide" / "index.html").read_text(encoding="utf-8")
+    assert 'class="nav-toc"' in html
+    assert "toc-sidebar" not in html
+    assert html.count('href="#overview"') == 1
+    assert html.count('href="#setup"') == 1
+
+
+@pytest.mark.parametrize("theme_name", ["material", "scrivener"])
+def test_section_child_page_keeps_its_folded_toc_under_tabs(
+    tmp_path: Path, theme_name: str
+) -> None:
+    """A non-index page in the same section folds its headings under its own entry."""
+    site = _build_tabbed_section_site(tmp_path, theme_name)
+    html = (site / "guide" / "install" / "index.html").read_text(encoding="utf-8")
+    assert 'class="nav-toc"' in html
+    assert "toc-sidebar" not in html
+    assert html.count('href="#install-heading"') == 1

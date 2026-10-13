@@ -829,6 +829,8 @@ def markwright_config(section: dict[str, object]) -> MarkwrightConfig:
     """Resolve the ``markwright:`` section through markwright's public config API.
 
     Shared by validation here and by the renderer, so a section that loads always renders.
+    ``warn`` defaults to true, so a fence directive the site's ``allowed_environments``
+    leaves out is reported; the section may set it to false.
 
     :param section: The raw section, empty when ``bartleby.yml`` has none.
     :returns: markwright's resolved config.
@@ -836,7 +838,7 @@ def markwright_config(section: dict[str, object]) -> MarkwrightConfig:
         markwright rejects the section; the caller attaches the source.
     """
     try:
-        return config_from_mapping(section, MARKWRIGHT_KEY)
+        return config_from_mapping({"warn": True, **section}, MARKWRIGHT_KEY)
     except MarkwrightConfigError as exc:
         raise ConfigError(
             str(exc).removeprefix(f"{MARKWRIGHT_KEY}: "),

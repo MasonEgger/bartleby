@@ -1252,13 +1252,13 @@
     font-size: 0.875em;
   }
 
-  /* Emoji: pymdownx.emoji emits a sized image; sit it inline at the text height. */
-  .prose img.emojione {
-    display: inline;
-    height: 1.2em;
-    width: auto;
-    margin: 0 0.05em;
-    vertical-align: -0.2em;
+  /* Math: pymdownx.arithmatex wraps TeX in .arithmatex for MathJax or KaTeX to typeset.
+     A block sits on its own line, centered, and scrolls sideways rather than overflowing;
+     inline math reads with the text around it. */
+  .prose div.arithmatex {
+    margin: var(--sc-ruling-unit) 0;
+    overflow-x: auto;
+    text-align: center;
   }
 
   /* Task lists: the checkbox is the marker, so the disc goes and the box takes its place. */

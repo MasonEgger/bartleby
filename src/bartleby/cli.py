@@ -6,9 +6,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime
+import json
 import logging
 import os
 import shlex
+import shutil
 import sys
 from pathlib import Path
 from string import Template
@@ -576,7 +578,8 @@ def _unknown_content_type(name: str, config: BartlebyConfig) -> UsageError:
 
 
 # The starter files `new site` copies, laid out as they land in the new project.
-# ${name} and ${today} are filled in with string.Template.
+# ${name}, ${title} (the name as a quoted YAML scalar), and ${today} are filled in with
+# string.Template.
 _SCAFFOLD_ROOT = Path(__file__).parent / "scaffold"
 # The files `new site --blog` adds on top of the docs-shaped starter.
 _SCAFFOLD_BLOG_ROOT = Path(__file__).parent / "scaffold_blog"
@@ -656,29 +659,39 @@ def _cmd_new_site(args: argparse.Namespace) -> NewSiteOutput:
         )
 
     target.mkdir(parents=True)
-    (target / "templates").mkdir()
-    (target / "static").mkdir()
-    (target / "hooks").mkdir()
+    # A JSON string is a valid double-quoted YAML scalar, so a quote or a backslash in
+    # the name reaches site.title intact. A failure past this point removes the
+    # directory, so a retry does not stop at "already exists".
+    values = {
+        "name": name,
+        "title": json.dumps(name, ensure_ascii=False),
+        "today": datetime.date.today().isoformat(),
+    }
+    try:
+        (target / "templates").mkdir()
+        (target / "static").mkdir()
+        (target / "hooks").mkdir()
+        _copy_starter_tree(_SCAFFOLD_ROOT, target, values)
+        config_path = target / "bartleby.yml"
 
-    values = {"name": name, "today": datetime.date.today().isoformat()}
-    _copy_starter_tree(_SCAFFOLD_ROOT, target, values)
-    config_path = target / "bartleby.yml"
+        if args.full_config:
+            full = render_full_config(CONFIG_SCHEMA, base=read_config_text(config_path))
+            write_config_text(config_path, full)
 
-    if args.full_config:
-        full = render_full_config(CONFIG_SCHEMA, base=read_config_text(config_path))
-        write_config_text(config_path, full)
-
-    if args.blog:
-        _copy_starter_tree(_SCAFFOLD_BLOG_ROOT, target, values)
-        edited = _merge_content_shape(
-            read_config_text(config_path),
-            CONTENT_SHAPES["blog"],
-            "blog",
-            load_config(config_path),
-            source=config_path,
-        )
-        validate_config_text(edited, config_path)
-        write_config_text(config_path, edited)
+        if args.blog:
+            _copy_starter_tree(_SCAFFOLD_BLOG_ROOT, target, values)
+            edited = _merge_content_shape(
+                read_config_text(config_path),
+                CONTENT_SHAPES["blog"],
+                "blog",
+                load_config(config_path),
+                source=config_path,
+            )
+            validate_config_text(edited, config_path)
+            write_config_text(config_path, edited)
+    except Exception:
+        shutil.rmtree(target)
+        raise
 
     created = sorted(
         f"{entry.name}/" if entry.is_dir() else entry.name for entry in target.iterdir()

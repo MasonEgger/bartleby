@@ -12,7 +12,8 @@ They describe published pages only.
 * ``site``: ``title``, ``description``, ``url``, and ``language`` (always ``en``).
 * ``content_types``: one object per configured content type, in config order, in the shape
   of ``bartleby schema <type>``.
-* ``taxonomies``: each taxonomy with ``name``, ``slug_format``, and the ``terms`` in use
+* ``taxonomies``: each taxonomy an enabled content type uses, with ``name``,
+  ``slug_format``, and the ``terms`` in use
   with their ``count`` over published pages.
 * ``authors``: the public authors, in the shape of ``bartleby schema authors``.
 * ``theme``: ``name`` (the leaf theme), ``chain`` (theme names, leaf first), and

@@ -40,3 +40,4 @@ markdown_extensions:
 
 A string entry replaces the default extension with the same name, or adds a new extension if none matches.
 A `{name, config}` mapping passes the `config` dict to Python-Markdown as `extension_configs`.
+For an extension Bartleby configures itself (`pymdownx.tabbed`, `pymdownx.arithmatex`, `pymdownx.emoji`), the `config` dict merges over the bundled options, so one key you set does not drop the others.

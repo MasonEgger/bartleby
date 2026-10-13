@@ -1,5 +1,5 @@
 site:
-  title: "${name}"
+  title: ${title}
   url: "https://example.com"
 
 theme:

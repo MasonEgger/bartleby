@@ -7,6 +7,7 @@ tags:
 
 Bartleby loads the extensions below on every build, in this order.
 Override the config of any of them with `markdown_extensions` in `bartleby.yml`.
+An override for an extension Bartleby configures itself merges over the bundled options, so a key you set wins and the rest stay.
 See [Markdown pipeline](../../concepts/markdown-pipeline.md) for why the order matters and how overrides merge.
 
 ## `markwright`
@@ -14,6 +15,7 @@ See [Markdown pipeline](../../concepts/markdown-pipeline.md) for why the order m
 The `markwright:` section of `bartleby.yml` selects and configures these extensions.
 It takes the keys of a `markwright.toml`: `enable` or `disable`, `warn`, and one table per extension.
 Without the section, every extension loads and every embed loads eagerly.
+`warn` is on unless you set it to `false`: when `fence.allowed_environments` leaves out an environment a page names, the build logs a warning with the page and the name, because the directive stays in the code block as text.
 Set `load: click` on an embed to hold it back until the reader clicks it.
 See [Configure markwright and Click-to-Load Embeds](../../guides/posts/configure-markwright.md), and markwright's own documentation for each extension's options.
 
@@ -30,8 +32,26 @@ See [Configure markwright and Click-to-Load Embeds](../../guides/posts/configure
 
 ## `pymdownx`
 
+Bartleby sets options on three of these, and a `markdown_extensions` override merges over them.
+
 `pymdownx.tabbed` runs with `alternate_style` on, which is the style the bundled themes expect.
-Override it through `markdown_extensions` if you need the other style.
+Setting another `pymdownx.tabbed` key, such as `separator`, keeps the alternate style; set `alternate_style: false` if you need the other markup.
+
+`pymdownx.arithmatex` runs with `generic` on.
+Inline math renders as `<span class="arithmatex">\(...\)</span>` and a block as `<div class="arithmatex">\[...\]</div>`, which MathJax 3 and KaTeX's auto-render script read with their default delimiters.
+Bartleby ships no math renderer; add the script of either one to your templates.
+
+`pymdownx.emoji` runs on the `twemoji` index with the `to_alt` generator, so `:smile:` renders as the character and the page makes no request to an emoji CDN.
+To render images instead, name a generator by its dotted path:
+
+```yaml
+markdown_extensions:
+  - name: pymdownx.emoji
+    config:
+      emoji_generator: pymdownx.emoji.to_svg
+```
+
+`emoji_generator` and `emoji_index` take a dotted path to any callable pymdownx accepts, such as `pymdownx.emoji.to_png` or `pymdownx.emoji.emojione`; a path that names nothing is a config error.
 
 | Extension | Purpose |
 |-----------|---------|

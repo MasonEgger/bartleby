@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from bartleby import cli
 from bartleby.cli import _discover_shortcode_names, main
 from bartleby.config import load_config
 from bartleby.plugins import KNOWN_EVENTS
@@ -1714,3 +1715,33 @@ def test_base_url_wins_over_a_set_of_site_url(
     main(["build", "--set", "site.url=https://set.test", "--base-url", "https://x.test"])
     html = (tmp_path / "mysite" / "site" / "index.html").read_text(encoding="utf-8")
     assert 'rel="canonical" href="https://x.test/' in html
+
+
+def test_new_site_quotes_a_name_with_a_double_quote_and_a_backslash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The site name lands in ``site.title`` exactly, however it needs quoting in YAML."""
+    monkeypatch.chdir(tmp_path)
+    name = 'q"uo\\te'
+    main(["new", "site", name])
+    config = load_config(tmp_path / name / "bartleby.yml")
+    assert config.site.title == name
+    monkeypatch.chdir(tmp_path / name)
+    main(["build"])
+    html = (tmp_path / name / "site" / "index.html").read_text(encoding="utf-8")
+    assert "q&#34;uo\\te" in html or 'q"uo\\te' in html
+
+
+def test_new_site_removes_its_directory_when_scaffolding_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failure after the directory is made leaves nothing behind, so a retry can run."""
+    monkeypatch.chdir(tmp_path)
+
+    def _fail(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(cli, "_copy_starter_tree", _fail)
+    with pytest.raises(RuntimeError, match="disk full"):
+        main(["new", "site", "mysite"])
+    assert not (tmp_path / "mysite").exists()

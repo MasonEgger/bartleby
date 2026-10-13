@@ -158,8 +158,19 @@ In text mode a failed rebuild prints each error to stderr and a good one prints 
 Changing `output_dir` while serving moves the output and the serving to the new directory.
 
 `pymdownx.tabbed` now defaults to `alternate_style`, so content tabs render in the shape both themes style.
+A `markdown_extensions` override for an extension Bartleby configures (`pymdownx.tabbed`, `pymdownx.arithmatex`, `pymdownx.emoji`) merges over the bundled options instead of replacing them, so setting one key keeps the rest.
 The tour's Critic Markup source block prints the literal markers instead of being processed itself.
-Emoji render at text size in both themes.
+
+`pymdownx.arithmatex` runs in generic mode.
+Inline math is `<span class="arithmatex">\(...\)</span>` and a block is `<div class="arithmatex">\[...\]</div>`, which MathJax 3 and KaTeX's auto-render script typeset as they come; before, the output was MathJax 2 `<script type="math/tex">` markup that neither reads.
+Both themes center a math block and let it scroll sideways.
+
+`pymdownx.emoji` renders `:smile:` as the character itself (the `twemoji` index with the `to_alt` generator).
+Before, every emoji was an `<img>` fetched from an EmojiOne CDN when the page opened.
+A site that wants images sets `emoji_generator` to a dotted path such as `pymdownx.emoji.to_svg` under `markdown_extensions`; `emoji_index` takes a dotted path the same way.
+
+The `markwright` section's `warn` is on unless the site sets it to `false`.
+With `fence.allowed_environments` set, a page that names an environment outside the list gets one build warning per name, with the page and a fix; before, the directive stayed in the code block as text with no message.
 
 Errors name the file, the key path or id, and a concrete fix, in one shape: `<file>: <key path>: <message> (fix: <hint>)`.
 `bartleby.yml` now rejects unknown top-level keys, unknown metadata field types, and a non-list `choices`.
@@ -228,6 +239,11 @@ The docs site builds on the Scrivener theme, with a corrected listing, excerpt, 
 - Posts with no date, author, or reading time no longer render an empty meta paragraph under the title.
 - Posts and listings in both bundled themes now get the section sidebar and table of contents that pages get.
   The sidebar needs the section's pages listed under it in `nav`, because `nav` keeps a content-type directory as one link.
+- With `nav.tabs`, `nav.sidebar`, `nav.section-index`, and `nav.toc-fold` all on, a section's index page keeps its table of contents in both themes: the sidebar title links to the index page and the headings fold under it.
+  Before, the fold removed the right column and the sidebar printed nothing, because the index page is not repeated as a child under `nav.section-index`.
+- `bartleby new site` quotes the site name for YAML, so a name with a double quote or a backslash lands in `site.title` as typed, and a failure after the directory is made removes it so a retry does not stop at "already exists".
+- `schema.json` lists only the taxonomies an enabled content type uses.
+  Before, a taxonomy that only a disabled type opted into appeared with no terms while its pages were not built.
 - Live reload works: the injected script connects to the page's own host and port.
 - A string key left null in `bartleby.yml` (`output_dir:` with nothing after it) reads as its default instead of the text `None`, so a build never writes into `None/`.
 - `site.url` is validated: it must be an absolute `http` or `https` URL with a host, so the sitemap never carries `<loc>/</loc>` or a scheme-less address.

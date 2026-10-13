@@ -263,3 +263,41 @@ def test_front_matter_named_like_listing_keys_neither_crashes_nor_loads_assets(
 
     html = (project / "site" / "plain" / "index.html").read_text(encoding="utf-8")
     assert "click_to_load" not in html
+
+
+def test_disallowed_environment_logs_one_warning_naming_it(
+    make_project: ProjectFactory, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A directive outside ``allowed_environments`` is reported once per page, by name."""
+    project = make_project("markwright:\n  fence:\n    allowed_environments: [local]\n")
+    (project / "content" / "envs.md").write_text(
+        "---\ntitle: Envs\n---\n\n```\n[environment third]\nssh a\n```\n\n"
+        "```\n[environment third]\nssh b\n```\n\n```\n[environment local]\nssh c\n```\n",
+        encoding="utf-8",
+    )
+    with caplog.at_level("WARNING", logger="bartleby"):
+        build(project / "bartleby.yml")
+
+    warnings = [
+        record.getMessage() for record in caplog.records if "environment" in record.getMessage()
+    ]
+    assert len(warnings) == 1
+    assert "third" in warnings[0]
+    assert "envs.md" in warnings[0]
+    assert "allowed_environments" in warnings[0]
+
+
+def test_warn_false_silences_the_disallowed_environment_warning(
+    make_project: ProjectFactory, caplog: pytest.LogCaptureFixture
+) -> None:
+    """``warn: false`` in the markwright section turns the report off."""
+    project = make_project(
+        "markwright:\n  warn: false\n  fence:\n    allowed_environments: [local]\n"
+    )
+    (project / "content" / "envs.md").write_text(
+        "---\ntitle: Envs\n---\n\n```\n[environment third]\nssh a\n```\n", encoding="utf-8"
+    )
+    with caplog.at_level("WARNING", logger="bartleby"):
+        build(project / "bartleby.yml")
+
+    assert [record for record in caplog.records if "environment" in record.getMessage()] == []

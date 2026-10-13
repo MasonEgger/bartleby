@@ -91,10 +91,10 @@ tabbed-labels
 tabbed-content
 tabbed-block
 tabbed-alternate
-# Extension output with no template reference (critic, emoji, task lists)
+# Extension output with no template reference (critic, math, task lists)
 critic
 comment
-emojione
+arithmatex
 task-list
 task-list-item
 # Click-to-load embeds (markwright preview hooks)

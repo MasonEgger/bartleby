@@ -24,7 +24,7 @@ The tour that `bartleby new site` writes at `content/tour/index.md` has one of e
 Before you begin, note the shape of the section, which matches a `markwright.toml`:
 
 - `enable` or `disable` is a list of extension names, and you set one of the two.
-- `warn` controls markwright's warnings.
+- `warn` is on by default; with `fence.allowed_environments` set, a page that names an environment outside the list gets a build warning, and `warn: false` silences it.
 - One table per extension holds that extension's options.
 
 The extension names are `fence`, `highlight`, `youtube`, `codepen`, `twitter`, `instagram`, `slideshow`, and `image_compare`.

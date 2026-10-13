@@ -32,6 +32,7 @@ from bartleby.config import (
     ThemeConfig,
     load_config,
 )
+from bartleby.config_edit import set_key
 from bartleby.content import Page, discover_content
 from bartleby.content_query import select_published
 from bartleby.theme_loader import ResolvedTheme, ThemeLayer, ThemeManifest
@@ -471,3 +472,16 @@ def test_agent_outputs_are_identical_across_two_builds(project: Path, tmp_path: 
         first_bytes = (project / "site" / name).read_bytes()
         assert first_bytes == (second / "site" / name).read_bytes(), name
         assert first_bytes
+
+
+def test_disabled_types_taxonomy_leaves_schema_and_the_site(project: Path) -> None:
+    """A taxonomy only a disabled type opted into is absent from schema.json and has no pages."""
+    config_path = project / "bartleby.yml"
+    text = set_key(config_path.read_text(encoding="utf-8"), "content_types.blog.enabled", False)
+    config_path.write_text(text, encoding="utf-8")
+
+    build(config_path)
+
+    schema = json.loads((project / "site" / "schema.json").read_text(encoding="utf-8"))
+    assert [taxonomy["name"] for taxonomy in schema["taxonomies"]] == ["tags"]
+    assert not (project / "site" / "categories").exists()

@@ -250,6 +250,7 @@ Common character sequences become typographic symbols.
 ### Emoji
 
 Wrap a shortcode in colons.
+The result is the character itself, so the page loads no image for it.
 
 ````
 :smile: :tada: :rocket:
@@ -262,7 +263,9 @@ Wrap a shortcode in colons.
 Dollar signs wrap math.
 One pair is inline, two pairs set a block.
 Bartleby writes the math markup; it does not ship a math renderer.
-Add a MathJax or KaTeX script to your templates to typeset it, and until you do the result shows the TeX source.
+Inline math becomes `\(...\)` and a block becomes `\[...\]`, each inside an element with the `arithmatex` class.
+MathJax 3 and KaTeX's auto-render script both read those delimiters as they come, so add either script to your templates to typeset the math.
+Until you do, the result shows the TeX source between the delimiters.
 
 ````
 The roots are $x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$.

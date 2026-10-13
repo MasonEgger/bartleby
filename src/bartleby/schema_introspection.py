@@ -174,7 +174,8 @@ def derive_taxonomies_schema(pages: list[Page], config: BartlebyConfig) -> Taxon
     """Derive each taxonomy's in-use terms with counts from the discovered pages.
 
     Term collection reuses :func:`bartleby.taxonomies.build_taxonomies` so the
-    schema's notion of an in-use term matches what the build itself indexes.
+    schema's notion of an in-use term matches what the build itself indexes, and a
+    taxonomy no enabled content type opts into is left out, as its pages are.
     Drafts are filtered here so "in use" means in published use, matching the
     build's own publication boundary; callers do not need to pre-filter.
 
@@ -186,10 +187,11 @@ def derive_taxonomies_schema(pages: list[Page], config: BartlebyConfig) -> Taxon
     taxonomies: list[dict[str, object]] = []
     for taxonomy_name, taxonomy_config in config.taxonomies.items():
         data = collected.global_taxonomies.get(taxonomy_name)
-        terms: list[dict[str, object]] = []
-        if data is not None:
-            for term in data.terms.values():
-                terms.append({"term": term.name, "count": term.count})
+        if data is None:
+            continue
+        terms: list[dict[str, object]] = [
+            {"term": term.name, "count": term.count} for term in data.terms.values()
+        ]
         taxonomies.append(
             {
                 "name": taxonomy_name,

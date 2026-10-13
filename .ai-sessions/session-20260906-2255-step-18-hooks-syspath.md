@@ -20,7 +20,7 @@
 - Verified clean starting state: branch `v1`, dirty tree with Step 18 changes (`src/bartleby/plugins.py`, `tests/test_plugins.py`, `todo.md`) already in the working tree from the implement dispatch.
 - Reviewed the fix: `discover_hooks` used to insert the `hooks/` directory at the front of `sys.path` and never removed it, so the insertion shadowed imports for the rest of the process, and grew with every dev-server rebuild that re-ran discovery. The fix wraps the load loop in `try`/`finally` and removes the inserted path afterward, guarded by an `added_hooks_path` flag so a path already on `sys.path` for another reason is left alone.
 - Confirmed the two new regression tests in `tests/test_plugins.py`: `test_discover_hooks_restores_sys_path` asserts `sys.path` is unchanged after one call, `test_discover_hooks_twice_does_not_grow_sys_path` asserts two calls in a row don't grow it (the R5 dev-server-rebuild case).
-- Confirmed the docstring update on `discover_hooks` documents that the sibling-import support is discovery-time only: a hook that imports an underscore-prefixed sibling at module top level still works, one that defers the import to call time will not find it, and that's intended.
+- Confirmed the docstring update on `discover_hooks` documents that the sibling-import support is discovery-time only: a hook that imports a `_`-prefixed sibling at module top level still works, one that defers the import to call time will not find it, and that's intended.
 - Marked Step 18 (18.1-18.4) done in `todo.md` and closed the Phase 6 checkpoint marker (R6, R13, R14, R15 all complete).
 - Ran `just check` (ruff, ruff format, mypy strict, full pytest, smoke test). Clean on the first pass: 565 tests passed, no flake encountered.
 - Wrote this session summary.

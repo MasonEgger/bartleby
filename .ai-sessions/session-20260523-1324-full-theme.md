@@ -6,7 +6,7 @@
 
 ## Key Actions
 
-- **Implemented Step 25** — Material theme polish:
+- **Implemented Step 25**: Material theme polish:
   - New partials: `search.html` (Alpine-driven modal with debounced query), `toc.html` (sticky table of contents with active-section tracking), `back_to_top.html` (Alpine show-on-scroll button).
   - `base.html` now includes search, back-to-top, and the existing header/footer partials.
   - Extended `main.css` with admonition variants (note/warning/danger/tip), code-block styling, content tab UI, search overlay, TOC sidebar, back-to-top, responsive media query, grid cards layout, and an `.md-button` rule for mkdocs-material compatibility.
@@ -17,4 +17,4 @@
 
 ## Suggested Skills for Next Session
 
-- `python:python` — Step 26 implements icon packs and tree-shaking. SVG file handling. Same toolchain.
+- `python:python`: Step 26 implements icon packs and tree-shaking. SVG file handling. Same toolchain.

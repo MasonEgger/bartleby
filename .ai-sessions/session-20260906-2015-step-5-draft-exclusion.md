@@ -30,7 +30,7 @@
 ## Efficiency Insights
 
 **What went well:**
-- Implement and validate already landed a clean, minimal diff (two source functions, three test files, two fixture bundles) — finalize had nothing to fix, just to package.
+- Implement and validate already landed a clean, minimal diff (two source functions, three test files, two fixture bundles): finalize had nothing to fix, just to package.
 
 **What could improve:**
 - Nothing notable for this step; it was a straightforward finalize.

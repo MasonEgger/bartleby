@@ -1,4 +1,4 @@
-# Session Summary: Step 13 — static agent surface
+# Session Summary: Step 13, static agent surface
 
 **Date**: 2026-06-22
 **Duration**: ~25 minutes
@@ -50,8 +50,8 @@
 
 - spec.md already documents the Static Agent Surface fully (lines 1715-1731), including `language` in site identity and the semantic-vs-mechanical curation rule, so Step 13.2 "confirm spec" needed no spec edit; the implementation matches the documented contract.
 - The alternate link is injected for every page with a `page.url` (not just content-type posts). Listing/taxonomy pages do not get a `.md` variant written, so their advertised alternate URL would 404; the spec says "every rendered page" carries the link, so this follows the spec literally. If that proves wrong, gating on `page.content_type_name` is the narrow fix.
-- `content-index.json` entries reuse `curate_page_fields`, which omits a field entirely when absent (no null-padding) — keeps entries compact and matches `content_query`'s curated shape.
+- `content-index.json` entries reuse `curate_page_fields`, which omits a field entirely when absent (no null-padding): keeps entries compact and matches `content_query`'s curated shape.
 
 ## Suggested Skills for Next Session
 
-- `python:python` — Step 14 (render and lint commands) is Python work in `cli.py` and a new `linting.py`, reusing the markdown pipeline and crossref link resolution, under mypy strict with tests in `tests/test_cli.py` and `tests/test_linting.py`.
+- `python:python`: Step 14 (render and lint commands) is Python work in `cli.py` and a new `linting.py`, reusing the markdown pipeline and crossref link resolution, under mypy strict with tests in `tests/test_cli.py` and `tests/test_linting.py`.

@@ -1,4 +1,4 @@
-# Session Summary: Step 10 — live reload, last-good-build, hook reload
+# Session Summary: Step 10, live reload, last-good-build, hook reload
 
 **Date**: 2026-06-22
 **Duration**: ~30 minutes
@@ -47,7 +47,7 @@
 
 ## Process Improvements
 
-- For per-file dynamic reload (hooks, plugins), prefer reading source text and `compile`/`exec` over `spec_from_file_location` — the latter's mtime-keyed bytecode cache silently serves stale code on sub-second edits, exactly the dev-server hot-reload case.
+- For per-file dynamic reload (hooks, plugins), prefer reading source text and `compile`/`exec` over `spec_from_file_location`: the latter's mtime-keyed bytecode cache silently serves stale code on sub-second edits, exactly the dev-server hot-reload case.
 - When a file uses `from __future__ import annotations`, runtime-unused typing imports (`Callable`, `Path`) belong in the `TYPE_CHECKING` block from the first write to avoid the TC003 round-trip.
 
 ## Observations
@@ -57,4 +57,4 @@
 
 ## Suggested Skills for Next Session
 
-- `python:python` — Step 11 (schema introspection) is Python work creating `src/bartleby/schema_introspection.py` and a `bartleby schema` command under mypy strict, with tests in `tests/test_schema_introspection.py`.
+- `python:python`: Step 11 (schema introspection) is Python work creating `src/bartleby/schema_introspection.py` and a `bartleby schema` command under mypy strict, with tests in `tests/test_schema_introspection.py`.

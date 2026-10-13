@@ -1,4 +1,4 @@
-# Session Summary: Step 15 — export, generate-skill, build --dry-run
+# Session Summary: Step 15, export, generate-skill, build --dry-run
 
 **Date**: 2026-06-23
 **Duration**: ~30 minutes
@@ -59,4 +59,4 @@
 
 ## Suggested Skills for Next Session
 
-- `python:python` — Step 16 (site-wide aggregate feed) is Python work extending `feeds.py` and `config.py` (site.feed include-scope validation, merge/sort/limit, contextual rel=alternate link selection) under mypy strict with tests in `tests/test_feeds.py` and `tests/test_theme.py`.
+- `python:python`: Step 16 (site-wide aggregate feed) is Python work extending `feeds.py` and `config.py` (site.feed include-scope validation, merge/sort/limit, contextual rel=alternate link selection) under mypy strict with tests in `tests/test_feeds.py` and `tests/test_theme.py`.

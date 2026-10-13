@@ -42,6 +42,10 @@ Icon packs
 ----------
 
 Material Design Icons   Apache License 2.0   https://pictogrammers.com/library/mdi/
+  Files: themes/base/icons/material/*.svg (home and close unmodified; account,
+  arrow-up, calendar, chevron-right, clock, magnify, menu, and tag modified) and
+  the chevron-up path inlined unmodified in
+  themes/material/templates/partials/back_to_top.html.
 FontAwesome (Free)      CC BY 4.0 (icons), MIT (code)   https://fontawesome.com/
 Octicons                MIT   https://primer.style/octicons/
 Simple Icons            CC0 1.0   https://simpleicons.org/

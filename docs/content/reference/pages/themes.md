@@ -291,7 +291,7 @@ Eject copies each file from the layer that wins it into one directory.
 It writes a `theme.yml` with the leaf theme's `name`, `version`, and `description`, the union of features from the whole chain, and no `extends`.
 
 ```
-Ejected theme 'scrivener' (56 files) to themes/scrivener
+Ejected theme 'scrivener' (59 files) to themes/scrivener
 Add this to bartleby.yml:
 theme:
   path: themes/scrivener

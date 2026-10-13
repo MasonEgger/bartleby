@@ -49,15 +49,19 @@ from bartleby.theme_loader import (
     THEME_FEATURES,
     ThemeManifest,
     default_theme,
+    flatten_chain,
     load_manifest,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+ROOT = Path(__file__).parent.parent
 SAMPLE_SITE = Path(__file__).parent / "fixtures" / "site"
-PAGES_DIR = Path(__file__).parent.parent / "docs" / "content" / "reference" / "pages"
+PAGES_DIR = ROOT / "docs" / "content" / "reference" / "pages"
+GUIDES_DIR = ROOT / "docs" / "content" / "guides" / "posts"
 THEMES_DIR = Path(themes_package.__file__).parent
+SOURCE_DIR = Path(config_module.__file__).parent
 
 Surface = tuple[set[str], set[str]]
 
@@ -833,3 +837,52 @@ def test_docs_list_exactly_what_the_code_defines(name: str) -> None:
     assert in_code, f"{name}: the code side is empty, so the test would pass for nothing"
     assert in_code - in_docs == set(), f"{name}: in code, missing from docs"
     assert in_docs - in_code == set(), f"{name}: in docs, missing from code"
+
+
+# ---------------------------------------------------------------------------
+# Prose that quotes a number the code can change
+# ---------------------------------------------------------------------------
+
+_MODULE_COUNT_CLAIMS = {
+    ROOT / "README.md": re.compile(r"Bartleby is (\d+) source modules"),
+    ROOT / "CLAUDE.md": re.compile(r"Bartleby is (\d+) single-responsibility modules"),
+    ROOT / "spec.md": re.compile(r"The implementation is (\d+) single-responsibility modules"),
+}
+
+
+def _source_modules() -> set[str]:
+    """Every module file under ``src/bartleby/`` except the package and entry-point files."""
+    return {path.name for path in SOURCE_DIR.glob("*.py") if not path.name.startswith("__")}
+
+
+def test_readme_architecture_names_every_module() -> None:
+    """The README's Architecture list names each module file, and no file that is gone."""
+    body = _sections((ROOT / "README.md").read_text(encoding="utf-8"))["Architecture"]
+    in_docs = {tick for tick in _ticks(body) if tick.endswith(".py")}
+    in_code = _source_modules()
+    assert in_code - in_docs == set(), "modules missing from the README Architecture list"
+    assert in_docs - in_code == set(), "README names modules that do not exist"
+
+
+@pytest.mark.parametrize("path", list(_MODULE_COUNT_CLAIMS), ids=lambda path: path.name)
+def test_module_count_claims_match_the_source_tree(path: Path) -> None:
+    """Each prose file that states the module count states the real one."""
+    match = _MODULE_COUNT_CLAIMS[path].search(path.read_text(encoding="utf-8"))
+    assert match is not None, f"{path.name} no longer states the module count"
+    assert int(match.group(1)) == len(_source_modules())
+
+
+_EJECT_COUNT_RE = re.compile(r"Ejected theme 'scrivener' \((\d+) files\)")
+
+
+@pytest.mark.parametrize(
+    "page",
+    [PAGES_DIR / "themes.md", GUIDES_DIR / "choose-and-customize-a-theme.md"],
+    ids=lambda page: page.name,
+)
+def test_docs_quote_the_real_eject_file_count(page: Path, tmp_path: Path) -> None:
+    """The eject output the docs quote carries the file count a fresh eject reports."""
+    ejected = flatten_chain(default_theme(), tmp_path / "ejected", project_dir=tmp_path)
+    quoted = {int(count) for count in _EJECT_COUNT_RE.findall(page.read_text(encoding="utf-8"))}
+    assert quoted, f"{page.name} no longer quotes the eject line"
+    assert quoted == {len(ejected.files)}

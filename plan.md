@@ -429,13 +429,13 @@ markwright 0.3.0 is a released dependency. Bartleby consumes its public config A
 
 ### Step 12: Rewrite the dev server on Starlette and uvicorn with same-port reload
 
-**NOTE**: Replace the `http.server.ThreadingHTTPServer` plus separate-WebSocket-port design in `server.py` with Starlette and uvicorn serving both the static files and the reload WebSocket on one port (after sphinx-autobuild's design). Add `starlette` and `uvicorn` to dependencies and `uv lock`. Keep the behavior the current tests pin: `is_watched`/`classify_change` event filtering stays, a full rebuild runs on every watched change, and the robustness property (an idle or preconnected socket must not stall a real request) still holds. `reload_snippet` connects to the same port now, on `RELOAD_WS_PATH`.
+**NOTE**: Replace the `http.server.ThreadingHTTPServer` plus separate-WebSocket-port design in `server.py` with Starlette and uvicorn serving both the static files and the reload WebSocket on one port (after sphinx-autobuild's design). Add `starlette` and `uvicorn` to dependencies and `uv lock`. Keep the behavior the current tests pin: `is_watched`/`classify_change` event filtering stays, a full rebuild runs on every watched change, and the idle-socket property (an idle or preconnected socket must not stall a real request) still holds. `reload_snippet` connects to the same port now, on `RELOAD_WS_PATH`.
 
 ```text
 1. RED: Write server tests first (extend tests/test_server.py):
    - Test that `reload_snippet()` now points the page at `location.host` and `RELOAD_WS_PATH` on the serving port (no separate port in the URL).
    - Test that the Starlette app serves a built file at its URL and the reload WebSocket route is mounted on the same app.
-   - Test the robustness property against the Starlette/uvicorn server: an idle TCP connection held open does not block a parallel request (the same shape as the existing idle-socket test, retargeted).
+   - Test the idle-socket property against the Starlette/uvicorn server: an idle TCP connection held open does not block a parallel request (the same shape as the existing idle-socket test, retargeted).
    - Keep and re-run the existing `is_watched`/`classify_change` event-filter tests unchanged.
 
 2. Document:
@@ -455,7 +455,7 @@ markwright 0.3.0 is a released dependency. Bartleby consumes its public config A
 
 7. Update documentation: CHANGELOG.md: dev server moved to Starlette and uvicorn with same-port live reload.
 
-8. Verify the robustness property and the reload round-trip on the new server, and run `just check`.
+8. Verify the idle-socket property and the reload round-trip on the new server, and run `just check`.
 ```
 
 ---

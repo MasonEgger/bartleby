@@ -219,7 +219,7 @@ def test_footer_shows_prev_next() -> None:
 
 
 def test_all_templates_render() -> None:
-    """Every theme template renders without raising."""
+    """Every theme template renders to a non-empty document."""
     env = _env()
     for template_name in (
         "base.html",
@@ -230,7 +230,8 @@ def test_all_templates_render() -> None:
         "taxonomy_index.html",
         "404.html",
     ):
-        env.get_template(template_name).render(**_base_context(paginator=None))
+        html = env.get_template(template_name).render(**_base_context(paginator=None))
+        assert html.strip(), f"{template_name} rendered nothing"
 
 
 @pytest.mark.parametrize("filename", sorted(VENDORED_BUNDLES))

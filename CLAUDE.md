@@ -10,7 +10,7 @@ Bartleby is an agents-first, batteries-included Python static site generator. Th
 
 ## Architecture
 
-Bartleby is 34 single-responsibility modules under `src/bartleby/`, grouped by build-pipeline phase (see spec.md "Component boundaries"). The key architectural decisions:
+Bartleby is 37 single-responsibility modules under `src/bartleby/`, grouped by build-pipeline phase (see spec.md "Component boundaries"). The key architectural decisions:
 
 - **Frontend stack**: Tailwind CSS + Alpine.js + HTMX + lunr.js (reimplemented, NOT ported from mkdocs-material)
 - **Synchronous build**: `build()` in `build.py` runs the whole pipeline in-process. `async_build()` is only an `asyncio.to_thread` wrapper used by the CLI `build` command. Parallel and incremental builds are explicit non-goals (spec.md).
@@ -87,3 +87,5 @@ Look at `src/bartleby/config.py` and `src/bartleby/authors.py` for the canonical
 - Absolute URLs: `urls.absolute_url` is the single builder for site-absolute URLs (seo, sitemap, feeds, llm, agent_surface all use it). Do not add per-module copies.
 - `schema.json` carries a `theme` block `{name, chain, features: {enabled, implemented, active}}`; `active` is the intersection and the value agents should rely on. The four agent files (`llms.txt`, `llms-full.txt`, `schema.json`, `content-index.json`) are byte-identical across builds and a test pins it.
 - `export --include-html` renders through `build.render_content`, which shares `_render_page_bodies` with the build.
+- Global CLI flags: `cli._global_flags()` holds the real defaults on the top-level parser; each subparser attaches `_global_flags(on_subcommand=True)`, whose defaults are `argparse.SUPPRESS`, so `bartleby --output json validate` keeps the value and a flag after the subcommand name still wins. Do not put defaults back on the subparser copies.
+- Prose that quotes a number: `tests/test_docs_reference.py` pins the module count in README.md, CLAUDE.md, and spec.md to the files under `src/bartleby/`, the README Architecture list to those files, and the `Ejected theme ... (N files)` line in the docs to a real eject. `tests/test_acknowledgments.py` scans every theme template for an inline `<svg>` with a `<path d=` and requires ACKNOWLEDGMENTS.md to name the file (or an in-test allowlist of Bartleby-original drawings).

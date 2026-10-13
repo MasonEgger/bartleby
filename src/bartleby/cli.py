@@ -242,30 +242,47 @@ def _report_error(exc: Exception, fmt: str) -> None:
     raise SystemExit(1)
 
 
-def _global_flags() -> argparse.ArgumentParser:
+def _global_flags(*, on_subcommand: bool = False) -> argparse.ArgumentParser:
     """A parent parser carrying the global flags shared by every subcommand.
 
-    Attaching these to each subparser (rather than only the top parser) lets
-    them appear after the subcommand, e.g. ``bartleby build --output json``.
+    The top-level parser attaches the copy that holds the real defaults. Each
+    subparser attaches a copy with ``on_subcommand`` set, whose defaults are
+    ``argparse.SUPPRESS``: the flags then parse after the subcommand name
+    (``bartleby build --output json``) without resetting a value given before it
+    (``bartleby --output json build``), and a flag given after still wins.
     """
+    defaults: dict[str, object] = {
+        "output": "text",
+        "config": None,
+        "quiet": False,
+        "verbose": False,
+    }
+    if on_subcommand:
+        defaults = dict.fromkeys(defaults, argparse.SUPPRESS)
     parent = argparse.ArgumentParser(add_help=False)
     parent.add_argument(
         "--output",
         choices=("text", "json"),
-        default="text",
+        default=defaults["output"],
         help="Output format: text (default) or json (machine-readable)",
     )
     parent.add_argument(
-        "--config", default=None, help="Path to bartleby.yml (default: ./bartleby.yml)"
+        "--config",
+        default=defaults["config"],
+        help="Path to bartleby.yml (default: ./bartleby.yml)",
     )
     verbosity = parent.add_mutually_exclusive_group()
     verbosity.add_argument(
         "--quiet",
         action="store_true",
+        default=defaults["quiet"],
         help="Suppress warnings and success confirmations (errors and data still print)",
     )
     verbosity.add_argument(
-        "--verbose", action="store_true", help="Log detailed progress to stderr"
+        "--verbose",
+        action="store_true",
+        default=defaults["verbose"],
+        help="Log detailed progress to stderr",
     )
     return parent
 
@@ -304,12 +321,12 @@ def _config_overrides(args: argparse.Namespace) -> list[str]:
 
 def _build_parser() -> argparse.ArgumentParser:
     """Construct the argparse tree for every ``bartleby`` subcommand."""
-    flags = _global_flags()
     parser = argparse.ArgumentParser(
         prog="bartleby",
         description="Bartleby static site generator",
-        parents=[flags],
+        parents=[_global_flags()],
     )
+    flags = _global_flags(on_subcommand=True)
     subparsers = parser.add_subparsers(dest="command")
 
     new_parser = subparsers.add_parser("new", help="Scaffold sites or content")

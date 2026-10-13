@@ -15,9 +15,9 @@
 
 ## Observations
 
-- The `raw_content` lives on each Page from Step 4 — no extra plumbing needed to write the .md variant. The "humans and agents equally" design pillar from the spec is paying off: the same field that drives the HTML render also drives the LLM output.
-- `llms.txt` and `llms-full.txt` are both human-readable too — pretty markdown headings, no Bartleby-specific syntax. Anyone landing on those URLs gets a usable site overview.
+- The `raw_content` lives on each Page from Step 4: no extra plumbing needed to write the .md variant. The "humans and agents equally" design pillar from the spec is paying off: the same field that drives the HTML render also drives the LLM output.
+- `llms.txt` and `llms-full.txt` are both human-readable too: pretty markdown headings, no Bartleby-specific syntax. Anyone landing on those URLs gets a usable site overview.
 
 ## Suggested Skills for Next Session
 
-- `python:python` — Step 21 implements the internal plugin architecture + hooks/ directory discovery. Module-level globbing, dynamic imports, decorator-based priority ordering. Same toolchain.
+- `python:python`: Step 21 implements the internal plugin architecture + hooks/ directory discovery. Module-level globbing, dynamic imports, decorator-based priority ordering. Same toolchain.

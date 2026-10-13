@@ -101,12 +101,17 @@ def test_build_command_invokes_pipeline(tmp_path: Path, monkeypatch: pytest.Monk
     assert (tmp_path / "mysite" / "site" / "index.html").exists()
 
 
-def test_validate_command_zero_exit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """``bartleby validate`` exits 0 on a clean config."""
+def test_validate_command_zero_exit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby validate`` exits 0 on a clean config and reports it valid."""
     monkeypatch.chdir(tmp_path)
     main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
-    main(["validate"])
+    main(["validate", "--output", "json"])
+    report = _last_json(capsys.readouterr().out)
+    assert report["valid"] is True
+    assert report["errors"] == []
 
 
 def test_validate_flags_missing_template_override(
@@ -1642,10 +1647,20 @@ def test_validate_set_failure_is_labeled_set(
     assert "--set: dev_server.port" in capsys.readouterr().err
 
 
-def test_validate_accepts_valid_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """``validate --set`` with a legal override passes."""
+def test_validate_accepts_valid_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``validate --set`` with a legal override passes, and the override reaches the validator.
+
+    The file holds a port the validator rejects, so the run can only pass if the
+    override replaced it before validation.
+    """
     _scaffold_and_enter(tmp_path, monkeypatch)
-    main(["validate", "--set", "dev_server.port=9100"])
+    _append_to_config("\ndev_server:\n  port: notaport\n")
+    with pytest.raises(SystemExit):
+        main(["validate"])
+    main(["validate", "--set", "dev_server.port=9100", "--output", "json"])
+    assert _last_json(capsys.readouterr().out)["valid"] is True
 
 
 def test_serve_passes_set_overrides_to_devserver(
@@ -1680,10 +1695,61 @@ def test_build_base_url_renders_canonical_urls_against_it(
     assert 'rel="canonical" href="https://x.test/' in html
 
 
-def test_validate_accepts_base_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """``validate --base-url`` is accepted and the override reaches the validator."""
+def test_validate_accepts_base_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``validate --base-url`` is accepted and the override reaches the validator.
+
+    The file holds a ``site.url`` the validator rejects, so the run can only pass
+    if ``--base-url`` replaced it before validation.
+    """
     _scaffold_and_enter(tmp_path, monkeypatch)
-    main(["validate", "--base-url", "https://x.test"])
+    _append_to_config("\nsite:\n  title: Base URL Site\n  url: not-a-url\n")
+    with pytest.raises(SystemExit):
+        main(["validate"])
+    main(["validate", "--base-url", "https://x.test", "--output", "json"])
+    assert _last_json(capsys.readouterr().out)["valid"] is True
+
+
+# --- global flags before the subcommand name ---------------------------------
+
+
+def test_output_json_before_the_subcommand_prints_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby --output json validate`` prints JSON; the subparser keeps the value."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["--output", "json", "validate"])
+    assert _last_json(capsys.readouterr().out)["valid"] is True
+
+
+def test_quiet_before_the_subcommand_silences_the_confirmation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby --quiet build`` prints nothing on success."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    capsys.readouterr()
+    main(["--quiet", "build"])
+    assert capsys.readouterr().out == ""
+
+
+def test_config_before_the_subcommand_is_honored(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby --config PATH validate`` finds the config from another directory."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    main(["--config", str(tmp_path / "mysite" / "bartleby.yml"), "validate", "--output", "json"])
+    assert _last_json(capsys.readouterr().out)["valid"] is True
+
+
+def test_global_flag_after_the_subcommand_wins_over_one_before(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby --output text validate --output json`` prints JSON."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["--output", "text", "validate", "--output", "json"])
+    assert _last_json(capsys.readouterr().out)["valid"] is True
 
 
 def test_serve_passes_base_url_as_a_site_url_override(

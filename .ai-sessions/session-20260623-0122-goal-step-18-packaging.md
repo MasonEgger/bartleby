@@ -1,4 +1,4 @@
-# Session Summary: Step 18.4/18.5 — Packaging and polish
+# Session Summary: Step 18.4/18.5, Packaging and polish
 
 **Date**: 2026-06-23
 **Duration**: ~15 minutes
@@ -25,14 +25,14 @@
     current hatchling-supported shape.
   - README: replaced the `## License` "TBD." with "MIT. See LICENSE." and
     rewrote the stale Status section (it claimed 272 tests / 27 steps and listed
-    deferred items the v1 hardening actually closed — real Tailwind, real vendor
+    deferred items the v1 hardening actually closed: real Tailwind, real vendor
     bundles, full icon packs). New text: 507 tests, initial 27 + 18 hardening
     steps, and only the genuinely-deferred items from plan.md "Out of scope"
     (parallel build, `--dirty`, voice/tone analysis, public theme API).
   - Created `CHANGELOG.md` in Keep-a-Changelog format with a 0.1.0 entry
     cataloguing the feature set by area (content/rendering, theme, output layer,
     plugins, CLI, dev server, build semantics) plus an empty `[Unreleased]`.
-- 18.5: `just check` green — ruff "All checks passed!", mypy "Success: no issues
+- 18.5: `just check` green; ruff "All checks passed!", mypy "Success: no issues
   found in 35 source files", 507 tests passed, `smoke` recipe passed.
 - todo.md: checked off 18.4, 18.5, and the parent Step 18 box.
 

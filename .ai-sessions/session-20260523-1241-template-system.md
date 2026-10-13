@@ -17,15 +17,15 @@
 
 ## Efficiency Insights
 
-- The 6-level cascade was easy to express as a flat candidate list searched in order across `[overrides, templates, theme]` roots. The "right answer" emerged from listing candidates in lookup-priority order, then iterating roots in the same order — no nested loops, no priority enums.
+- The 6-level cascade was easy to express as a flat candidate list searched in order across `[overrides, templates, theme]` roots. The "right answer" emerged from listing candidates in lookup-priority order, then iterating roots in the same order: no nested loops, no priority enums.
 - Built-in theme partials (`seo_meta.html`, `jsonld.html`) were lifted directly from the spec's SEO / JSON-LD sections. No editorial intervention needed.
 - `tomllib` is stdlib in 3.11+ so no new dependency for TOML data files.
 
 ## Observations
 
-- `jinja2.FileSystemLoader` stores its search paths as `.searchpath` — used `getattr(loader, "searchpath", [])` so mypy stays happy with the strict `BaseLoader | None` type from the env.
+- `jinja2.FileSystemLoader` stores its search paths as `.searchpath`: used `getattr(loader, "searchpath", [])` so mypy stays happy with the strict `BaseLoader | None` type from the env.
 - The 6-level cascade returns the candidate name string, not the template object. This lets the Jinja2 environment's loader chain handle the actual file lookup. Same template name resolves differently depending on whether `overrides/` or theme provides it.
 
 ## Suggested Skills for Next Session
 
-- `python:python` — Step 9 implements the navigation system (nav from config, auto-generated from pages, prev/next linking). Dataclass-heavy. Same toolchain.
+- `python:python`: Step 9 implements the navigation system (nav from config, auto-generated from pages, prev/next linking). Dataclass-heavy. Same toolchain.

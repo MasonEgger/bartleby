@@ -1,4 +1,4 @@
-# Session Summary: Audit Closeout — Next-Session Paths Captured
+# Session Summary: Audit Closeout, Next-Session Paths Captured
 
 **Date**: 2026-06-02
 **Duration**: ~3 minutes
@@ -6,21 +6,21 @@
 
 ## Key Actions
 
-Added a "Next session — paths" closeout section at the end of
+Added a "Next session: paths" closeout section at the end of
 audit.md so the recommended next-step options aren't lost when
 this session ends.
 
 Four paths captured:
 
-- **Path A** — release-blockers (Deferral 1 vendor JS, Deferral
-  6 dev server, Spec 1 Phase 5 wording). 1–3 days for #1 and #3;
+- **Path A**: release-blockers (Deferral 1 vendor JS, Deferral
+  6 dev server, Spec 1 Phase 5 wording). 1-3 days for #1 and #3;
   ~1 week for #2.
-- **Path B** — quick wins (Design 14, 17 + Meta 1, 2 +
+- **Path B**: quick wins (Design 14, 17 + Meta 1, 2 +
   Deferral 8). One focused afternoon; closes 5 items.
-- **Path C** — run /ultrareview as an independent cross-check
+- **Path C**: run /ultrareview as an independent cross-check
   before acting on the audit. User-triggered, billed.
-- **Path D** — pivot to feature work; Step 28 structured
-  `--output json` is the next plan.md item and unlocks Phase 5
+- **Path D**: pivot to feature work; Step 28 structured
+  `--output json` is the next plan.md item and opens Phase 5
   without committing to all of it.
 
 Recommendation: Path B first (one afternoon), then Path A. Run

@@ -1,4 +1,4 @@
-# Session Summary: Step 2 (2.1 + 2.3) — build failure semantics
+# Session Summary: Step 2 (2.1 + 2.3), build failure semantics
 
 **Date**: 2026-06-22
 **Duration**: ~30 minutes
@@ -37,7 +37,7 @@
   `BuildError`. Renamed the existing metadata-validation list to
   `metadata_errors` to avoid a name collision with the new `page_errors`.
 - Verified: `just check` green (ruff lint + format-check, mypy --strict, pytest)
-  — 290 passed (was 286; +4 new tests).
+  with 290 passed (was 286; +4 new tests).
 
 ## Prompt Inventory
 
@@ -49,7 +49,7 @@
 
 **What went well:**
 - Forcing render-pass failures via unknown shortcodes (`[% name %]`) needed no
-  new fixture files — just appending a line to existing posts.
+  new fixture files: just appending a line to existing posts.
 
 **What could improve:**
 - Nothing notable for this step.
@@ -78,7 +78,7 @@
 
 ## Suggested Skills for Next Session
 
-- `python:python` — Step 2's next sub-items (2.2 clean error output, 2.4 CLI
+- `python:python`: Step 2's next sub-items (2.2 clean error output, 2.4 CLI
   error boundary, 2.5 `logging.getLogger`) are Python CLI/module work under
   mypy strict.
 </content>

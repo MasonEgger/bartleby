@@ -204,6 +204,9 @@ The docs site builds on the Scrivener theme, with a corrected listing, excerpt, 
 
 ### Fixed
 
+- A global flag given before the subcommand name is honored: `bartleby --output json validate` prints JSON, `bartleby --quiet build` prints nothing, and `bartleby --config PATH build` reads that file.
+  Before, the subcommand's own copy of each flag reset it to the default, so only a flag given after the name counted.
+  A flag given after the name still wins over one given before it.
 - `output_dir` set to `.`, `..`, `content`, or any other directory the build reads is a `config_error` with a fix, from the file and from `--set`.
   Before, the build deleted the project before failing on the missing staging directory.
   The build itself refuses to replace an output directory that holds `bartleby.yml` or `content/`, as a last guard.

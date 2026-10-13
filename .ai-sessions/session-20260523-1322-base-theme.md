@@ -9,7 +9,7 @@
 - **Implemented Step 24**:
   - New partials: `header.html` (site title, nav, color-mode toggle), `nav.html` (top-level nav iteration), `footer.html` (prev/next + build meta).
   - `base.html` rewritten to include those partials, link `/css/main.css`, defer-load three vendor scripts.
-  - Stub vendor assets at `src/bartleby/theme/static/{css,js}/`: `main.css` (~30 lines of base typography + dark mode CSS variables), and placeholder JS stubs for Alpine, HTMX, and lunr — Step 25 will swap these for the real minified bundles.
+  - Stub vendor assets at `src/bartleby/theme/static/{css,js}/`: `main.css` (~30 lines of base typography + dark mode CSS variables), and placeholder JS stubs for Alpine, HTMX, and lunr; Step 25 will swap these for the real minified bundles.
   - New templates: `404.html`, `taxonomy.html`, `taxonomy_index.html`.
   - **build.py** now copies `theme/static/` into the output dir before the user's `static/` copy, so theme assets are overridable.
   - 10 tests in `tests/test_theme.py` verify HTML5 structure, viewport meta, CSS+JS references, site title, dark-mode toggle, 404 render, post-template metadata, prev/next footer, and a smoke-render of every theme template.
@@ -24,4 +24,4 @@
 
 ## Suggested Skills for Next Session
 
-- `python:python` — Step 25 polishes the theme (real Tailwind compile, real Alpine bundle, Alpine components, responsive design). Same toolchain.
+- `python:python`: Step 25 polishes the theme (real Tailwind compile, real Alpine bundle, Alpine components, responsive design). Same toolchain.

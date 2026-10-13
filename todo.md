@@ -111,28 +111,28 @@ Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done 
 - [x] 1. Scope: material + scrivener tailwind.css + safelist.txt component classes for every markwright hook; regenerated main.css
 - [x] 2. Tooling: frontend-design; enumerated markwright class hooks; just theme-css; build + browser
 - [x] 3. Do: enumerate hooks from rendered output; add classes to both themes; recompile
-- [x] 4. Verify: all eight extensions styled in both themes, both modes, desktop + mobile; screenshots to Mason
+- [x] 4. Verify: all eight extensions styled in both themes, both modes, desktop + mobile; screenshots taken in the session scratchpad and described in prose in the evidence file
 - [x] 5. Document: CHANGELOG (markwright hooks styled in both themes)
 
 ## Section 5: The async dev server
 
 ### Step 12: Rewrite the dev server on Starlette and uvicorn with same-port reload (feature)
-- [x] 1. RED: reload_snippet points at location.host + RELOAD_WS_PATH on serving port; Starlette app serves a built file + mounts reload WS on same app; robustness (idle socket does not block parallel request) on new server; existing is_watched/classify_change tests kept
+- [x] 1. RED: reload_snippet points at location.host + RELOAD_WS_PATH on serving port; Starlette app serves a built file + mounts reload WS on same app; the idle-socket property (an idle socket held open does not block a parallel request) on new server; existing is_watched/classify_change tests kept
 - [x] 2. Document: server.py docstring + CLAUDE.md dev-server bullet (Starlette + uvicorn, one port, event filter unchanged)
 - [x] 3. GREEN: add starlette + uvicorn deps + uv lock; rewrite server.py (static route + WS route on one app via uvicorn; watchdog -> classifier -> broadcast; reload_snippet same port); remove old ThreadingHTTPServer + separate-port hub
 - [x] 4. RED: integration (serve on ephemeral port; fetch page + open WS same port; edit file -> reload message arrives)
 - [x] 5. GREEN: wire into _cmd_serve preserving --host/--port/--events/--set/--base-url
 - [x] 6. REFACTOR: keep change classifier exactly; only transport changes
 - [x] 7. Document: CHANGELOG (dev server -> Starlette + uvicorn, same-port reload)
-- [x] 8. Verify: robustness property + reload round-trip + `just check`
+- [x] 8. Verify: idle-socket property + reload round-trip + `just check`
 
 ## Section 6: Three-column docs layout
 
 ### Step 13: Three-column layout with fold-TOC and tabs feature flags (task)
-- [x] 1. Scope: theme_loader.py two new feature names + test; base + material/scrivener doc_layout + nav/toc partials for three columns and both flags; both themes tailwind + safelist; regenerated main.css
+- [x] 1. Scope: theme_loader.py one new feature name (`nav.toc-fold`; `nav.tabs` already existed) + test; base + material/scrivener doc_layout + nav/toc partials for three columns and both flags; both themes tailwind + safelist; regenerated main.css
 - [x] 2. Tooling: frontend-design (layout + responsive), python (THEME_FEATURES); mkdocs-material/Zensical for shape only; just theme-css; build docs + browser
-- [x] 3. Do: add two features + test; implement three-column shell + fold + tabs in both themes; recompile
-- [x] 4. Verify: default three columns, fold on, tabs on, both themes, both modes, desktop + mobile; no feature warnings; no UndefinedError; screenshots to Mason
+- [x] 3. Do: add the `nav.toc-fold` feature + test; implement three-column shell + fold + tabs in both themes; recompile
+- [x] 4. Verify: default three columns, fold on, tabs on, both themes, both modes, desktop + mobile; no feature warnings; no UndefinedError; screenshots taken in the session scratchpad and described in prose in the evidence file
 - [x] 5. Document: CHANGELOG (three-column layout + fold/tabs flags)
 
 ## Section 7: Scaffold and first-run output

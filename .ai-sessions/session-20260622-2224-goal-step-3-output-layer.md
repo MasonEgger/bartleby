@@ -1,4 +1,4 @@
-# Session Summary: Step 3 — structured output layer (--output json)
+# Session Summary: Step 3, structured output layer (--output json)
 
 **Date**: 2026-06-22
 **Duration**: ~25 minutes
@@ -55,4 +55,4 @@
 
 ## Suggested Skills for Next Session
 
-- `python:python` — Step 4 (vendor real Alpine/HTMX/lunr bundles) is Python packaging + asset-copy build code under mypy strict.
+- `python:python`: Step 4 (vendor real Alpine/HTMX/lunr bundles) is Python packaging + asset-copy build code under mypy strict.

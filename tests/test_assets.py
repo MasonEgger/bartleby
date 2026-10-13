@@ -102,7 +102,8 @@ def test_empty_static_dir_ok(tmp_path: Path) -> None:
     """A missing ``static/`` directory is not an error."""
     output = tmp_path / "site"
     output.mkdir()
-    copy_static_files(tmp_path / "missing", output)  # No exception expected.
+    copy_static_files(tmp_path / "missing", output)
+    assert list(output.iterdir()) == []
 
 
 def test_two_pages_sharing_directory_with_asset_raises(tmp_path: Path) -> None:
@@ -166,7 +167,8 @@ def test_two_pages_sharing_directory_without_asset_is_legal(tmp_path: Path) -> N
     output = tmp_path / "site"
     output.mkdir()
 
-    copy_colocated_assets([], [page_a, page_b], content_dir, output)  # No exception expected.
+    copy_colocated_assets([], [page_a, page_b], content_dir, output)
+    assert list(output.rglob("*")) == []
 
 
 def test_orphan_asset_lands_at_source_path(tmp_path: Path) -> None:

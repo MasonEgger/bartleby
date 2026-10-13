@@ -34,7 +34,7 @@
 | Prompt/Command | Action Taken | Outcome |
 |---|---|---|
 | Mode: implement, Step 12 | Rewrote server.py on Starlette and uvicorn, tests, docs | Dirty tree, tests green |
-| Mode: validate, iterations 1 to 3 | End-to-end probes (same-port reload, idle socket, 404, --events, log noise, overrides) | Two robustness defects, then clean |
+| Mode: validate, iterations 1 to 3 | End-to-end probes (same-port reload, idle socket, 404, --events, log noise, overrides) | Two failure-handling defects, then clean |
 | Mode: fix, iterations 1 and 2 | Labeled-error catch, bind-first, error text | Tests green |
 | Mode: finalize (first) | Final check | Stopped at a flaky test |
 | Mode: finalize (second) | Final check, summary, commit, push | One commit |

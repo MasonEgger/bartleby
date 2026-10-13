@@ -1,4 +1,4 @@
-# Session Summary: Step 1 — pass Page dataclass into template context
+# Session Summary: Step 1, pass Page dataclass into template context
 
 **Date**: 2026-06-22
 **Duration**: ~25 minutes
@@ -77,7 +77,7 @@
 
 ## Suggested Skills for Next Session
 
-- `python:python` — Step 2 (build failure semantics, clean error reporting,
+- `python:python`: Step 2 (build failure semantics, clean error reporting,
   logging) is more Python module/CLI work under mypy strict.
 </content>
 </invoke>

@@ -1,4 +1,4 @@
-# Session Summary: Step 16 — site-wide aggregate feed
+# Session Summary: Step 16, site-wide aggregate feed
 
 **Date**: 2026-06-23
 **Duration**: ~30 minutes
@@ -53,4 +53,4 @@
 
 ## Suggested Skills for Next Session
 
-- `python:python` — Step 17 (smoke test and test-quality hardening) is Python TDD work: new `tests/test_smoke.py` e2e, strengthened listing/taxonomy/theme render assertions, and a `DevServer.run()` integration test, all under mypy strict.
+- `python:python`: Step 17 (smoke test and test-quality hardening) is Python TDD work: new `tests/test_smoke.py` e2e, strengthened listing/taxonomy/theme render assertions, and a `DevServer.run()` integration test, all under mypy strict.

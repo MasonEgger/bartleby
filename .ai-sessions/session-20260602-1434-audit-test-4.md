@@ -1,4 +1,4 @@
-# Session Summary: Audit Test 4 — Commit History Walk
+# Session Summary: Audit Test 4, Commit History Walk
 
 **Date**: 2026-06-02
 **Duration**: ~15 minutes
@@ -24,22 +24,22 @@ Docs-only commit. No code changes.
 
 ## Headline findings
 
-- **Design 3 — `build_page_context` flattens Page into a dict.** The
+- **Design 3: `build_page_context` flattens Page into a dict.** The
   hand-built `page_namespace` dict in templates.py is a closed schema
   that doesn't expose new Page fields automatically. This is why
   Bug 1 (`authors` exposed as raw key strings) and Bug 2
   (`custom_metadata` not exposed at all) survived to release. The
   d212d95 commit patches the symptoms; the real fix is to pass the
   Page dataclass directly to templates.
-- **Design 4 — `on_pages` fires before draft filter.** Plugins
+- **Design 4: `on_pages` fires before draft filter.** Plugins
   operate on pages that won't ship.
-- **Design 5 — No per-page error isolation.** Build aborts on the
+- **Design 5: No per-page error isolation.** Build aborts on the
   first bad page.
-- **Design 6 — `KNOWN_EVENTS` has 17 entries; BasePlugin has 16
+- **Design 6: `KNOWN_EVENTS` has 17 entries; BasePlugin has 16
   methods.** `on_pages` slipped through.
-- **Design 1 + 2 — `parse_front_matter` paper cuts.** Too-loose
+- **Design 1 + 2: `parse_front_matter` paper cuts.** Too-loose
   start detection + silent non-dict YAML swallow.
-- **Design 7 — Magic strings everywhere.** `"taxonomy_kind"`,
+- **Design 7: Magic strings everywhere.** `"taxonomy_kind"`,
   `"listing_kind"`, etc. should be enums.
 
 ## Verification

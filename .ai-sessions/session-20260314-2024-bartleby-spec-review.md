@@ -25,7 +25,7 @@ Review and strengthen the Bartleby SSG specification by comparing it against fou
 - Fetched 11 mkdocs-material reference pages (admonitions, annotations, code blocks, content tabs, diagrams, formatting, grids, icons, images, lists, math, tooltips, buttons, footnotes, data tables)
 - Identified 2 conflicts: text highlighting (`==text==` vs `<^>text<^>`) and code block titles (`title="..."` vs `[label ...]`)
 - User decided: support both syntaxes, code annotations yes, do-markdown loaded by default (never a plugin)
-- Added comprehensive "Content Reference" section with exact markdown syntax for all 15 feature categories
+- Added a full "Content Reference" section with exact markdown syntax for all 15 feature categories
 - Added 6 new default extensions (caret, tilde, critic, snippets, blocks.caption, abbr)
 - Expanded theme feature toggles to 20 flags
 
@@ -58,6 +58,6 @@ Review and strengthen the Bartleby SSG specification by comparing it against fou
 
 ## Final State
 
-- `spec.md` is a comprehensive, internally consistent specification ready for manual review
+- `spec.md` is a complete, internally consistent specification ready for manual review
 - All design decisions are documented with concrete syntax examples
 - Reference codebases (MkDocs, mkdocs-material, do-markdown, Hugo) have been thoroughly analyzed and their best patterns incorporated

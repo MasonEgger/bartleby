@@ -25,13 +25,13 @@ The full notices that their licenses require are reproduced under Notices below.
   https://github.com/olivernn/lunr.js.
   Compatible: MIT into MIT.
   The file keeps its own header comment.
-- **Material Design Icons (Pictogrammers)**, 10 SVGs in `themes/base/icons/material/`.
+- **Material Design Icons (Pictogrammers)**, 10 SVGs in `themes/base/icons/material/` and one inline path in `themes/material/templates/partials/back_to_top.html`.
   Apache License 2.0.
   https://github.com/Templarian/MaterialDesign.
   Compatible: Apache-2.0 permits redistribution inside an MIT package when the license text ships with it and modified files are marked.
-  `src/bartleby/THIRD-PARTY-NOTICES` carries the full license text, and this entry marks the eight modified glyphs.
-  `home` and `close` match the upstream paths exactly.
-  The other eight are close or simplified revisions of the upstream glyphs.
+  `src/bartleby/THIRD-PARTY-NOTICES` carries the full license text, and this entry marks the modified files.
+  `home.svg` and `close.svg` match the upstream paths exactly, and the material back-to-top partial inlines the upstream `chevron-up` path unchanged.
+  The other eight files are modified: `account.svg`, `arrow-up.svg`, `calendar.svg`, `chevron-right.svg`, `clock.svg`, `magnify.svg`, `menu.svg`, and `tag.svg` are close or simplified revisions of the upstream glyphs.
 - **Font Awesome Free (brands)**, 5 SVGs in `themes/base/icons/fontawesome-brands/`.
   Icons are CC BY 4.0, Copyright Fonticons, Inc.
   https://fontawesome.com/license/free.
@@ -168,7 +168,7 @@ Lucide (ISC):
 Material Design Icons (Apache-2.0): licensed under the Apache License, Version 2.0.
 The full text is in `src/bartleby/THIRD-PARTY-NOTICES`, which ships inside the package.
 Upstream has no NOTICE file.
-Eight of the ten paths differ from the current upstream glyphs, so treat them as modified.
+Eight of the ten icon files (`account`, `arrow-up`, `calendar`, `chevron-right`, `clock`, `magnify`, `menu`, `tag`) differ from the current upstream glyphs, so treat them as modified; `home`, `close`, and the inline `chevron-up` in the material theme's `partials/back_to_top.html` are unmodified.
 
 Font Awesome Free icons (CC BY 4.0): Copyright Fonticons, Inc., https://fontawesome.com.
 Licensed under https://creativecommons.org/licenses/by/4.0/.

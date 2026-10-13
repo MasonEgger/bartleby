@@ -1,4 +1,4 @@
-# Session Summary: Step 18 (18.1 RED + 18.2 GREEN) — packaging behavior changes
+# Session Summary: Step 18 (18.1 RED + 18.2 GREEN), packaging behavior changes
 
 **Date**: 2026-06-23
 **Duration**: ~35 minutes
@@ -86,6 +86,6 @@
 
 ## Suggested Skills for Next Session
 
-- `python:python` — 18.3 is a pure-refactor pass (StrEnum for magic strings, docstring/
+- `python:python`: 18.3 is a pure-refactor pass (StrEnum for magic strings, docstring/
   fall-through fixes in `resolve_template_name`, move in-function theme import to module
   top, put `hooks/` on `sys.path`, split `build()` into phase helpers) under mypy strict.

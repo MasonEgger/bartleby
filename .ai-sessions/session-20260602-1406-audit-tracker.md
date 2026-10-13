@@ -11,7 +11,7 @@
   the stop-hook issue from `later.md`. 13 rows total with status
   markers (✅/🔴/🟡/🟢/📝) so the post-audit follow-up state is
   visible without scrolling.
-- Refreshed the Test 2 summary table — added an explicit "Status"
+- Refreshed the Test 2 summary table: added an explicit "Status"
   column with OPEN/FIXED markers per deferral.
 - Pulled the ship-0.1.0 punch list into the top tracker so the
   recommended next-step order (Deferral 1 → 6 → 8 → 2) is queued.

@@ -541,3 +541,46 @@ $B config show; $B config get site.title; $B config set site.title Gate
 $B build --set site.title=Over; $B build --base-url https://gate.test
 (cd /path/to/bartleby/docs && uv run bartleby build --strict)     # 76 pages
 ```
+
+## Post-Review Corrections
+
+A review after the gate found two verdicts whose evidence did not match the claim, and six commits landed on `v0.1.1` to fix what the review reproduced.
+This section records both, so the verdicts above read against what the code does now.
+
+### G6 and G16: The --set Label
+
+G6 says errors from `--set` are labeled as coming from `--set`, and its evidence shows one such label (`--set: site.feed.limit: must be an integer`).
+G16 quoted a `--set markwright.bogus=1` run whose error was labeled with the file, and still said met.
+The two could not both hold: the markwright section's unknown-key check labeled every error with `bartleby.yml`, whichever source the key came from.
+
+Before (the line G16 quoted, from the gate run at `bbb006e`):
+
+```text
+error [config_error] bartleby.yml: markwright: unknown configuration key: 'bogus' (fix: fix the `markwright:` section; it takes the same keys as markwright.toml)
+```
+
+After (commit `e071241`, run on a fresh `bartleby new site` scaffold at `bd6d822`):
+
+```text
+error [config_error] --set: markwright: unknown configuration key: 'bogus' (fix: fix the `markwright:` section; it takes the same keys as markwright.toml)
+```
+
+The label now follows the override: an error at or under a `--set` key is blamed on `--set`, and every other error on the file.
+`tests/test_cli.py::test_validate_set_failure_is_labeled_set` and the config tests in `tests/test_config.py` pin it.
+With that, G6's claim holds for the markwright section too, and G16's evidence line matches its verdict.
+
+### The Second-Party Clean-Install Run
+
+Commit `31b4469` says a second party repeated the walk with its own wheel and venv.
+That party was the Step 19 validator dispatch (running on Opus), which built the wheel from the same tree, installed it into a venv it created outside the repo, and ran the clean-install walk above from a scratch directory of its own.
+Its three iterations returned two prose findings on this file and then came back clean.
+The details are in `.ai-sessions/session-20261012-1605-goal-step-19-final-gate.md` (Key Actions and Prompt Inventory).
+
+### The Six Fix Commits After the Gate
+
+- `e071241` Type config values by the schema and harden the config file edits: `--set` and `config set` type values by the schema, a config error names the loaded file or `--set`, and the file is read in one place and written in one place through a temp file and a rename.
+- `e5261cf` Note the config I/O path and schema-typed values in CLAUDE.md: the architecture notes name where the config writer and the typed values live.
+- `1a58f2e` Guard the output directory and keep the dev server alive: `output_dir` may not be the project or a directory the build reads, the output swap moves aside before it deletes, and a failed rebuild no longer kills the watcher.
+- `c469178` Note the dev server worker and output swap in CLAUDE.md: the dev-server and build items describe the worker thread and the swap.
+- `ae99e6d` Fix the rendering defaults, the tabbed TOC fold, and the scaffold: arithmatex emits generic delimiters, emoji render as characters, extension overrides merge over the bundled options, the tabbed sidebar folds the index page's TOC, and `new site` quotes the title.
+- `bd6d822` Note the bundled extension options and fence warning in CLAUDE.md: the rendering notes name the option merge and the disallowed-environment warning.

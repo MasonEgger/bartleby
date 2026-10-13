@@ -30,7 +30,7 @@ def on_page_markdown(markdown, page, config):
 
 At build start, Bartleby reads each `hooks/*.py` file in alphabetical order and skips files whose names start with `_`.
 It registers every module-level function whose name matches a known event.
-A hook file can import an underscore-prefixed sibling module at the top of the file, which is the way to share helper code between hooks.
+A hook file can import a sibling module whose name starts with `_` at the top of the file, which is the way to share helper code between hooks.
 
 ## Installed Plugins
 

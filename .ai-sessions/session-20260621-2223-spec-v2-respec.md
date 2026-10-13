@@ -51,4 +51,4 @@
 
 ## Suggested Skills for Next Session
 
-- `python:python` — `/bpe:plan` produces a TDD roadmap and the next execute-plan steps are Python/uv/pytest work.
+- `python:python`: `/bpe:plan` produces a TDD roadmap and the next execute-plan steps are Python/uv/pytest work.

@@ -22,7 +22,7 @@ Third-pass review of the Bartleby SSG specification against four reference codeb
 - User confirmed Python 3.14+, full MVP, async performance, strict typing
 
 ### Turn 3: CLI Deep Dive
-- User asked if argparse would work — confirmed it's the right call for 5 commands
+- User asked if argparse would work: confirmed it's the right call for 5 commands
 - Locked in argparse (stdlib, zero dependencies, no mypy friction)
 
 ### Turn 4: First Batch of Spec Updates
@@ -40,7 +40,7 @@ Third-pass review of the Bartleby SSG specification against four reference codeb
 ### Turn 6: Frontend Stack Decision
 - User proposed Tailwind CSS, HTMX, and Alpine.js
 - Recommended Tailwind + Alpine.js, dropped HTMX for core theme (wrong tool for static sites)
-- User pushed back with HTMX for future form/server interactions — valid use case
+- User pushed back with HTMX for future form/server interactions: valid use case
 - Final stack: Tailwind (styling) + Alpine.js (interactivity) + HTMX (user-facing server interactions) + lunr.js (search)
 - Rewrote entire Material Theme section to reflect reimplementation approach
 
@@ -51,7 +51,7 @@ Third-pass review of the Bartleby SSG specification against four reference codeb
 - Page feedback widget: deferred to v2
 
 ### Turn 8: Remaining Architecture Decisions
-- Async: safest option — ProcessPoolExecutor for markdown rendering only, plugin hooks in main process
+- Async: safest option; ProcessPoolExecutor for markdown rendering only, plugin hooks in main process
 - License: MIT with THIRD-PARTY-NOTICES
 - Cross-references: relative .md paths rewritten at build time
 - SEO: baked in (Open Graph, Twitter Cards, canonical URLs, JSON-LD)
@@ -110,24 +110,24 @@ Third-pass review of the Bartleby SSG specification against four reference codeb
 
 ## Efficiency Insights
 
-- **Parallel agent exploration was highly effective** — 4 agents ran concurrently analyzing MkDocs, mkdocs-material, do-markdown, and Hugo. Total wall time ~3 minutes vs ~12 minutes sequential.
-- **Honest architectural feedback saved significant time** — flagging HTMX as wrong for static site interactivity but right for forms prevented a design mistake that would have surfaced during implementation.
-- **Iterative spec editing** — using targeted Edit calls rather than full rewrites kept changes focused and reviewable. ~30 individual edits across the session.
-- **Full end-to-end review at Turn 10** was valuable — caught 6 issues including the co-located asset URL bug that would have been painful to discover during implementation.
+- **Parallel agent exploration was highly effective**: 4 agents ran concurrently analyzing MkDocs, mkdocs-material, do-markdown, and Hugo. Total wall time ~3 minutes vs ~12 minutes sequential.
+- **Honest architectural feedback saved significant time**: flagging HTMX as wrong for static site interactivity but right for forms prevented a design mistake that would have surfaced during implementation.
+- **Iterative spec editing**: using targeted Edit calls rather than full rewrites kept changes focused and reviewable. ~30 individual edits across the session.
+- **Full end-to-end review at Turn 10** was valuable: caught 6 issues including the co-located asset URL bug that would have been painful to discover during implementation.
 
 ## Process Improvements
 
 - Could have asked all Material theme questions in a single batch rather than splitting across 2 turns
-- The co-located asset URL issue (assets not following page URLs when url_format is set) should have been caught in the first review — it's a known Hugo concept (page bundles) that was missed
+- The co-located asset URL issue (assets not following page URLs when url_format is set) should have been caught in the first review: it's a known Hugo concept (page bundles) that was missed
 - The LLM friendliness features (llms.txt, .md variants) are a strong differentiator that could have been identified earlier as a first-class feature rather than an afterthought
 - Future sessions should reference this session's memory files for full context
 
 ## Observations
 
-- The project underwent a genuine identity shift during this session — from "Python port of MkDocs + Material" to "batteries-included Python SSG with modern frontend stack and LLM friendliness." This changes the competitive positioning significantly.
-- The Tailwind + Alpine.js decision is arguably the most impactful architectural choice — it makes the theme genuinely extensible rather than a maintenance burden, and sets Bartleby apart from every other SSG in the Python ecosystem.
+- The project underwent a genuine identity shift during this session: from "Python port of MkDocs + Material" to "batteries-included Python SSG with modern frontend stack and LLM friendliness." This changes the competitive positioning significantly.
+- The Tailwind + Alpine.js decision is arguably the most impactful architectural choice: it makes the theme genuinely extensible rather than a maintenance burden, and sets Bartleby apart from every other SSG in the Python ecosystem.
 - The "batteries included" philosophy (ship everything, users ship output) is a strong design lens that resolved multiple decisions quickly (icon packs, HTMX inclusion, LLM features).
-- The spec is now comprehensive enough to begin implementation planning. Next session should focus on breaking the 22 components into an implementation order with dependency graph.
+- The spec is now complete enough to begin implementation planning. Next session should focus on breaking the 22 components into an implementation order with dependency graph.
 - Mason's instinct to ask "can we just use argparse?" and "should we use Tailwind instead of porting SCSS?" consistently pushed toward simpler, more maintainable solutions. The spec is better for it.
 
 ## Final State

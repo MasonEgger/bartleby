@@ -1,4 +1,4 @@
-# Session Summary: Step 14 — render and lint commands
+# Session Summary: Step 14, render and lint commands
 
 **Date**: 2026-06-23
 **Duration**: ~25 minutes
@@ -18,7 +18,7 @@
 ## Key Actions
 
 - RED: wrote `tests/test_linting.py` (9 tests) covering broken-crossref detection, valid-crossref pass, missing-description, present-description pass, orphan detection, linked-page-not-orphan, `--check-external` off by default, opt-in checker invocation, and the structured `Finding` shape.
-- RED: added 6 CLI tests to `tests/test_cli.py` — `render` html+json (no `site/` written), render does no full build, `--format markdown` returns processed markdown (no `<p>`), render unknown path -> usage error (exit 2), lint json shape (issues + summary, broken-crossref -> exit 1), and lint `--check-external` off by default (monkeypatched `bartleby.linting.check_external_url` never called).
+- RED: added 6 CLI tests to `tests/test_cli.py`; `render` html+json (no `site/` written), render does no full build, `--format markdown` returns processed markdown (no `<p>`), render unknown path -> usage error (exit 2), lint json shape (issues + summary, broken-crossref -> exit 1), and lint `--check-external` off by default (monkeypatched `bartleby.linting.check_external_url` never called).
 - GREEN: created `src/bartleby/linting.py` with `Finding`, `lint_site`, `check_external_url`, and per-check helpers. Broken-link detection reuses `crossrefs.resolve_page_crossrefs`; orphan detection uses `navigation.build_navigation` (`pages_flat`) plus an inbound-href scan that excludes self-links; external checking is opt-in and pluggable via `external_checker`.
 - GREEN: added `RenderOutput` and `LintOutput` to `output.py` (RenderOutput omits the non-selected of html/markdown from JSON; LintOutput exit_code is 1 when any error-severity issue is present).
 - GREEN: wired `render` and `lint` subcommands + `_cmd_render`/`_cmd_lint` in `cli.py`. Render resolves shortcodes -> markdown -> single-page crossrefs; `--format` selects html (default) / markdown / metadata; never writes `site/`. Lint renders published pages in-memory, then runs `lint_site`.
@@ -51,8 +51,8 @@
 
 - The plan.md scope for lint is narrower than spec.md's full lint list (spec also names missing alt text, duplicate titles, unused taxonomy terms). Step 14 implements exactly the plan's three checks plus opt-in external; the rest can land in a later step if promoted.
 - `lint` exits 1 only on error-severity findings (broken-crossref, broken-external); missing-description and orphaned-page are warnings and do not fail the command.
-- Render deliberately renders the markdown body HTML, not the full template — keeps the command lightweight for fast feedback and avoids the 404/theme/asset machinery a full build needs.
+- Render deliberately renders the markdown body HTML, not the full template: keeps the command lightweight for fast feedback and avoids the 404/theme/asset machinery a full build needs.
 
 ## Suggested Skills for Next Session
 
-- `python:python` — Step 15 (export, generate-skill, build --dry-run) is Python work creating `export.py` and `skills.py`, wiring CLI commands through the output formatter, and adding `--dry-run` to build, under mypy strict with tests in `tests/test_export.py`, `tests/test_skills.py`, and `tests/test_build.py`.
+- `python:python`: Step 15 (export, generate-skill, build --dry-run) is Python work creating `export.py` and `skills.py`, wiring CLI commands through the output formatter, and adding `--dry-run` to build, under mypy strict with tests in `tests/test_export.py`, `tests/test_skills.py`, and `tests/test_build.py`.

@@ -37,7 +37,7 @@ def _site() -> SiteConfig:
 def test_sitemap_valid_xml() -> None:
     """The sitemap parses as valid XML."""
     xml = generate_sitemap([_page(source="a.md", date=datetime.date(2026, 3, 1))], _site())
-    ET.fromstring(xml)
+    assert ET.fromstring(xml).tag == "{http://www.sitemaps.org/schemas/sitemap/0.9}urlset"
 
 
 def test_sitemap_includes_all_pages() -> None:

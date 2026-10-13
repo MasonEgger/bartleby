@@ -15,4 +15,4 @@
 
 ## Suggested Skills for Next Session
 
-- `python:python` — Step 19 implements SEO meta tag generation (Open Graph, Twitter Card, canonical URLs). Mostly template work, but a thin Python module wires the context.
+- `python:python`: Step 19 implements SEO meta tag generation (Open Graph, Twitter Card, canonical URLs). Mostly template work, but a thin Python module wires the context.

@@ -1,4 +1,4 @@
-# Session Summary: Step 2 (2.2 + 2.4) — CLI error boundary and clean error output
+# Session Summary: Step 2 (2.2 + 2.4), CLI error boundary and clean error output
 
 **Date**: 2026-06-22
 **Duration**: ~25 minutes
@@ -36,7 +36,7 @@
   per page error (for BuildError) or a single line otherwise, then `raise
   SystemExit(1)`. Added `os` import and `AuthorError`/`BuildError` imports.
 - Verified: `just check` green (ruff lint + format-check, mypy --strict,
-  pytest) — 293 passed (was 290; +3 new tests).
+  pytest): 293 passed (was 290; +3 new tests).
 
 ## Prompt Inventory
 
@@ -81,6 +81,6 @@
 
 ## Suggested Skills for Next Session
 
-- `python:python` — Step 2's next sub-items (2.5 `logging.getLogger`, 2.6
+- `python:python`: Step 2's next sub-items (2.5 `logging.getLogger`, 2.6
   `on_build_error` plugin dispatch, 2.7 shared error formatting) are Python
   module work under mypy strict.

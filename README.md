@@ -50,9 +50,9 @@ Add what you need as you go:
 - `bartleby new site --blog mysite` starts with a blog and a sample post.
 - `bartleby enable blog news` adds a blog to an existing site, and `bartleby disable news` turns it off.
   Each enabled blog publishes its own RSS and Atom feeds, plus one combined feed for the site.
+- `bartleby new post "Hello" --type news` writes a post into that blog.
+  New posts are drafts until you set `draft: false` in the front matter.
 - `bartleby config show`, `config get`, `config set`, and `--set key.path=value` read and change config without opening the file.
-
-New posts are drafts until you set `draft: false` in the front matter.
 
 The default theme is `scrivener`.
 Set `theme.name: material` in `bartleby.yml` to switch to the Material look.
@@ -124,9 +124,9 @@ The `Justfile` exposes individual targets too: `just lint`, `just typecheck`, `j
 
 ## Architecture
 
-Bartleby is 34 source modules under `src/bartleby/`, organised by build pipeline phase:
+Bartleby is 37 source modules under `src/bartleby/`, organised by build pipeline phase:
 
-- **Config layer**: `config.py`, `authors.py`, `errors.py`
+- **Config layer**: `config.py`, `authors.py`, `errors.py`, `config_schema.py` (every `bartleby.yml` key as data: path, type, default, choices, description), `config_edit.py` (the one writer behind `config set`, `enable`, and `new site --full-config`), `content_shapes.py` (the content-type shapes `bartleby enable` can add; blog is the only one)
 - **Content layer**: `content.py`, `metadata.py`, `urls.py`, `content_query.py`
 - **Rendering**: `markdown_pipeline.py`, `shortcodes.py`, `templates.py`, `crossrefs.py`
 - **Structure**: `navigation.py`, `taxonomies.py`, `listings.py`, `pagination.py`

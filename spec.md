@@ -163,12 +163,15 @@ Installed entries can be folded into plan.md per-section Tools blocks; not-insta
 
 ## Component boundaries
 
-The implementation is 34 single-responsibility modules under `src/bartleby/`, grouped by build-pipeline phase.
+The implementation is 37 single-responsibility modules under `src/bartleby/`, grouped by build-pipeline phase.
 
 Config layer:
 - `config.py`: load and validate `bartleby.yml`.
 - `authors.py`: author definition loading, validation, and resolution.
 - `errors.py`: the shared `file: key path: message (fix: hint)` formatter behind every structured error.
+- `config_schema.py`: every `bartleby.yml` key as data (path, type, default, choices, description), the single source for `--full-config`, `config schema`, and the configuration reference.
+- `config_edit.py`: the one comment-preserving writer behind `config set`, `enable`, and `new site --full-config`.
+- `content_shapes.py`: the content-type shapes `bartleby enable` can add to `bartleby.yml`; blog is the only one.
 
 Content layer:
 - `content.py`: content discovery, front matter parsing, and page data objects.

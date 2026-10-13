@@ -84,7 +84,7 @@ def test_rss_valid_xml() -> None:
     """The RSS feed parses cleanly as XML."""
     posts = [_post(source="blog/posts/a.md", title="A", date=datetime.date(2026, 3, 1))]
     xml = generate_rss(posts, "blog", _config().site)
-    ET.fromstring(xml)
+    assert ET.fromstring(xml).tag == "rss"
 
 
 def test_rss_channel_metadata() -> None:
@@ -137,7 +137,7 @@ def test_atom_valid_xml() -> None:
     """The Atom feed parses cleanly as XML."""
     posts = [_post(source="blog/posts/a.md", title="A", date=datetime.date(2026, 3, 1))]
     xml = generate_atom(posts, "blog", _config().site)
-    ET.fromstring(xml)
+    assert ET.fromstring(xml).tag == "{http://www.w3.org/2005/Atom}feed"
 
 
 def test_atom_entry_fields() -> None:

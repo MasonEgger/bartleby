@@ -30,7 +30,7 @@
 ## Efficiency Insights
 
 **What went well:**
-- Implement and validate already landed a clean, minimal diff (one new exception type, one index rebuilt as `dict[str, list[Page]]`, one `BuildError` translation site) — finalize had nothing to fix, just to package.
+- Implement and validate already landed a clean, minimal diff (one new exception type, one index rebuilt as `dict[str, list[Page]]`, one `BuildError` translation site): finalize had nothing to fix, just to package.
 
 **What could improve:**
 - Nothing notable for this step; it was a straightforward finalize.

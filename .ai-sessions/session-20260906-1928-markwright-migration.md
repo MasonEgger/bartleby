@@ -32,7 +32,7 @@
 ## Observations
 
 - This is a prerequisite fix outside the 20-defect remediation scope; it unblocks the cycle's `just check` gate.
-- R1's premise (Python 2 `except` syntax = SyntaxError) does not reproduce on Python 3.14 (PEP 758). The full spec (R2–R17) is being re-verified against 3.14 next, per Mason's decision, before the loop resumes. Step 1's uncommitted artifacts (`tests/test_import_health.py`, `todo.md` edits) are held for that phase.
+- R1's premise (Python 2 `except` syntax = SyntaxError) does not reproduce on Python 3.14 (PEP 758). The full spec (R2-R17) is being re-verified against 3.14 next, per Mason's decision, before the loop resumes. Step 1's uncommitted artifacts (`tests/test_import_health.py`, `todo.md` edits) are held for that phase.
 
 ## Suggested Skills for Next Session
 

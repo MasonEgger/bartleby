@@ -22,8 +22,8 @@
 ## Observations
 
 - 30 default extensions all import cleanly. Worth noting in case future Python versions drop support for any of pymdownx's older modules.
-- The `toc_tokens` attribute is set on the renderer instance after `.convert()` runs — accessing it via `getattr(..., [])` keeps mypy happy without an `Any` cast.
+- The `toc_tokens` attribute is set on the renderer instance after `.convert()` runs: accessing it via `getattr(..., [])` keeps mypy happy without an `Any` cast.
 
 ## Suggested Skills for Next Session
 
-- `python:python` — Step 8 implements the template system (Jinja2). More dataclasses, more YAML/TOML data loading, six-level lookup cascade. Same toolchain.
+- `python:python`: Step 8 implements the template system (Jinja2). More dataclasses, more YAML/TOML data loading, six-level lookup cascade. Same toolchain.

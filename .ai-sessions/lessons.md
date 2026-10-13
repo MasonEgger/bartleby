@@ -2,16 +2,16 @@
 
 ## Recent
 <!-- 10 most recent lessons, newest first -->
+- ruamel writes YAML 1.2 and PyYAML reads 1.1, so a string ruamel leaves plain (`Yes`, `on`, `1e3`) comes back a boolean or number through the loader. Before dumping a string, ask PyYAML's implicit resolver for its tag and double-quote anything that is not `str` (2026-10-12)
+- Rejecting duplicate YAML keys surfaces every fixture that appends a second `theme:` or `nav:` block to a config and relied on last-key-wins; twelve tests did. Grep for `read_text(...) + "\ntheme:` before tightening the loader, and build fixtures with `set_key` through a shared helper (2026-10-12)
+- A Python heredoc whose replacement strings are not raw turns `\ufeff` and `\n` into the literal characters in the edited file. Grep the touched files for `\x{FEFF}` and other non-keyboard characters after a scripted edit (2026-10-12)
+- When a string config key starts storing CLI text as typed, every hint and doc line that told users to wrap a value in `'"..."'` becomes wrong (the quotes get stored). Grep hints and guides for the old quoting advice when changing value typing (2026-10-12)
+- Labeling a parent-key error (`theme: set only one of name, path, or package`) as `--set` by ancestry alone relabels a file-only clash. Decide by reloading with the overrides beneath that key dropped: if the same error persists it is the file's, otherwise the override's (2026-10-12)
+- ruamel hangs the next key's comment on the last item of a sequence too, so appending to `nav` needs the same detach-and-reattach of the trailing comment token that `set_key` does for a mapping key; share the two helpers (2026-10-12)
 - A final gate's evidence file is itself a claim and gets audited like any other. A verdict that rests on a judgment (fit to show, stable enough to build on) is "met with a note" that names whose judgment it is (2026-10-12)
 - A clean-install walk is proof only when a second party repeats it with their own wheel and venv from outside the repo. The executor's walk and the validator's independent one both passed for Goal 8 (2026-10-12)
 - Start a correctness sweep from a grep for every bare coercion (`int(`, bool reads, list iteration) on raw config values. One unguarded `int()` was reported in Step 16 and fourteen more sites of the same shape sat beside it (2026-10-12)
 - A fix hint is itself a claim and must be true for its case. Two hints in Step 18 named fixes that could not work (an output_dir clause for a failure inside the project dir; shell quoting missing from a slug hint), so test that the hinted fix works (2026-10-12)
-- A theme that ships code highlighting must ship the token CSS. Two cycles of screenshot review missed it because monochrome code still looks like code; pin every token pair with a contrast test (2026-10-12)
-- Start a license audit from `find` over the shipped tree, not from the plan's list. Step 17's plan named one icon and three libraries; the tree held 24 more icons and an htmx notice mislabeled BSD-2 (it is Zero-Clause BSD) (2026-10-12)
-- Compare a reproduced license notice whitespace-normalized against the fetched upstream text. A dropped copyright holder (modern-normalize has three) or a stale year (Octicons) is invisible to a reader and still fails the license (2026-10-12)
-- Apache-2.0 material bundled inside an MIT package needs the license text shipped in the notices file, not a link to it (2026-10-12)
-- A reference page tied to a schema should hold a generated block between markers (`<!-- config-schema:begin/end -->`) that a test regenerates from `CONFIG_SCHEMA` and compares byte for byte. A hand-written table with a row-count test lets a default drift. Step 16 mutated the schema three ways to prove the test bites (2026-10-12)
-- Writing honest docs is a correctness pass. Stating exactly what an error does turned up a bare `ValueError` traceback from `int()` on `site.feed.limit` that the suite never caught, so write the docs claim before deciding the behavior is fine (2026-10-12)
 
 ## Architecture
 - A printed "next command" is a claim the user will paste, so build it with `shlex.quote` and test a site name with a space and one with a trailing slash. Step 15's first draft printed an unquoted path that broke on a space (2026-10-12)
@@ -23,11 +23,15 @@
 - Fix a lifecycle gap at the region, not at each raise site. The `on_build_error` then `on_shutdown` pairing was patched for one `BuildError` path in Step 23, again in Step 25, and a third time in Step 26 (missing `content/`, strict crossref, asset collision), because each fix named raise sites. A `_pair_failure_hooks` context manager around the whole post-startup region means a new raise cannot skip the hooks. Then scope the docs claim to the exact exception type (`BuildError`, not "failures"), since ThemeError, plugin exceptions, and OSError still pass through unpaired by contract. Give every path its own test, and note which ones are unreachable from the other entry point (strict crossref cannot run from export) (2026-10-10)
 
 ## Packaging
+- Apache-2.0 material bundled inside an MIT package needs the license text shipped in the notices file, not a link to it (2026-10-12)
+- Compare a reproduced license notice whitespace-normalized against the fetched upstream text. A dropped copyright holder (modern-normalize has three) or a stale year (Octicons) is invisible to a reader and still fails the license (2026-10-12)
+- Start a license audit from `find` over the shipped tree, not from the plan's list. Step 17's plan named one icon and three libraries; the tree held 24 more icons and an htmx notice mislabeled BSD-2 (it is Zero-Clause BSD) (2026-10-12)
 
 - For PEP 639 license metadata in pyproject.toml, use the SPDX expression string (`license = "MIT"`) plus `license-files = ["LICENSE"]`, not the deprecated table form (`license = { text = ... }`) or `License ::` classifiers; hatchling supports it and it is the current documented shape (2026-06-23)
 - Before refreshing a README "Status"/test-count section, pull live facts (`git log --reverse` for the first-commit date, `pytest --co | tail -1` for the test count) and cross-check the "deferred items" list against plan.md "Out of scope" rather than copying the stale original forward; the v1 hardening had already closed half the originally-listed deferrals (2026-06-23)
 
 ## Workflow
+- Writing honest docs is a correctness pass. Stating exactly what an error does turned up a bare `ValueError` traceback from `int()` on `site.feed.limit` that the suite never caught, so write the docs claim before deciding the behavior is fine (2026-10-12)
 - A feature tour is a test of the themes and the pipeline, not only of content. Step 14's tour exposed three features that rendered broken for every user who wrote them (content tabs in a shape neither theme styled, the critic source block processed itself, emoji as 64px blocks), so render every tour section in both themes before calling it done (2026-10-12)
 - A "source beside result" page must guard its source blocks from preprocessors that run before fences are protected. `pymdownx.critic` rewrote its own example, so the source is a raw HTML pre with entity-escaped markers (2026-10-12)
 - A tour's hook list in its test must map one to one onto the tour's claims. A loose hook (`data-prefix` covering three features) passes while any one of them breaks (2026-10-12)
@@ -93,6 +97,8 @@
 - Adding a second loop over the same collection inside one function and reusing the prior loop's variable name trips mypy: the first loop types the variable non-optional, so reassigning a `... | None` from `dict.get()` is an incompatible-assignment error. Pick a fresh variable name for the new loop (2026-06-23)
 
 ## Testing
+- A reference page tied to a schema should hold a generated block between markers (`<!-- config-schema:begin/end -->`) that a test regenerates from `CONFIG_SCHEMA` and compares byte for byte. A hand-written table with a row-count test lets a default drift. Step 16 mutated the schema three ways to prove the test bites (2026-10-12)
+- A theme that ships code highlighting must ship the token CSS. Two cycles of screenshot review missed it because monochrome code still looks like code; pin every token pair with a contrast test (2026-10-12)
 - A transport rewrite's acceptance test is a real end-to-end probe: scaffold a site, serve it, curl a page, open the WebSocket, hold an idle socket, make a bad edit, make a fixed edit, bind a busy port. Step 12's probe found two robustness defects that predated the rewrite (a labeled build error killed the watchdog thread silently; a busy port printed a raw traceback after a full build) and the unit suite had caught neither (2026-10-12)
 - A new filter over content types (here `enabled_content_types`) must be applied by grepping every consumer of the collection in `src/`, not the ones in mind: Step 7's first pass covered listings, feeds, and discovery, and missed `schema.json`, the generated skills, and taxonomies, three of them agent-facing (2026-10-12)
 - A value handed to a ruamel round-trip writer must itself be a ruamel type: a plain dict stops the comment-transfer walk at its boundary, so the comment above the next key was displaced. `set_key` now converts dict and list values first (2026-10-12)

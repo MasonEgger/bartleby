@@ -13,6 +13,7 @@ import yaml
 from bartleby.build import build
 from bartleby.cli import main
 from bartleby.config import load_config
+from bartleby.content_shapes import CONTENT_SHAPES, ContentShape
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -189,7 +190,7 @@ class TestDisable:
     def test_sets_enabled_false_and_keeps_the_block(self, project: Path) -> None:
         main(["enable", "blog", "tutorials"])
 
-        main(["disable", "blog", "tutorials"])
+        main(["disable", "tutorials"])
 
         block = _tutorials_block(project)
         assert block["enabled"] is False
@@ -204,7 +205,7 @@ class TestDisable:
         main(["config", "set", "content_types.tutorials.excerpt_separator", "<!-- cut -->"])
         main(["config", "set", "taxonomies.series.slug_format", '"{slug}"'])
         main(["config", "set", "content_types.tutorials.taxonomies", "[tags, series]"])
-        main(["disable", "blog", "tutorials"])
+        main(["disable", "tutorials"])
         capsys.readouterr()
 
         main(["enable", "blog", "tutorials", "--output", "json"])
@@ -220,7 +221,7 @@ class TestDisable:
 
     def test_enable_on_an_enabled_instance_after_a_flip_is_a_no_op(self, project: Path) -> None:
         main(["enable", "blog", "tutorials"])
-        main(["disable", "blog", "tutorials"])
+        main(["disable", "tutorials"])
         main(["enable", "blog", "tutorials"])
         first = _config_file(project)
 
@@ -230,10 +231,10 @@ class TestDisable:
 
     def test_second_run_changes_nothing(self, project: Path) -> None:
         main(["enable", "blog", "tutorials"])
-        main(["disable", "blog", "tutorials"])
+        main(["disable", "tutorials"])
         first = _config_file(project)
 
-        main(["disable", "blog", "tutorials"])
+        main(["disable", "tutorials"])
 
         assert _config_file(project) == first
 
@@ -243,29 +244,97 @@ class TestDisable:
         before = _config_file(project)
 
         with pytest.raises(SystemExit) as raised:
-            main(["disable", "blog", "tutorials"])
+            main(["disable", "tutorials"])
 
         assert raised.value.code != 0
         assert "tutorials" in capsys.readouterr().err
         assert _config_file(project) == before
 
-    def test_unknown_shape_exits_non_zero(self, project: Path) -> None:
-        with pytest.raises(SystemExit) as raised:
-            main(["disable", "podcast", "shows"])
+    def test_takes_only_a_name(self, project: Path) -> None:
+        """``disable`` has no shape positional; a second word is an argparse usage error."""
+        main(["enable", "blog", "tutorials"])
 
-        assert raised.value.code != 0
+        with pytest.raises(SystemExit) as raised:
+            main(["disable", "blog", "tutorials"])
+
+        assert raised.value.code == 2
+        assert load_config(project / "bartleby.yml").content_types["tutorials"].enabled is True
+
+    def test_json_output_carries_no_shape(
+        self, project: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        main(["enable", "blog", "tutorials"])
+        capsys.readouterr()
+
+        main(["disable", "tutorials", "--output", "json"])
+
+        payload = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+        assert payload["action"] == "disable"
+        assert payload["enabled"] is False
+        assert "shape" not in payload
 
 
 class TestRejectedResultLeavesFileUntouched:
-    def test_enable_into_an_invalid_config_does_not_write(self, project: Path) -> None:
-        """A config that fails validation stops enable before any write."""
-        (project / "bartleby.yml").write_text("site:\n  title: T\n", encoding="utf-8")
+    def test_enable_whose_merged_config_fails_validation_does_not_write(
+        self, project: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A merge result the validator rejects is never written; the file stays as it was.
+
+        The site config is valid on its own, so the failure is the merged text's, and the
+        guard between validation and the write is what keeps the file untouched.
+        """
+        bogus = ContentShape(path_suffix="posts", settings={"feeds": ["bogus"]}, taxonomies={})
+        monkeypatch.setitem(CONTENT_SHAPES, "blog", bogus)
         before = _config_file(project)
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as raised:
             main(["enable", "blog", "tutorials"])
 
+        assert raised.value.code == 1
         assert _config_file(project) == before
+
+
+class TestNavEntry:
+    def test_enable_appends_a_nav_entry_when_nav_is_explicit(self, project: Path) -> None:
+        """A site with a ``nav`` gets ``- Tutorials: tutorials/`` so the listing is reachable."""
+        main(["enable", "blog", "tutorials"])
+
+        parsed = yaml.safe_load(_config_file(project))
+        assert parsed["nav"] == [{"Home": "index.md"}, {"Tutorials": "tutorials/"}]
+        assert "# Pages of the home site." in _config_file(project)
+
+    def test_enable_titles_a_hyphenated_name_by_words(self, project: Path) -> None:
+        main(["enable", "blog", "field-notes"])
+
+        parsed = yaml.safe_load(_config_file(project))
+        assert parsed["nav"][-1] == {"Field Notes": "field-notes/"}
+
+    def test_enable_leaves_an_existing_entry_alone(self, project: Path) -> None:
+        """An entry that already links to the type is not duplicated, nested ones included."""
+        main(["config", "set", "nav", "[{Home: index.md}, {More: [{Tutorials: tutorials/}]}]"])
+
+        main(["enable", "blog", "tutorials"])
+
+        parsed = yaml.safe_load(_config_file(project))
+        assert parsed["nav"] == [{"Home": "index.md"}, {"More": [{"Tutorials": "tutorials/"}]}]
+
+    def test_enable_adds_no_nav_when_the_site_has_none(self, project: Path) -> None:
+        """Auto-navigation stays auto: no ``nav`` key appears."""
+        (project / "bartleby.yml").write_text(
+            "site:\n  title: Sample\n  url: https://example.com\n", encoding="utf-8"
+        )
+
+        main(["enable", "blog", "tutorials"])
+
+        assert "nav" not in yaml.safe_load(_config_file(project))
+
+    def test_disable_leaves_the_nav_entry_in_place(self, project: Path) -> None:
+        main(["enable", "blog", "tutorials"])
+        before = yaml.safe_load(_config_file(project))["nav"]
+
+        main(["disable", "tutorials"])
+
+        assert yaml.safe_load(_config_file(project))["nav"] == before
 
 
 class TestBuild:
@@ -286,7 +355,7 @@ class TestBuild:
     def test_disabled_type_drops_listing_pages_and_feeds(self, project: Path) -> None:
         main(["enable", "blog", "tutorials"])
         _add_post(project, "tutorials/posts/intro.md", "Intro Tutorial")
-        main(["disable", "blog", "tutorials"])
+        main(["disable", "tutorials"])
 
         build(project / "bartleby.yml")
 
@@ -304,7 +373,7 @@ class TestBuild:
         build(project / "bartleby.yml")
         assert (project / "site" / "tutorials" / "feed.xml").is_file()
 
-        main(["disable", "blog", "tutorials"])
+        main(["disable", "tutorials"])
         build(project / "bartleby.yml")
 
         assert not (project / "site" / "tutorials").exists()
@@ -314,7 +383,7 @@ class TestBuild:
         main(["enable", "blog", "speaking"])
         _add_post(project, "tutorials/posts/intro.md", "Intro Tutorial")
         _add_post(project, "speaking/posts/talk.md", "A Talk")
-        main(["disable", "blog", "tutorials"])
+        main(["disable", "tutorials"])
 
         build(project / "bartleby.yml")
 
@@ -327,8 +396,7 @@ class TestBuild:
         self, project: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
         main(["enable", "blog", "tutorials"])
-        main(["config", "set", "nav", "[{Home: index.md}, {Tutorials: tutorials/}]"])
-        main(["disable", "blog", "tutorials"])
+        main(["disable", "tutorials"])
 
         with caplog.at_level(logging.WARNING, logger="bartleby"):
             build(project / "bartleby.yml")
@@ -342,7 +410,7 @@ class TestBuild:
         main(["enable", "blog", "tutorials"])
         main(["config", "set", "taxonomies.series.slug_format", '"{slug}"'])
         main(["config", "set", "content_types.tutorials.taxonomies", "[series]"])
-        main(["disable", "blog", "tutorials"])
+        main(["disable", "tutorials"])
 
         build(project / "bartleby.yml")
 

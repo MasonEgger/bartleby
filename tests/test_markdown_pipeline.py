@@ -12,7 +12,7 @@ import markwright
 import pytest
 from markwright import ConfigWarning, config_from_mapping, selected_extensions
 
-from bartleby import markdown_pipeline
+from bartleby import config as config_module
 from bartleby.config import (
     AIConfig,
     BartlebyConfig,
@@ -263,15 +263,19 @@ def test_markwright_extensions_load_before_pymdownx(
     assert loaded.index("markwright.fence") < loaded.index("pymdownx.superfences")
 
 
-def test_invalid_markwright_option_raises_a_sourced_config_error() -> None:
-    """Markwright's own validation error comes back labelled with bartleby.yml and the key."""
+def test_invalid_markwright_option_raises_a_config_error_under_the_markwright_key() -> None:
+    """Markwright's own validation error comes back under the ``markwright`` key.
+
+    The source is left for ``load_config`` to attach, so a ``--config other.yml`` or a
+    ``--set`` override is named correctly instead of a hard-coded ``bartleby.yml``.
+    """
     with pytest.raises(ConfigError) as exc_info:
         create_markdown_renderer(_config(markwright={"youtube": {"bogus": 1}}))
     error = exc_info.value
-    assert error.source == "bartleby.yml"
+    assert error.source is None
     assert error.key_path == "markwright"
     assert error.hint
-    assert str(error).startswith("bartleby.yml: markwright: [youtube] unknown option 'bogus'")
+    assert str(error).startswith("markwright: [youtube] unknown option 'bogus'")
 
 
 def test_markwright_option_error_for_a_bad_value_is_translated() -> None:
@@ -291,7 +295,7 @@ def test_section_goes_to_config_from_mapping_and_options_reach_the_extensions(
         seen_tables.append(table)
         return config_from_mapping(table, source)
 
-    monkeypatch.setattr(markdown_pipeline, "config_from_mapping", record_table)
+    monkeypatch.setattr(config_module, "config_from_mapping", record_table)
 
     renderer = create_markdown_renderer(_config(markwright=section))
     html = render_markdown("[youtube dQw4w9WgXcQ]", renderer).html

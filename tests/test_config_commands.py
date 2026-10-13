@@ -205,6 +205,164 @@ class TestSet:
 
         assert (project / "bartleby.yml").read_text(encoding="utf-8") == SAMPLE
 
+    @pytest.mark.parametrize(
+        ("key", "suggestion"),
+        [("dev_server.prot", "dev_server.port"), ("site.titel", "site.title")],
+    )
+    def test_rejects_an_unknown_nested_key_naming_the_closest_one(
+        self, project: Path, capsys: pytest.CaptureFixture[str], key: str, suggestion: str
+    ) -> None:
+        with pytest.raises(SystemExit) as exc:
+            main(["config", "set", key, "9000"])
+
+        assert exc.value.code == 1
+        error = capsys.readouterr().err
+        assert f"{key}: unknown key" in error
+        assert f"did you mean '{suggestion}'" in error
+        assert (project / "bartleby.yml").read_text(encoding="utf-8") == SAMPLE
+
+    @pytest.mark.parametrize("value", ["Yes", "Hello: World", "2026-01-01", "42"])
+    def test_keeps_a_string_value_as_typed(
+        self, project: Path, capsys: pytest.CaptureFixture[str], value: str
+    ) -> None:
+        """A string key is never YAML-typed: the text round-trips through set and get."""
+        main(["config", "set", "site.title", value])
+        capsys.readouterr()
+
+        main(["config", "get", "site.title"])
+
+        assert capsys.readouterr().out == f"{value}\n"
+        assert yaml.safe_load((project / "bartleby.yml").read_text())["site"]["title"] == value
+
+    def test_rejects_a_value_of_the_wrong_type_naming_the_expected_one(
+        self, project: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        with pytest.raises(SystemExit) as exc:
+            main(["config", "set", "site.feed.enabled", "yes please"])
+
+        assert exc.value.code == 1
+        error = capsys.readouterr().err
+        assert "site.feed.enabled: must be true or false" in error
+        assert (project / "bartleby.yml").read_text(encoding="utf-8") == SAMPLE
+
+    def test_empty_string_value_unsets_the_key_to_its_default(
+        self, project: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        main(["config", "set", "site.description", ""])
+        capsys.readouterr()
+
+        rows = _show_rows(capsys)
+
+        assert rows["site.description"]["value"] == ""
+        assert "None" not in (project / "bartleby.yml").read_text(encoding="utf-8")
+
+    def test_keeps_yaml_typing_under_an_open_mapping(self, project: Path) -> None:
+        main(["config", "set", "markwright.disable", "[twitter]"])
+
+        text = (project / "bartleby.yml").read_text(encoding="utf-8")
+        assert yaml.safe_load(text)["markwright"] == {"disable": ["twitter"]}
+
+    def test_rejects_a_bad_markwright_section_without_writing(self, project: Path) -> None:
+        """markwright validates at config-set time, so a build is never the first to fail."""
+        with pytest.raises(SystemExit):
+            main(["config", "set", "markwright.enable", "[nonexistent_ext]"])
+
+        assert (project / "bartleby.yml").read_text(encoding="utf-8") == SAMPLE
+
+    def test_date_value_under_an_open_mapping_prints_as_text(
+        self, project: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A YAML date never reaches json.dumps as a date object."""
+        main(["config", "set", "theme.tokens.release", "2026-01-01", "--output", "json"])
+
+        assert _json_payload(capsys)["value"] == "2026-01-01"
+
+    def test_duplicate_key_in_the_file_is_a_labeled_error(
+        self, project: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        (project / "bartleby.yml").write_text(SAMPLE + "  title: Twice\n", encoding="utf-8")
+
+        with pytest.raises(SystemExit) as exc:
+            main(["config", "set", "site.url", "https://x.test"])
+
+        assert exc.value.code == 1
+        error = capsys.readouterr().err
+        assert "bartleby.yml" in error
+        assert "duplicate" in error
+        assert "line" in error
+
+    def test_tab_indent_in_the_file_is_a_labeled_error(
+        self, project: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        (project / "bartleby.yml").write_text("site:\n\ttitle: T\n", encoding="utf-8")
+
+        with pytest.raises(SystemExit) as exc:
+            main(["config", "set", "site.url", "https://x.test"])
+
+        assert exc.value.code == 1
+        assert "bartleby.yml: invalid YAML at line 2" in capsys.readouterr().err
+
+    def test_read_only_file_is_a_labeled_error(
+        self, project: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        config_path = project / "bartleby.yml"
+        config_path.chmod(0o444)
+        try:
+            with pytest.raises(SystemExit) as exc:
+                main(["config", "set", "site.title", "X"])
+        finally:
+            config_path.chmod(0o644)
+
+        assert exc.value.code == 1
+        assert "error [config_error] " in capsys.readouterr().err
+        assert config_path.read_text(encoding="utf-8") == SAMPLE
+
+    def test_config_pointing_at_a_directory_is_a_labeled_error(
+        self, project: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        with pytest.raises(SystemExit) as exc:
+            main(["config", "set", "site.title", "X", "--config", "."])
+
+        assert exc.value.code == 1
+        assert "error [config_error] " in capsys.readouterr().err
+
+
+class TestDottedTokenSet:
+    def test_set_get_and_show_agree_on_a_dotted_token_name(
+        self, project: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """``theme.tokens.color.primary`` is one flat key, not nested mappings."""
+        main(["config", "set", "theme.tokens.color.primary", "red"])
+        capsys.readouterr()
+
+        text = (project / "bartleby.yml").read_text(encoding="utf-8")
+        assert yaml.safe_load(text)["theme"]["tokens"] == {"color.primary": "red"}
+
+        main(["config", "get", "theme.tokens.color.primary"])
+        assert capsys.readouterr().out == "red\n"
+
+        rows = _show_rows(capsys)
+        assert rows["theme.tokens.color.primary"] == {
+            "path": "theme.tokens.color.primary",
+            "value": "red",
+            "source": "file",
+        }
+
+    def test_set_override_of_a_dotted_token_reads_back(
+        self, project: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        main(
+            [
+                "config",
+                "get",
+                "theme.tokens.color.primary",
+                "--set",
+                "theme.tokens.color.primary=red",
+            ]
+        )
+
+        assert capsys.readouterr().out == "red\n"
+
 
 class TestSchema:
     def test_json_has_one_object_per_schema_field(

@@ -18,6 +18,7 @@ from bartleby.theme_loader import (
     resolve_theme,
 )
 from bartleby.themes import bundled_theme_root
+from tests.config_helpers import replace_top_level_keys
 from tests.theme_helpers import material_theme
 
 THEMES = Path(__file__).parent / "fixtures" / "themes"
@@ -29,11 +30,7 @@ def _project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, theme_path: Path |
     main(["new", "site", "mysite"])
     project = tmp_path / "mysite"
     if theme_path is not None:
-        config = project / "bartleby.yml"
-        config.write_text(
-            config.read_text(encoding="utf-8") + f"\ntheme:\n  path: {theme_path}\n",
-            encoding="utf-8",
-        )
+        replace_top_level_keys(project / "bartleby.yml", f"theme:\n  path: {theme_path}\n")
     monkeypatch.chdir(project)
     return project
 
@@ -253,10 +250,9 @@ class TestEjectEditBuild:
         main(["theme", "eject"])
         ejected = next((project / "themes").iterdir())
 
-        config = project / "bartleby.yml"
-        text = config.read_text(encoding="utf-8")
-        text = text.split("\ntheme:\n")[0]
-        config.write_text(f"{text}\ntheme:\n  path: themes/{ejected.name}\n", encoding="utf-8")
+        replace_top_level_keys(
+            project / "bartleby.yml", f"theme:\n  path: themes/{ejected.name}\n"
+        )
         page = ejected / "templates" / "page.html"
         page.write_text(
             page.read_text(encoding="utf-8").replace("<p>", "<p>EJECTED-EDIT-MARKER "),
@@ -279,9 +275,7 @@ class TestEjectEditBuild:
         main(["new", "site", "mysite"])
         project = tmp_path / "mysite"
         config = project / "bartleby.yml"
-        config.write_text(
-            config.read_text(encoding="utf-8") + "\ntheme:\n  name: material\n", encoding="utf-8"
-        )
+        replace_top_level_keys(config, "theme:\n  name: material\n")
         monkeypatch.chdir(project)
         main(["theme", "eject"])
         ejected = project / "themes" / "material"

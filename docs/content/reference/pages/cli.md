@@ -37,7 +37,7 @@ bartleby new site NAME [--full-config] [--blog]
 Creates `NAME/` containing `bartleby.yml`, `content/index.md`, and a feature tour at `content/tour/index.md`.
 It also creates empty `templates/`, `static/`, and `hooks/` directories.
 The generated config holds only what the site needs to build and defines no content types.
-`--full-config` writes a `bartleby.yml` that lists every option with its description as a comment, in place of the minimal config.
+`--full-config` writes a `bartleby.yml` that lists every option with its description as a comment, on top of the minimal config: the site name, `nav`, and theme features are kept, and `content_types` and `taxonomies` appear as a commented-out example, so the site builds the same pages either way.
 `--blog` also adds the blog content type, the `tags` taxonomy, a `nav` entry, a sample post at `content/blog/posts/welcome.md`, and `.authors.yml`.
 Fails if `NAME` already exists.
 
@@ -73,6 +73,7 @@ bartleby new post TITLE [--type TYPE]
 The command slugifies the title to name the file, and writes it to the content type's `path` under `content/`.
 The front matter stub holds `title`, `date` (today, in ISO format), and `draft: true`.
 Fails if the content type is not declared in `bartleby.yml`, or if the file already exists.
+A disabled content type is a usage error whose fix line reads `run bartleby enable blog <name>`, because nothing would build the post.
 
 ## `bartleby build`
 
@@ -87,10 +88,13 @@ bartleby build [--include-drafts] [--strict] [--dry-run] [--set KEY.PATH=VALUE] 
 - `--dry-run` renders into a temporary directory, compares the result with the existing `site/`, and reports what would change.
   It writes nothing.
 - `--set KEY.PATH=VALUE` overrides one config value for this run.
-  The value parses as YAML, and the flag repeats.
+  The key must be one that `bartleby config schema` lists, or sit under an open mapping such as `markwright` or `theme.tokens`; an unknown key is an error that names the closest known key.
+  A string key takes the text as typed, and every other key parses the value as YAML and checks its type, so `--set site.title=Yes` sets the title to the text `Yes` and `--set dev_server.port=notaport` is an error.
+  The flag repeats.
   An error that comes from an override names `--set` as its source, as in `error [config_error] --set: theme.features: unknown feature 'bogus' ...`.
 - `--base-url URL` overrides `site.url` for this run, and wins over a `--set site.url=...`.
   Canonical and absolute URLs use it.
+  The value must be an absolute `http` or `https` URL with a host.
 
 Output goes to `site/` next to `bartleby.yml`, or to the directory named by `output_dir`.
 The new output replaces the old one only when the whole build succeeds.
@@ -200,6 +204,7 @@ bartleby schema TARGET
 ```
 
 `TARGET` is a content type name, `authors`, or `taxonomies`.
+A disabled content type prints `enabled: false` under its first line, and its JSON carries `"enabled": false`.
 See [Agent output formats](agent-surface.md#bartleby-schema) for the output shapes.
 
 ## `bartleby content`
@@ -293,9 +298,13 @@ An unknown key exits with code `2`, names the key, and points at `config show` a
 bartleby config set KEY VALUE
 ```
 
-Write one value into `bartleby.yml`, keeping its comments and key order.
-`VALUE` is parsed as YAML, so `9000` is an integer.
-The command validates the edited config before it writes, so a rejected value leaves the file untouched.
+Write one value into `bartleby.yml`, keeping its comments, key order, byte order mark, and line endings.
+`KEY` must be one that `config schema` lists, a section such as `content_types.blog`, or a key under an open mapping (`markwright`, `theme.tokens`, `theme.icon_packs`, `ai.robots`); any other key is an error that names the closest known key.
+A string key stores `VALUE` as typed, so `Yes` and `Hello: World` stay text, and an empty value unsets the key.
+Every other key parses `VALUE` as YAML, so `9000` is an integer, and a value of the wrong type is an error that names the expected one.
+A token name keeps its dots: `config set theme.tokens.color.primary red` writes the one key `color.primary`.
+The command validates the edited config before it writes, the `markwright` section included, so a rejected value leaves the file untouched.
+The write replaces the file in one step, and a read-only file or an unwritable directory is a `config_error`, as are a repeated key or a tab indent in the file.
 On success, it prints `Set KEY to VALUE in bartleby.yml`, or says the value is already set.
 
 ### `bartleby config schema`
@@ -319,7 +328,8 @@ Add a content type to `bartleby.yml`.
 `SHAPE` is the kind of content type; `blog` is the only one.
 `NAME` is the type's name, such as `tutorials`, and the new block uses `NAME/posts` as its path.
 The block carries `feeds: [rss, atom]`, and the command adds the `tags` taxonomy when the site lacks it.
-The command creates no content directory and adds no `nav` entry.
+When `bartleby.yml` has an explicit `nav` with no entry for the type, the command appends `- NAME: NAME/` (the name as a title, so `field-notes` becomes `Field Notes`) so the listing is reachable; a site without `nav` builds its navigation from the content tree.
+The command creates no content directory.
 A site may enable the same shape under several names.
 If the name is already defined and enabled, the command changes nothing and says so.
 If it is defined but disabled, the command sets `enabled: true` on it and leaves every other key as it was.
@@ -330,14 +340,15 @@ See [Enable Content Types](../../guides/posts/enable-content-types.md).
 ## `bartleby disable`
 
 ```
-bartleby disable SHAPE NAME
+bartleby disable NAME
 ```
 
 Stop building the content type `NAME` by setting `enabled: false` on it.
-`SHAPE` is the same value `enable` takes.
-The block stays in `bartleby.yml`.
+The command takes no shape, because the block is already in `bartleby.yml`.
+The block and any `nav` entry stay in `bartleby.yml`; the next build warns about a `nav` entry that links to the disabled type.
 The build skips the type's pages, listing, and feeds, and the type drops out of the site feed.
 A name that `bartleby.yml` does not define exits with code `2`.
+With `--output json`, the result has `status`, `action`, `name`, `file`, `enabled`, and `changed`, and no `shape`.
 To turn the type back on, run `bartleby enable SHAPE NAME` again.
 
 ## `bartleby theme`

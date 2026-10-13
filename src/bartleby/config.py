@@ -15,11 +15,15 @@ all follow this shape, so tests assert on substrings of it, not exact strings.
 
 from __future__ import annotations
 
+import datetime
 import difflib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
 import yaml
+from markwright import ConfigError as MarkwrightConfigError
+from markwright import config_from_mapping
 
 from bartleby.errors import format_error
 from bartleby.theme_loader import DEFAULT_THEME_NAME, THEME_FEATURES
@@ -27,6 +31,8 @@ from bartleby.theme_loader import DEFAULT_THEME_NAME, THEME_FEATURES
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
+
+    from markwright import Config as MarkwrightConfig
 
 
 _RENAMED_FEATURES: dict[str, str] = {
@@ -64,6 +70,12 @@ FEED_FORMATS: tuple[str, ...] = ("rss", "atom")
 
 COLOR_MODES: tuple[str, ...] = ("light", "dark")
 """The values ``theme.color_mode.default`` accepts."""
+
+DOTTED_KEY_SECTIONS: tuple[str, ...] = ("theme.tokens",)
+"""Mappings whose keys contain dots (``color.primary``), so a path under one is not split."""
+
+MARKWRIGHT_KEY = "markwright"
+"""The top-level key that carries markwright's own config table."""
 
 
 class ConfigError(Exception):
@@ -132,6 +144,17 @@ def _check_choices(values: list[str], choices: tuple[str, ...], key_path: str) -
                 key_path=key_path,
                 hint=f"use one of {', '.join(choices)}",
             )
+
+
+def _string_field(raw: dict[str, Any], key: str, default: str) -> str:
+    """Read a string key; ``None`` or absent yields ``default``, anything else is ``str()``-ed.
+
+    :param raw: The mapping that holds the key.
+    :param key: The key to read.
+    :param default: The value for an absent or null key.
+    """
+    value = raw.get(key)
+    return default if value is None else str(value)
 
 
 def _bool_field(raw: dict[str, Any], key: str, default: bool, parent_key: str) -> bool:
@@ -347,8 +370,8 @@ class BartlebyConfig:
     """Root configuration object representing a fully-parsed ``bartleby.yml``.
 
     :ivar markwright: The ``markwright:`` section exactly as written. It has the shape of a
-        ``markwright.toml`` and is validated by markwright's own config API at render time
-        (:func:`bartleby.markdown_pipeline.create_markdown_renderer`), never here.
+        ``markwright.toml``; :func:`markwright_config` has already validated it through
+        markwright's own config API, and the renderer resolves it again from here.
     """
 
     site: SiteConfig
@@ -381,11 +404,18 @@ OVERRIDE_SOURCE = "--set"
 def split_path(dotted_path: str) -> list[str]:
     """Split a dotted key path into its segments.
 
+    A path under a :data:`DOTTED_KEY_SECTIONS` mapping keeps its tail as one segment:
+    ``theme.tokens.color.primary`` is ``["theme", "tokens", "color.primary"]``.
+
     :param dotted_path: A path such as ``site.feed.limit``.
     :returns: The segments, in order.
     :raises ConfigError: If the path is empty or has an empty segment.
     """
     segments = dotted_path.split(".")
+    for section in DOTTED_KEY_SECTIONS:
+        prefix = section.split(".")
+        if segments[: len(prefix)] == prefix and len(segments) > len(prefix):
+            segments = [*prefix, ".".join(segments[len(prefix) :])]
     if not all(segments):
         raise ConfigError(
             f"invalid key path {dotted_path!r}",
@@ -427,7 +457,8 @@ def existing_prefix[Mapping: dict[str, Any]](
 def parse_override_value(dotted_path: str, text: str) -> Any:
     """Parse the text of a ``--set`` or ``config set`` value as YAML.
 
-    ``42`` is an int, ``true`` a bool, ``[a, b]`` a list, and empty text null.
+    ``42`` is an int, ``true`` a bool, ``[a, b]`` a list, and empty text null. A date
+    or timestamp is carried as its ISO text, since no config key holds a date.
 
     :param dotted_path: The key the value is for; named in the error.
     :param text: The value as the user typed it.
@@ -435,30 +466,36 @@ def parse_override_value(dotted_path: str, text: str) -> Any:
     :raises ConfigError: If ``text`` is not valid YAML.
     """
     try:
-        return yaml.safe_load(text)
+        value = yaml.load(text, Loader=_StrictLoader)
     except yaml.YAMLError as exc:
         raise ConfigError(
-            f"value {text!r} is not valid YAML{_yaml_location(exc)}",
+            f"value {text!r} is not valid YAML{yaml_location(exc)}",
             key_path=dotted_path,
             hint="wrap the value in quotes, such as '\"Hello: World\"'",
         ) from exc
+    return value.isoformat() if isinstance(value, datetime.date) else value
 
 
 def apply_overrides(raw: dict[str, Any], sets: list[str]) -> dict[str, Any]:
     """Apply ``key.path=value`` overrides to a raw config mapping, in order.
 
-    Each value is parsed as YAML, so ``42`` is an int, ``true`` a bool, ``[a, b]`` a
-    list, and an empty value null. A dotted path creates the mappings it passes
-    through, and a key set twice keeps the last value. The result still goes through
-    the normal validator; :func:`load_config` labels any error it raises for an
-    overridden key with ``--set`` as its source.
+    Each value is typed by the schema (:func:`bartleby.config_schema.override_value`):
+    a string key keeps the text as typed, and any other key parses it as YAML, so
+    ``42`` is an int, ``true`` a bool, ``[a, b]`` a list, and an empty value null. A
+    dotted path creates the mappings it passes through, and a key set twice keeps the
+    last value. The result still goes through the normal validator; :func:`load_config`
+    labels any error it raises for an overridden key with ``--set`` as its source.
 
     :param raw: The parsed config mapping; mutated in place.
     :param sets: Overrides written ``key.path=value``.
     :returns: ``raw``.
-    :raises ConfigError: If an override has no ``=``, a malformed path or YAML value,
-        or passes through a key that holds a non-mapping.
+    :raises ConfigError: If an override has no ``=``, names a key the schema lacks, has a
+        malformed path or a value of the wrong type, or passes through a non-mapping.
     """
+    # config_schema reads this module's defaults at import, so the typed parser is
+    # imported at call time to keep the module graph one-directional.
+    from bartleby.config_schema import override_value
+
     for token in sets:
         dotted_path, separator, text = token.partition("=")
         if not separator:
@@ -468,7 +505,7 @@ def apply_overrides(raw: dict[str, Any], sets: list[str]) -> dict[str, Any]:
                 source=OVERRIDE_SOURCE,
             )
         try:
-            value = parse_override_value(dotted_path, text)
+            value = override_value(dotted_path, text)
             segments = split_path(dotted_path)
             holder, depth = existing_prefix(raw, segments)
         except ConfigError as exc:
@@ -542,22 +579,46 @@ def load_config(config_path: Path, overrides: list[str] | None = None) -> Bartle
         key beneath it) names ``--set`` as its source instead of the file.
     :returns: A fully parsed and validated :class:`BartlebyConfig`.
     :raises FileNotFoundError: If ``config_path`` does not exist.
-    :raises ConfigError: If the file is empty, malformed, or fails validation.
+    :raises ConfigError: If the file cannot be read, is empty, malformed, or fails validation.
     """
     if not config_path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
+    sets = overrides or []
     try:
-        return _load_config_text(config_path, overrides or [])
+        return _load_config_text(config_path, sets)
     except ConfigError as exc:
         if exc.source is None:
-            overridden = (token.partition("=")[0] for token in overrides or [])
             exc.source = (
-                OVERRIDE_SOURCE
-                if any(same_branch(exc.key_path, path) for path in overridden)
-                else config_path
+                OVERRIDE_SOURCE if _override_at_fault(exc, config_path, sets) else config_path
             )
         raise
+
+
+def _override_at_fault(exc: ConfigError, config_path: Path, overrides: list[str]) -> bool:
+    """Whether a validation error is down to a ``--set`` override rather than the file.
+
+    An error at or under an override path is the override's. An error on a parent of
+    an override path (``theme: set only one of name, path, or package``) is the
+    override's only when the file, loaded with every override under that parent
+    dropped, no longer raises it.
+    """
+    key_path = exc.key_path
+    override_paths = [token.partition("=")[0] for token in overrides]
+    if any(same_branch(key_path, path) for path in override_paths):
+        return True
+    if key_path is None or not any(same_branch(path, key_path) for path in override_paths):
+        return False
+
+    # Reload without the overrides beneath the failing key to see whether the file alone raises it.
+    unrelated = [
+        token for token in overrides if not same_branch(token.partition("=")[0], key_path)
+    ]
+    try:
+        _load_config_text(config_path, unrelated)
+    except ConfigError as file_exc:
+        return (file_exc.key_path, file_exc.message) != (exc.key_path, exc.message)
+    return True
 
 
 def validate_config_text(text: str, config_path: Path) -> None:
@@ -586,18 +647,56 @@ def same_branch(key_path: str | None, override_path: str) -> bool:
     return key_path == override_path or key_path.startswith(f"{override_path}.")
 
 
+def read_config_text(config_path: Path) -> str:
+    """Read ``bartleby.yml`` exactly as written: byte order mark and line endings kept.
+
+    The one place the config file is read, so an unreadable path is one error.
+
+    :param config_path: The file to read.
+    :returns: The file text.
+    :raises ConfigError: If the path is a directory or cannot be read.
+    """
+    try:
+        with config_path.open(encoding="utf-8", newline="") as handle:
+            return handle.read()
+    except OSError as exc:
+        raise ConfigError(
+            f"cannot read config file ({exc.strerror or exc})",
+            hint="pass --config with the path to a readable bartleby.yml file",
+            source=config_path,
+        ) from exc
+
+
+class _StrictLoader(yaml.SafeLoader):
+    """A SafeLoader that rejects a mapping with two equal keys instead of keeping the last."""
+
+    def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict[Any, Any]:
+        seen: set[str] = set()
+        for key_node, _value_node in node.value:
+            if not isinstance(key_node, yaml.ScalarNode):
+                continue
+            key = self.construct_scalar(key_node)
+            if key in seen:
+                raise ConfigError(
+                    f"duplicate key {key!r} at line {key_node.start_mark.line + 1}",
+                    hint=f"keep one `{key}:` line; the later one replaces the earlier",
+                )
+            seen.add(key)
+        return super().construct_mapping(node, deep)
+
+
 def _read_raw_config(config_path: Path) -> dict[str, Any]:
     """Read ``config_path`` as a YAML mapping; the caller attaches the source."""
-    return _parse_raw_text(config_path.read_text(encoding="utf-8"))
+    return _parse_raw_text(read_config_text(config_path))
 
 
 def _parse_raw_text(raw_text: str) -> dict[str, Any]:
     """Parse config text as a YAML mapping; the caller attaches the source."""
     try:
-        parsed: Any = yaml.safe_load(raw_text)
+        parsed: Any = yaml.load(raw_text.removeprefix("\ufeff"), Loader=_StrictLoader)
     except yaml.YAMLError as exc:
         raise ConfigError(
-            f"invalid YAML{_yaml_location(exc)}",
+            f"invalid YAML{yaml_location(exc)}",
             hint="fix the syntax at that line (check indentation, quotes, and brackets)",
         ) from exc
 
@@ -629,8 +728,11 @@ def _validate_raw(parsed: dict[str, Any], config_dir: Path) -> BartlebyConfig:
     return config
 
 
-def _yaml_location(exc: yaml.YAMLError) -> str:
-    """Return `` at line N`` for a YAML syntax error that carries a position."""
+def yaml_location(exc: Exception) -> str:
+    """Return `` at line N`` for a PyYAML or ruamel error that carries a position.
+
+    :param exc: The YAML error; one without a ``problem_mark`` yields an empty string.
+    """
     mark = getattr(exc, "problem_mark", None)
     return f" at line {mark.line + 1}" if mark is not None else ""
 
@@ -677,7 +779,7 @@ def _parse_config(raw: dict[str, Any], config_dir: Path) -> BartlebyConfig:
         site=_parse_site(raw.get("site")),
         nav=nav,
         theme=_parse_theme(raw.get("theme")),
-        authors_file=str(raw.get("authors_file", ".authors.yml")),
+        authors_file=_string_field(raw, "authors_file", ".authors.yml"),
         content_types=_parse_content_types(raw.get("content_types")),
         taxonomies=_parse_taxonomies(raw.get("taxonomies")),
         exclude_patterns=exclude_patterns,
@@ -689,23 +791,45 @@ def _parse_config(raw: dict[str, Any], config_dir: Path) -> BartlebyConfig:
         ai=_parse_ai(raw.get("ai")),
         dev_server=_parse_dev_server(raw.get("dev_server")),
         config_dir=config_dir,
-        output_dir=str(raw.get("output_dir", "site")),
+        output_dir=_string_field(raw, "output_dir", "site"),
         markwright=_parse_markwright(raw.get("markwright")),
     )
 
 
 def _parse_markwright(raw: Any) -> dict[str, object]:
-    """Carry the ``markwright`` section through untouched; markwright validates its contents.
+    """Carry the ``markwright`` section through as written, once markwright has validated it.
 
     :param raw: The raw ``markwright`` value from the parsed YAML.
     :returns: The section as a plain mapping, empty when the key is absent or null.
-    :raises ConfigError: If the section is not a mapping.
+    :raises ConfigError: If the section is not a mapping, or markwright rejects it.
     """
     if raw is None:
         return {}
     if not isinstance(raw, dict):
-        raise _expected("markwright", "mapping", "`markwright: {disable: [youtube]}`")
-    return {str(key): value for key, value in raw.items()}
+        raise _expected(MARKWRIGHT_KEY, "mapping", "`markwright: {disable: [youtube]}`")
+    section = {str(key): value for key, value in raw.items()}
+    markwright_config(section)
+    return section
+
+
+def markwright_config(section: dict[str, object]) -> MarkwrightConfig:
+    """Resolve the ``markwright:`` section through markwright's public config API.
+
+    Shared by validation here and by the renderer, so a section that loads always renders.
+
+    :param section: The raw section, empty when ``bartleby.yml`` has none.
+    :returns: markwright's resolved config.
+    :raises ConfigError: With markwright's message under the ``markwright`` key path, when
+        markwright rejects the section; the caller attaches the source.
+    """
+    try:
+        return config_from_mapping(section, MARKWRIGHT_KEY)
+    except MarkwrightConfigError as exc:
+        raise ConfigError(
+            str(exc).removeprefix(f"{MARKWRIGHT_KEY}: "),
+            key_path=MARKWRIGHT_KEY,
+            hint="fix the `markwright:` section; it takes the same keys as markwright.toml",
+        ) from exc
 
 
 def _parse_plugins(raw: Any) -> tuple[list[str], set[str]]:
@@ -747,13 +871,30 @@ def _parse_site(raw: Any) -> SiteConfig:
             )
     return SiteConfig(
         title=str(raw["title"]),
-        url=str(raw["url"]),
-        description=str(raw.get("description", "")),
-        author=str(raw.get("author", "")),
+        url=_site_base_url(str(raw["url"])),
+        description=_string_field(raw, "description", ""),
+        author=_string_field(raw, "author", ""),
         default_image=_optional_str(raw.get("default_image")),
         twitter=_optional_str(raw.get("twitter")),
         feed=_parse_feed(raw.get("feed")),
     )
+
+
+def _site_base_url(url: str) -> str:
+    """Require ``site.url`` to be an absolute ``http`` or ``https`` URL with a host.
+
+    :param url: The value as written.
+    :returns: ``url`` unchanged.
+    :raises ConfigError: If the scheme or host is missing (``""``, ``example.com``, ``https://``).
+    """
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        raise ConfigError(
+            f"{url!r} is not an absolute http(s) URL",
+            key_path="site.url",
+            hint="write the full address with its scheme, such as `url: https://example.com`",
+        )
+    return url
 
 
 def _parse_feed(raw: Any) -> FeedConfig:
@@ -949,7 +1090,7 @@ def _parse_pagination(raw: Any, parent_key: str) -> PaginationConfig:
     return PaginationConfig(
         enabled=_bool_field(raw, "enabled", False, pagination_key),
         per_page=_int_field(raw, "per_page", 10, pagination_key),
-        url_format=str(raw.get("url_format", "page/{page}")),
+        url_format=_string_field(raw, "url_format", "page/{page}"),
     )
 
 
@@ -1008,15 +1149,17 @@ def _parse_taxonomies(raw: Any) -> dict[str, TaxonomyConfig]:
             raise _expected(
                 key_path, "mapping", 'the taxonomy name followed by `slug_format: "{slug}"`'
             )
-        slug_format = definition.get("slug_format", "{slug}")
+        slug_format = definition.get("slug_format")
+        if slug_format is None:
+            slug_format = "{slug}"
         if not isinstance(slug_format, str):
             raise ConfigError(
                 "must be a string",
                 key_path=f"{key_path}.slug_format",
                 hint=(
                     "quote the pattern so YAML reads it as text: "
-                    '`slug_format: "{slug}"` in the file, or '
-                    "`config set taxonomies.<name>.slug_format '\"{slug}\"'` from the shell"
+                    '`slug_format: "{slug}"` in the file; from the shell, '
+                    "`config set taxonomies.<name>.slug_format '{slug}'` stores it as text"
                 ),
             )
         result[str(taxonomy_name)] = TaxonomyConfig(
@@ -1076,7 +1219,7 @@ def _parse_skills(raw: Any) -> SkillsConfig:
             hint="delete the key; put example guidance in ai.skills.style_guide instead",
         )
     return SkillsConfig(
-        output_dir=str(raw.get("output_dir", ".claude/skills")),
+        output_dir=_string_field(raw, "output_dir", ".claude/skills"),
         style_guide=_optional_str(raw.get("style_guide")),
         regenerate_on_build=_bool_field(raw, "regenerate_on_build", False, "ai.skills"),
     )
@@ -1108,7 +1251,8 @@ def _parse_dev_server(raw: Any) -> DevServerConfig:
     if not isinstance(raw, dict):
         raise _expected("dev_server", "mapping", "`dev_server:` followed by `host:` and `port:`")
     return DevServerConfig(
-        host=str(raw.get("host", "127.0.0.1")), port=_int_field(raw, "port", 8000, "dev_server")
+        host=_string_field(raw, "host", "127.0.0.1"),
+        port=_int_field(raw, "port", 8000, "dev_server"),
     )
 
 

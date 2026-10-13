@@ -20,6 +20,7 @@ user-chosen name; such an entry is ``repeatable``.
 from __future__ import annotations
 
 import dataclasses
+import difflib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -500,6 +501,135 @@ def schema_field(path: str) -> ConfigField:
         if entry.path == path:
             return entry
     raise KeyError(path)
+
+
+def _segments_match(schema_segments: list[str], segments: list[str]) -> bool:
+    """Whether each concrete segment equals its schema segment, with ``<name>`` matching any."""
+    return len(schema_segments) == len(segments) and all(
+        pattern.startswith("<") or pattern == actual
+        for pattern, actual in zip(schema_segments, segments, strict=True)
+    )
+
+
+def resolve_path(dotted_path: str) -> ConfigField | None:
+    """Classify a concrete key path against the schema.
+
+    :param dotted_path: A path as typed to ``config set`` or ``--set``, such as
+        ``content_types.blog.path`` or ``theme.tokens.color.primary``.
+    :returns: The field the path instantiates; ``None`` for a path that names a section
+        (``site.feed``, ``content_types.blog``) or sits beneath an open mapping such as
+        ``markwright`` or ``theme.tokens``, where any key is allowed.
+    :raises ConfigError: If no schema entry accepts the path; the hint names the closest
+        known key.
+    """
+    segments = config.split_path(dotted_path)
+    for entry in CONFIG_SCHEMA:
+        parts = entry.path.split(".")
+        if _segments_match(parts, segments):
+            return entry
+        if entry.type_name == "mapping" and _segments_match(parts, segments[: len(parts)]):
+            return None
+    if any(
+        _segments_match(entry.path.split(".")[: len(segments)], segments)
+        for entry in CONFIG_SCHEMA
+    ):
+        return None
+    raise _unknown_key(segments)
+
+
+def _unknown_key(segments: list[str]) -> config.ConfigError:
+    """Build the error for a path the schema lacks, pointing at the closest key beside it."""
+    depth = max(
+        len(prefix)
+        for prefix in (segments[:count] for count in range(len(segments)))
+        if any(
+            _segments_match(entry.path.split(".")[: len(prefix)], prefix)
+            for entry in CONFIG_SCHEMA
+        )
+    )
+    parent = ".".join(segments[:depth])
+    key_path = ".".join(segments[: depth + 1])
+    known = sorted(
+        {
+            entry.path.split(".")[depth]
+            for entry in CONFIG_SCHEMA
+            if len(entry.path.split(".")) > depth
+            and _segments_match(entry.path.split(".")[:depth], segments[:depth])
+        }
+    )
+    if not known:
+        hint = f"{parent} holds a whole value with no keys beneath it; set {parent} itself"
+    elif close := difflib.get_close_matches(segments[depth], known, n=1):
+        hint = f"did you mean {'.'.join([*segments[:depth], close[0]])!r}?"
+    else:
+        where = f"under {parent}" if parent else "at the top level"
+        hint = f"valid keys {where} are {', '.join(known)}"
+    return config.ConfigError("unknown key", key_path=key_path, hint=hint)
+
+
+_TYPE_MESSAGES: dict[str, str] = {
+    "boolean": "must be true or false",
+    "integer": "must be an integer",
+    "list": "must be a list",
+    "mapping": "must be a mapping",
+}
+"""The wrong-type message per schema type, worded as the file validator words it."""
+
+
+def _fits(entry: ConfigField, value: object) -> bool:
+    """Whether a YAML-parsed value has the shape ``entry`` declares."""
+    match entry.type_name:
+        case "boolean":
+            return isinstance(value, bool)
+        case "integer":
+            return (isinstance(value, int) and not isinstance(value, bool)) or (
+                isinstance(value, str) and value.isdecimal()
+            )
+        case "list":
+            # ``plugins`` also takes a name-to-flag mapping; the validator decides.
+            return isinstance(value, (list, dict))
+        case "mapping":
+            return isinstance(value, dict)
+    return True
+
+
+def _type_hint(entry: ConfigField) -> str:
+    """A fix hint showing a value of the declared type."""
+    match entry.type_name:
+        case "boolean":
+            return "write true or false"
+        case "integer":
+            example = entry.default if isinstance(entry.default, int) else 10
+            return f"write a whole number, such as {example}"
+        case "list":
+            return "write a flow list, such as [a, b] (quote it in the shell)"
+    return "write a flow mapping, such as {key: value} (quote it in the shell)"
+
+
+def override_value(dotted_path: str, text: str) -> Any:
+    """Turn the text of a ``config set`` or ``--set`` value into the value the key holds.
+
+    A string key keeps the text as typed (``Yes`` stays ``"Yes"``, ``Hello: World``
+    stays one string); empty text unsets the key. Every other key parses the text as
+    YAML and must receive the declared type, reported in the words the file validator
+    uses. A section or a key under an open mapping takes whatever the YAML says; the
+    validator checks it afterwards.
+
+    :param dotted_path: The key the value is for.
+    :param text: The value as the user typed it.
+    :returns: The typed value, or ``None`` to unset the key.
+    :raises ConfigError: If the path is unknown, the text is not valid YAML, or the
+        parsed value has the wrong type for the key.
+    """
+    entry = resolve_path(dotted_path)
+    if entry is not None and entry.type_name == "string":
+        return text or None
+    value = config.parse_override_value(dotted_path, text)
+    if entry is None or value is None or _fits(entry, value):
+        return value
+    raise config.ConfigError(
+        _TYPE_MESSAGES[entry.type_name], key_path=dotted_path, hint=_type_hint(entry)
+    )
 
 
 def resolve_with_sources(

@@ -652,9 +652,41 @@ def test_apply_overrides_missing_equals_names_set_and_token() -> None:
 
 
 def test_apply_overrides_rejects_non_mapping_parent() -> None:
-    """A path through a scalar fails instead of replacing the scalar."""
-    with pytest.raises(ConfigError, match="site.title is not a mapping"):
-        apply_overrides({"site": {"title": "T"}}, ["site.title.deep=1"])
+    """A path through a list inside an open mapping fails instead of replacing the list."""
+    with pytest.raises(ConfigError, match="markwright.disable is not a mapping"):
+        apply_overrides({"markwright": {"disable": ["x"]}}, ["markwright.disable.deep=1"])
+
+
+def test_apply_overrides_rejects_a_key_the_schema_lacks_with_a_suggestion() -> None:
+    """A misspelled nested key is refused, labeled ``--set``, with the closest known key."""
+    with pytest.raises(ConfigError) as exc_info:
+        apply_overrides({}, ["site.titel=X"])
+    message = str(exc_info.value)
+    assert message.startswith("--set: site.titel: unknown key")
+    assert "did you mean 'site.title'" in message
+
+
+def test_apply_overrides_keeps_a_string_value_as_typed() -> None:
+    """A string key never goes through YAML typing: ``Yes`` and ``Hello: World`` stay text."""
+    raw: dict[str, Any] = {}
+    apply_overrides(raw, ["site.title=Yes", "site.description=Hello: World"])
+    assert raw["site"] == {"title": "Yes", "description": "Hello: World"}
+
+
+def test_apply_overrides_rejects_a_value_of_the_wrong_type() -> None:
+    """A boolean key given a word is refused, naming the expected type."""
+    with pytest.raises(ConfigError) as exc_info:
+        apply_overrides({}, ["ai.llms_txt=maybe"])
+    message = str(exc_info.value)
+    assert message.startswith("--set: ai.llms_txt: must be true or false")
+    assert "fix:" in message
+
+
+def test_apply_overrides_allows_any_key_under_an_open_mapping() -> None:
+    """``markwright`` and ``theme.tokens`` take keys the schema does not list."""
+    raw: dict[str, Any] = {}
+    apply_overrides(raw, ["markwright.disable=[twitter]", "theme.tokens.radius=2px"])
+    assert raw == {"markwright": {"disable": ["twitter"]}, "theme": {"tokens": {"radius": "2px"}}}
 
 
 def test_load_config_applies_overrides_before_validation() -> None:
@@ -746,3 +778,150 @@ def test_markwright_section_loads_as_a_raw_mapping(tmp_path: Path) -> None:
 def test_markwright_section_defaults_to_an_empty_mapping() -> None:
     """With no `markwright:` section the config carries an empty mapping, not defaults."""
     assert load_config(FIXTURES / "minimal.yml").markwright == {}
+
+
+# ---------------------------------------------------------------------------
+# Null string fields, duplicate keys, unreadable files, site.url, markwright
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("body", "attribute", "default"),
+    [
+        ("output_dir:\n", "output_dir", "site"),
+        ("authors_file:\n", "authors_file", ".authors.yml"),
+    ],
+)
+def test_null_top_level_string_field_reads_as_its_default(
+    tmp_path: Path, body: str, attribute: str, default: str
+) -> None:
+    """A present-but-null string key is the default, never the text "None"."""
+    config = load_config(_write_config(tmp_path, _BASE_CONFIG + body))
+    assert getattr(config, attribute) == default
+
+
+def test_null_nested_string_fields_read_as_their_defaults(tmp_path: Path) -> None:
+    """Null site, pagination, skills, and dev_server strings fall back to their defaults."""
+    body = (
+        _BASE_CONFIG
+        + "  description:\n  author:\n"
+        + "content_types:\n  blog:\n    path: blog\n    pagination:\n      url_format:\n"
+        + "ai:\n  skills:\n    output_dir:\n"
+        + "dev_server:\n  host:\n"
+        + "taxonomies:\n  tags:\n    slug_format:\n"
+    )
+    config = load_config(_write_config(tmp_path, body))
+    assert config.site.description == ""
+    assert config.site.author == ""
+    assert config.content_types["blog"].pagination.url_format == "page/{page}"
+    assert config.ai.skills.output_dir == ".claude/skills"
+    assert config.dev_server.host == "127.0.0.1"
+    assert config.taxonomies["tags"].slug_format == "{slug}"
+
+
+def test_empty_override_of_a_string_field_reads_as_its_default() -> None:
+    """``--set output_dir=`` unsets the key, so the build never writes into ``None/``."""
+    config = load_config(FIXTURES / "minimal.yml", overrides=["output_dir="])
+    assert config.output_dir == "site"
+
+
+def test_duplicate_mapping_key_is_a_config_error_naming_the_line(tmp_path: Path) -> None:
+    """PyYAML keeps the last of two equal keys; Bartleby rejects the file instead."""
+    config_path = _write_config(tmp_path, _BASE_CONFIG + "dev_server:\n  port: 1\n  port: 2\n")
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(config_path)
+    message = str(excinfo.value)
+    assert "bartleby.yml" in message
+    assert "duplicate key 'port'" in message
+    assert "line 6" in message
+    assert "fix:" in message
+
+
+def test_config_path_that_is_a_directory_is_a_config_error(tmp_path: Path) -> None:
+    """``--config .`` names the path and says it is not a file, with no traceback."""
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(tmp_path)
+    message = str(excinfo.value)
+    assert str(tmp_path) in message
+    assert "fix:" in message
+
+
+def test_unreadable_config_file_is_a_config_error(tmp_path: Path) -> None:
+    """A read that fails with any OSError is reported as a ConfigError on the path."""
+    config_path = _write_config(tmp_path, _BASE_CONFIG)
+    config_path.chmod(0o000)
+    try:
+        with pytest.raises(ConfigError) as excinfo:
+            load_config(config_path)
+    finally:
+        config_path.chmod(0o644)
+    assert "bartleby.yml" in str(excinfo.value)
+    assert "fix:" in str(excinfo.value)
+
+
+def test_override_date_value_is_an_iso_string() -> None:
+    """A YAML date in an override is carried as text, so JSON output never sees a date."""
+    from bartleby.config import parse_override_value
+
+    assert parse_override_value("markwright.x", "2026-01-01") == "2026-01-01"
+    assert parse_override_value("markwright.x", "2026-01-01T10:00:00") == "2026-01-01T10:00:00"
+
+
+def test_split_path_keeps_a_dotted_token_name_whole() -> None:
+    """Everything after ``theme.tokens`` is one key, because token names contain dots."""
+    from bartleby.config import split_path
+
+    assert split_path("theme.tokens.color.primary") == ["theme", "tokens", "color.primary"]
+    assert split_path("theme.tokens") == ["theme", "tokens"]
+    assert split_path("site.feed.limit") == ["site", "feed", "limit"]
+
+
+def test_override_of_a_dotted_token_name_sets_one_key() -> None:
+    """``--set theme.tokens.color.primary=red`` writes the flat token, not nested mappings."""
+    config = load_config(FIXTURES / "minimal.yml", overrides=["theme.tokens.color.primary=red"])
+    assert config.theme.tokens == {"color.primary": "red"}
+
+
+def test_parent_key_error_caused_by_overrides_is_labeled_set() -> None:
+    """A cross-field error on ``theme`` names ``--set`` when the overrides caused it."""
+    with pytest.raises(ConfigError) as exc_info:
+        load_config(FIXTURES / "minimal.yml", overrides=["theme.name=material", "theme.path=x"])
+    assert str(exc_info.value).startswith("--set: theme:")
+
+
+@pytest.mark.parametrize("url", ["", "no-scheme", "ftp://x.test", "https://", "example.com/x"])
+def test_site_url_must_be_an_absolute_http_url(tmp_path: Path, url: str) -> None:
+    """``site.url`` needs an http or https scheme and a host; anything else is rejected."""
+    config_path = _write_config(tmp_path, f"site:\n  title: Site\n  url: {url!r}\n")
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(config_path)
+    message = str(excinfo.value)
+    assert "site.url" in message
+    assert "fix:" in message
+
+
+def test_base_url_override_without_a_scheme_is_labeled_set() -> None:
+    """A bare ``--base-url`` value is rejected with ``--set`` as its source."""
+    with pytest.raises(ConfigError) as exc_info:
+        load_config(FIXTURES / "minimal.yml", overrides=["site.url=no-scheme"])
+    assert str(exc_info.value).startswith("--set: site.url")
+
+
+def test_markwright_section_is_validated_at_load_time(tmp_path: Path) -> None:
+    """An unknown markwright extension fails ``load_config``, not the first render."""
+    config_path = _write_config(tmp_path, _BASE_CONFIG + "markwright:\n  enable: [nonexistent]\n")
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(config_path)
+    message = str(excinfo.value)
+    assert message.startswith(f"{config_path}: markwright:")
+    assert "nonexistent" in message
+    assert "fix:" in message
+
+
+def test_markwright_override_error_is_labeled_set() -> None:
+    """``--set markwright.bogus=1`` is markwright's error with ``--set`` as its source."""
+    with pytest.raises(ConfigError) as exc_info:
+        load_config(FIXTURES / "minimal.yml", overrides=["markwright.bogus=1"])
+    message = str(exc_info.value)
+    assert message.startswith("--set: markwright")
+    assert "bogus" in message

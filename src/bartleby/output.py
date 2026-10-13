@@ -419,8 +419,11 @@ class LintOutput:
 
 
 def format_config_value(value: object) -> str:
-    """Show a config value as ``config get`` prints it: strings bare, anything else as JSON."""
-    return value if isinstance(value, str) else json.dumps(value)
+    """Show a config value as ``config get`` prints it: strings bare, anything else as JSON.
+
+    A value JSON cannot encode, such as a date from the YAML parser, prints as its ``str``.
+    """
+    return value if isinstance(value, str) else json.dumps(value, default=str)
 
 
 @dataclass(slots=True)
@@ -451,7 +454,7 @@ class ConfigShowOutput:
     def to_text(self) -> str:
         width = max((len(entry.path) for entry in self.values), default=0)
         return "\n".join(
-            f"{entry.path:<{width}} = {json.dumps(entry.value)}  ({entry.source})"
+            f"{entry.path:<{width}} = {json.dumps(entry.value, default=str)}  ({entry.source})"
             for entry in self.values
         )
 
@@ -477,15 +480,16 @@ class ConfigGetOutput:
 
 @dataclass(slots=True)
 class ContentTypeToggleOutput:
-    """Result of ``bartleby enable SHAPE NAME`` and ``bartleby disable SHAPE NAME``.
+    """Result of ``bartleby enable SHAPE NAME`` and ``bartleby disable NAME``.
 
-    ``action`` is ``enable`` or ``disable``. ``enabled`` is the state the type is left
+    ``action`` is ``enable`` or ``disable``. ``shape`` is the shape ``enable`` wrote and
+    ``None`` for ``disable``, which takes none. ``enabled`` is the state the type is left
     in. ``changed`` is false when the config already held that state, so the file was
     not rewritten. ``reenabled`` is true when ``enable`` flipped an existing disabled type on.
     """
 
     action: str
-    shape: str
+    shape: str | None
     name: str
     enabled: bool
     file: str
@@ -497,15 +501,17 @@ class ContentTypeToggleOutput:
         return EXIT_SUCCESS
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "status": "success",
             "action": self.action,
-            "shape": self.shape,
             "name": self.name,
             "enabled": self.enabled,
             "file": self.file,
             "changed": self.changed,
         }
+        if self.shape is not None:
+            payload["shape"] = self.shape
+        return payload
 
     def to_text(self) -> str:
         if self.action == "enable":
@@ -608,5 +614,5 @@ def render(result: Result, fmt: str) -> str:
     if isinstance(result, RawOutput):
         return result.text
     if fmt == "json":
-        return json.dumps(result.to_dict(), sort_keys=True)
+        return json.dumps(result.to_dict(), sort_keys=True, default=str)
     return result.to_text()

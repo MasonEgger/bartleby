@@ -14,6 +14,7 @@ from bartleby.cli import _discover_shortcode_names, main
 from bartleby.config import load_config
 from bartleby.plugins import KNOWN_EVENTS
 from bartleby.theme_loader import ResolvedTheme, ThemeLayer, ThemeManifest
+from tests.config_helpers import replace_top_level_keys
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -448,6 +449,43 @@ def test_new_post_missing_type_json_is_usage_error(
     assert payload["code"] == "usage_error"
 
 
+def test_new_post_on_a_disabled_type_is_a_usage_error_with_the_enable_hint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A post for a disabled type would never build, so the command refuses and names the fix."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite", "--blog"])
+    monkeypatch.chdir(tmp_path / "mysite")
+    main(["disable", "blog"])
+    capsys.readouterr()
+
+    with pytest.raises(SystemExit) as exc:
+        main(["new", "post", "Hi", "--type", "blog"])
+
+    assert exc.value.code == 2
+    error = capsys.readouterr().err
+    assert "'blog' is disabled" in error
+    assert "run bartleby enable blog blog" in error
+    assert not list((tmp_path / "mysite" / "content" / "blog" / "posts").glob("hi.md"))
+
+
+def test_schema_reports_a_disabled_type_in_text_and_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``schema <type>`` says the type is off instead of printing it as a live schema."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite", "--blog"])
+    monkeypatch.chdir(tmp_path / "mysite")
+    main(["disable", "blog"])
+    capsys.readouterr()
+
+    main(["schema", "blog"])
+    assert "enabled: false" in capsys.readouterr().out.splitlines()
+
+    main(["schema", "blog", "--output", "json"])
+    assert _last_json(capsys.readouterr().out)["enabled"] is False
+
+
 def test_schema_content_type_json(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -756,12 +794,8 @@ def test_lint_nav_page_never_reported_orphaned(
         '---\ntitle: "Lonely"\ndate: 2026-05-01\ndraft: false\ndescription: "d"\n---\n\nBody.\n',
         encoding="utf-8",
     )
-    config_path = site / "bartleby.yml"
-    config_path.write_text(
-        config_path.read_text(encoding="utf-8") + '\nnav:\n  - "Lonely": blog/posts/lonely.md\n',
-        encoding="utf-8",
-    )
     monkeypatch.chdir(site)
+    _append_to_config('nav:\n  - "Lonely": blog/posts/lonely.md\n')
 
     main(["lint", "--output", "json"])
     payload = _last_json(capsys.readouterr().out)
@@ -1203,11 +1237,10 @@ def test_discover_shortcode_names_deduplicates_across_locations(
 
 
 def _append_to_config(extra: str) -> None:
-    """Append ``extra`` YAML to ``./bartleby.yml`` in the current directory."""
+    """Merge ``extra`` YAML into ``./bartleby.yml``, replacing any top-level key it repeats."""
     from pathlib import Path as RuntimePath
 
-    config_path = RuntimePath("bartleby.yml")
-    config_path.write_text(config_path.read_text(encoding="utf-8") + extra, encoding="utf-8")
+    replace_top_level_keys(RuntimePath("bartleby.yml"), extra)
 
 
 def test_build_with_old_material_feature_name_exits_one_with_replacement(
@@ -1651,7 +1684,7 @@ def test_serve_passes_base_url_as_a_site_url_override(
     main(["serve", "--base-url", "https://x.test"])
     kwargs = captured["kwargs"]
     assert isinstance(kwargs, dict)
-    assert kwargs["overrides"] == ['site.url="https://x.test"']
+    assert kwargs["overrides"] == ["site.url=https://x.test"]
 
 
 def test_base_url_wins_over_a_set_of_site_url(

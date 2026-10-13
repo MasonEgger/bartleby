@@ -48,7 +48,7 @@ Add what you need as you go:
 
 - `bartleby new site --full-config mysite` writes every option Bartleby accepts, each at its default with a one-line comment.
 - `bartleby new site --blog mysite` starts with a blog and a sample post.
-- `bartleby enable blog news` adds a blog to an existing site, and `bartleby disable blog news` turns it off.
+- `bartleby enable blog news` adds a blog to an existing site, and `bartleby disable news` turns it off.
   Each enabled blog publishes its own RSS and Atom feeds, plus one combined feed for the site.
 - `bartleby config show`, `config get`, `config set`, and `--set key.path=value` read and change config without opening the file.
 

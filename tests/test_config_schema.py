@@ -150,7 +150,7 @@ class TestDefaults:
     def test_absent_top_level_keys_default_as_config_py_parses_them(
         self, path: str, tmp_path: Path
     ) -> None:
-        parsed = config._parse_config({"site": {"title": "t", "url": "u"}}, tmp_path)
+        parsed = config._parse_config({"site": {"title": "t", "url": "https://x.test"}}, tmp_path)
         assert schema_field(path).default == getattr(parsed, path)
 
     def test_taxonomy_slug_format_matches_config_py(self) -> None:
@@ -211,7 +211,7 @@ def test_resolve_with_sources_override_wins_over_file_key() -> None:
 def test_resolve_with_sources_base_url_override_reads_set() -> None:
     """``--base-url`` reaches the config as a ``site.url`` override tagged ``--set``."""
     resolved = resolve_with_sources(
-        FIXTURES / "minimal.yml", overrides=['site.url="https://x.test"']
+        FIXTURES / "minimal.yml", overrides=["site.url=https://x.test"]
     )
     assert resolved["site.url"] == ("https://x.test", OVERRIDE_SOURCE)
 

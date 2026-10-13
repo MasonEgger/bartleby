@@ -28,9 +28,12 @@ Add `--set KEY.PATH=VALUE` to `build`, `serve`, or `validate`:
 bartleby build --set site.title="Staging Site" --set site.feed.limit=10
 ```
 
-The key path is the dotted path of the key in `bartleby.yml`.
+The key path is the dotted path of the key in `bartleby.yml`, and it must be one that `bartleby config schema` lists.
+A misspelled key such as `site.titel` is an error that names the closest known key.
 The flag repeats, and `bartleby.yml` stays as it was.
-The value parses as YAML, so `10` is an integer, `true` is a boolean, and a flow list such as `'theme.features=[search, nav.sidebar]'` is a list.
+A string key takes the text as typed, so `site.title=Yes` sets the title to the word `Yes`.
+Every other key parses the value as YAML, so `10` is an integer, `true` is a boolean, and a flow list such as `'theme.features=[search, nav.sidebar]'` is a list; a value of the wrong type, such as `dev_server.port=notaport`, is an error that names the expected type.
+Keys under `markwright` and `theme.tokens` are open, so any name works there, and a token name keeps its dots: `--set theme.tokens.color.primary=red` sets the one token `color.primary`.
 Quote a value that your shell would otherwise split or expand.
 
 To preview the Material theme without editing the file:
@@ -52,6 +55,7 @@ bartleby build --base-url https://staging.example.com
 
 The flag is a shortcut for `--set site.url=...`, and it wins when you pass both.
 All three commands accept it.
+The value must be an absolute `http` or `https` URL with a host; an empty value or `staging.example.com` without a scheme is an error, so the sitemap never carries a relative `<loc>`.
 
 ## Step 3: Reading Errors from an Override
 
@@ -109,9 +113,10 @@ bartleby config set site.title "My Site"
 bartleby config set dev_server.port 9000
 ```
 
-The command parses the value as YAML, checks the edited config, and only then writes the file.
-It keeps your comments and the order of your keys.
-A value the config rejects leaves the file untouched.
+The command types the value by the key, as `--set` does: text for a string key, YAML for the rest, so `"My Site"` and `Hello: World` stay text and `9000` is an integer.
+It then checks the edited config, the `markwright` section included, and only then writes the file in one step.
+It keeps your comments, the order of your keys, and the file's byte order mark and line endings.
+A value the config rejects leaves the file untouched, as does a file that cannot be written.
 
 ## Step 7: Listing Every Accepted Key
 
@@ -134,7 +139,9 @@ To see every option in context, scaffold a site with the full config:
 bartleby new site mysite --full-config
 ```
 
-The generated `bartleby.yml` lists each option at its default, with its description as a comment.
+The generated `bartleby.yml` keeps the site name, the `nav`, and the theme features of the minimal scaffold, and lists every other option at its default, with its description as a comment.
+The `content_types` and `taxonomies` blocks are a commented-out example named `example`; uncomment and rename it to add a type, or run `bartleby enable blog <name>`.
+The site builds the same pages as the minimal scaffold until you change something.
 Delete the lines you do not need.
 Without the flag, the file holds only what the site needs to build.
 

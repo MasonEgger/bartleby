@@ -21,25 +21,14 @@ from html.parser import HTMLParser
 from typing import TYPE_CHECKING, Any
 
 import markdown
-from markwright import (
-    ConfigError as MarkwrightConfigError,
-)
-from markwright import (
-    ConfigWarning,
-    config_from_mapping,
-    extension_configs,
-    selected_extensions,
-)
+from markwright import ConfigWarning, extension_configs, selected_extensions
 
-from bartleby.config import ConfigError
+from bartleby.config import markwright_config
 
 if TYPE_CHECKING:
     from bartleby.config import BartlebyConfig
 
 _LOGGER = logging.getLogger("bartleby")
-
-_MARKWRIGHT_SOURCE = "bartleby.yml"
-_MARKWRIGHT_KEY = "markwright"
 
 _BUNDLED_EXTENSIONS: tuple[str, ...] = (
     # pymdownx
@@ -94,7 +83,7 @@ def create_markdown_renderer(config: BartlebyConfig) -> markdown.Markdown:
         default-list string entry, and any ``config`` mapping is passed through as
         ``extension_configs``.
     :returns: A configured :class:`markdown.Markdown` instance.
-    :raises ConfigError: When markwright rejects the ``markwright:`` section.
+    :raises ConfigError: When markwright rejects a ``markwright:`` section built by hand.
     :raises ImportError: When a required extension cannot be loaded; the
         error message names the offending extension.
     """
@@ -147,23 +136,13 @@ def _markwright_extensions(
     :param section: The raw section, empty when ``bartleby.yml`` has none.
     :returns: The dotted extension names markwright selects, in its order, and the
         ``extension_configs`` entries for those with options.
-    :raises ConfigError: With markwright's message, ``bartleby.yml`` as the source and
-        ``markwright`` as the key path, when markwright rejects the section.
+    :raises ConfigError: When markwright rejects the section (``load_config`` has
+        already checked it, so this fires only for a config built by hand).
     """
-    label = f"{_MARKWRIGHT_SOURCE}: {_MARKWRIGHT_KEY}"
-    try:
-        markwright_config = config_from_mapping(section, label)
-    except MarkwrightConfigError as exc:
-        raise ConfigError(
-            str(exc).removeprefix(f"{label}: "),
-            key_path=_MARKWRIGHT_KEY,
-            hint="fix the `markwright:` section; it takes the same keys as markwright.toml",
-            source=_MARKWRIGHT_SOURCE,
-        ) from exc
+    resolved = markwright_config(section)
+    names = selected_extensions(resolved)
 
-    names = selected_extensions(markwright_config)
-
-    return [f"markwright.{name}" for name in names], extension_configs(markwright_config, names)
+    return [f"markwright.{name}" for name in names], extension_configs(resolved, names)
 
 
 def render_markdown(source: str, renderer: markdown.Markdown) -> RenderedContent:

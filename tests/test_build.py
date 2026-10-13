@@ -20,6 +20,7 @@ from bartleby.build import (
 )
 from bartleby.config import ConfigError
 from bartleby.theme_loader import resolve_theme
+from tests.config_helpers import replace_top_level_keys
 from tests.theme_helpers import material_theme
 
 
@@ -30,11 +31,7 @@ def project(tmp_path: Path) -> Path:
     destination = tmp_path / "site_project"
     shutil.copytree(source, destination)
     # The sample site exercises material's templates; name it so the default theme can change.
-    config_path = destination / "bartleby.yml"
-    config_path.write_text(
-        config_path.read_text(encoding="utf-8") + "\ntheme:\n  name: material\n",
-        encoding="utf-8",
-    )
+    replace_top_level_keys(destination / "bartleby.yml", "theme:\n  name: material\n")
     return destination
 
 
@@ -157,10 +154,7 @@ def test_icon_packs_single_false_entry_leaves_other_packs_enabled(project: Path)
     naming one pack must not silently drop the other three defaults.
     """
     config_path = project / "bartleby.yml"
-    config_path.write_text(
-        config_path.read_text(encoding="utf-8") + "\ntheme:\n  icon_packs:\n    simple: false\n",
-        encoding="utf-8",
-    )
+    replace_top_level_keys(config_path, "theme:\n  icon_packs:\n    simple: false\n")
     _write_template_with_icon_spans(
         project,
         ["material-home", "fontawesome-github", "octicons-star-16", "simple-github"],
@@ -187,10 +181,8 @@ def test_icon_packs_two_false_entries_disable_exactly_those_two(project: Path) -
     still land in the output.
     """
     config_path = project / "bartleby.yml"
-    config_path.write_text(
-        config_path.read_text(encoding="utf-8")
-        + "\ntheme:\n  icon_packs:\n    fontawesome: false\n    simple: false\n",
-        encoding="utf-8",
+    replace_top_level_keys(
+        config_path, "theme:\n  icon_packs:\n    fontawesome: false\n    simple: false\n"
     )
     _write_template_with_icon_spans(
         project,
@@ -994,11 +986,10 @@ def test_configured_path_theme_is_resolved_and_checked(
 def test_build_docs_page_renders_toc_and_sidebar(project: Path) -> None:
     """A material docs page carries a TOC of its headings, a tab bar, and a marked sidebar."""
     config_path = project / "bartleby.yml"
-    config_path.write_text(
-        config_path.read_text(encoding="utf-8")
-        + "\nnav:\n  - Home: index.md\n  - About:\n      - Overview: about.md\n"
-        + "\ntheme:\n  name: material\n  features:\n    - nav.tabs\n    - nav.sidebar\n",
-        encoding="utf-8",
+    replace_top_level_keys(
+        config_path,
+        "nav:\n  - Home: index.md\n  - About:\n      - Overview: about.md\n"
+        "theme:\n  name: material\n  features:\n    - nav.tabs\n    - nav.sidebar\n",
     )
     (project / "content" / "about.md").write_text(
         "---\ntitle: About\n---\n\n## First Heading\n\nText.\n\n### Nested Heading\n\nMore.\n",
@@ -1020,10 +1011,9 @@ def test_build_docs_layout_opens_current_group_and_marks_current_link(
 ) -> None:
     """The sidebar opens only the group holding the current page; listings stay single-column."""
     config_path = project / "bartleby.yml"
-    config_text = config_path.read_text(encoding="utf-8").replace("theme:\n  name: material\n", "")
-    config_path.write_text(
-        config_text
-        + "\nnav:\n"
+    replace_top_level_keys(
+        config_path,
+        "nav:\n"
         + "  - Home: index.md\n"
         + "  - Guide:\n"
         + "      - Overview: guide/index.md\n"
@@ -1033,9 +1023,8 @@ def test_build_docs_layout_opens_current_group_and_marks_current_link(
         + "      - Advanced:\n"
         + "          - Tuning: guide/advanced/tuning.md\n"
         + "  - Blog: blog/\n"
-        + f"\ntheme:\n  name: {theme_name}\n  features:\n"
+        + f"theme:\n  name: {theme_name}\n  features:\n"
         + "    - nav.tabs\n    - nav.sidebar\n    - nav.section-index\n",
-        encoding="utf-8",
     )
     guide = project / "content" / "guide"
     for relative in ("index.md", "setup/install.md", "setup/configure.md", "advanced/tuning.md"):

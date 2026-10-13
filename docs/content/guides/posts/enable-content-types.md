@@ -33,13 +33,13 @@ bartleby enable blog tutorials
 `tutorials` is the name you choose.
 The command prints `Added blog content type 'tutorials' to bartleby.yml`.
 
-The command writes two things to `bartleby.yml`.
+The command writes up to three things to `bartleby.yml`.
 It adds a `tutorials` block under `content_types`, with the path `tutorials/posts`, `readtime`, an excerpt separator, the `tags` taxonomy, and `feeds: [rss, atom]`.
-It also adds the `tags` taxonomy when the site does not declare it yet.
+It adds the `tags` taxonomy when the site does not declare it yet.
+When the file has an explicit `nav` with no entry for the type, it appends `- Tutorials: tutorials/`, so the new listing is reachable from the header.
 
 The command leaves other files alone.
-It does not create `content/tutorials/posts/`, and it does not add a `nav` entry.
-You do both in the next steps.
+It does not create `content/tutorials/posts/`; you do that in the next step.
 
 ## Step 2: Writing the First Page
 
@@ -52,9 +52,9 @@ bartleby new post "Build Your First Site" --type tutorials
 The command creates `content/tutorials/posts/build-your-first-site.md`, along with the missing directories.
 Set `draft: false` in its front matter when the page is ready to publish.
 
-## Step 3: Linking the Section from Your Navigation
+## Step 3: Checking the Section in Your Navigation
 
-If your `bartleby.yml` has an explicit `nav`, add the new section to it:
+If your `bartleby.yml` has an explicit `nav`, `enable` has already added the new section to it:
 
 ```yaml
 nav:
@@ -64,6 +64,7 @@ nav:
 ```
 
 A directory target such as `tutorials/` points at the type's listing page.
+Move the entry, or rename its title, as you like; `enable` adds one only when no entry links to `tutorials/` yet.
 A site without a `nav` key builds its navigation from the content tree, so this step does not apply to it.
 
 ## Step 4: Reading the Feeds
@@ -108,14 +109,16 @@ Each name gets its own path, listing, taxonomy pages, and pair of feeds, and the
 To stop building a type, run `disable`:
 
 ```bash
-bartleby disable blog tutorials
+bartleby disable tutorials
 ```
 
-The command sets `enabled: false` on the `tutorials` block and leaves every other key as it was.
+The command takes only the name, because the block is already in the file.
+It sets `enabled: false` on the `tutorials` block and leaves every other key as it was, the `nav` entry included.
 The build then skips the type's pages, listing, and feeds, and the type drops out of the combined feed.
 Your content files stay where they are.
-If you added the `Tutorials: tutorials/` entry in Step 3, the next build prints `WARNING: nav entry 'Tutorials' links to the disabled content type 'tutorials'; remove the entry or set content_types.tutorials.enabled to true`.
+With the `Tutorials: tutorials/` entry from Step 3 still in place, the next build prints `WARNING: nav entry 'Tutorials' links to the disabled content type 'tutorials'; remove the entry or set content_types.tutorials.enabled to true`.
 Remove the nav entry while the type is off, or keep it and expect the warning.
+`bartleby new post --type tutorials` refuses while the type is off, with the fix `run bartleby enable blog tutorials`, and `bartleby schema tutorials` prints `enabled: false`.
 
 To turn the type back on, run `enable` again:
 

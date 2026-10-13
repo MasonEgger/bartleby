@@ -158,6 +158,7 @@ For a content type, the JSON has these keys:
 | Key | Contents |
 |-----|----------|
 | `content_type`, `path` | The type's name and content path |
+| `enabled` | `false` when the type is disabled in `bartleby.yml`; `schema.json` lists enabled types only |
 | `url_base`, `url_format` | The URL settings, or `null` |
 | `required_fields`, `optional_fields` | Lists of `{name, type, choices?}` objects built from the type's `metadata` schema |
 | `features` | `pagination`, `per_page`, `feeds`, `readtime`, and `excerpt_separator` when set |

@@ -34,6 +34,7 @@ class ContentTypeSchema:
     required_fields: list[dict[str, object]]
     optional_fields: list[dict[str, object]]
     features: dict[str, object]
+    enabled: bool = True
 
     @property
     def exit_code(self) -> int:
@@ -43,6 +44,7 @@ class ContentTypeSchema:
         return {
             "content_type": self.content_type,
             "path": self.path,
+            "enabled": self.enabled,
             "url_base": self.url_base,
             "url_format": self.url_format,
             "required_fields": self.required_fields,
@@ -52,6 +54,8 @@ class ContentTypeSchema:
 
     def to_text(self) -> str:
         lines = [f"content type: {self.content_type} ({self.path})"]
+        if not self.enabled:
+            lines.append("enabled: false")
         lines.append("required:")
         lines += [_field_line(field) for field in self.required_fields] or ["  (none)"]
         lines.append("optional:")
@@ -143,6 +147,7 @@ def derive_content_type_schema(type_name: str, config: BartlebyConfig) -> Conten
         required_fields=required_fields,
         optional_fields=optional_fields,
         features=features,
+        enabled=content_type.enabled,
     )
 
 

@@ -109,7 +109,7 @@ Installed entries can be folded into plan.md per-section Tools blocks; not-insta
    `bartleby config show` prints the resolved config with the source of each value (default, file, or `--set`), `config get` reads one key, `config set` validates and writes one key into `bartleby.yml` keeping its comments, and `config schema --output json` lists every key with its type, default, allowed values, and a one-line description.
    `--full-config`, `config schema`, and the configuration reference docs come from one schema, and `enable` and `config set` share one comment-preserving YAML writer.
    The blog is opt-in, through `bartleby new site --blog` or `bartleby enable <content-type> <name>` on an existing site, which merges the needed config if it is missing and is safe to run twice.
-   `bartleby disable <content-type> <name>` turns it off through an `enabled` flag, not by deleting config.
+   `bartleby disable <name>` turns it off through an `enabled` flag, not by deleting config; the shape is already in the file, so the command takes only the name.
    The first argument is a content-type shape and the second is the instance name: `bartleby enable blog tutorials` adds a second blog-shaped type at `tutorials/`.
    A site can enable the same content type more than once (mason.dev runs `blog`, `tutorials`, and `speaking`), and each enabled type publishes its own RSS and Atom feeds plus one combined site feed, with the existing per-type `feeds` key as the opt-out and `site.feed` controlling the combined feed.
    `new site` and `serve` print what Hugo prints: what was created and the next command, then the build summary, the URL, and how to stop.

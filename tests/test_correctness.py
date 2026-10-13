@@ -79,11 +79,14 @@ BAD_LISTS = [
     ("ai.agent_context.constraints", "abc"),
 ]
 BAD_MAPPINGS = [("theme.icon_packs", "x")]
-BAD_STRINGS = [
+REJECTED = [*BAD_INTEGERS, *BAD_BOOLEANS, *BAD_LISTS, *BAD_MAPPINGS]
+# (dotted path, value text) pairs a string key stores as typed, YAML syntax and all.
+VERBATIM_STRINGS = [
     ("taxonomies.tags.slug_format", "{slug}"),
     ("taxonomies.tags.slug_format", "[a, b]"),
+    ("site.title", "Yes"),
+    ("site.description", "Hello: World"),
 ]
-REJECTED = [*BAD_INTEGERS, *BAD_BOOLEANS, *BAD_LISTS, *BAD_MAPPINGS, *BAD_STRINGS]
 
 
 @pytest.fixture
@@ -158,8 +161,9 @@ class TestIntegerCoercion:
 
 
 class TestSlugFormatIsAString:
-    def test_a_quoted_pattern_loads_as_a_string(self, project: Path) -> None:
-        main(["config", "set", "taxonomies.tags.slug_format", '"tag-{slug}"'])
+    def test_a_pattern_set_from_the_shell_loads_as_a_string(self, project: Path) -> None:
+        """A string key takes the text as typed, so the braces need only shell quoting."""
+        main(["config", "set", "taxonomies.tags.slug_format", "tag-{slug}"])
 
         loaded = load_config(project / "bartleby.yml")
         assert loaded.taxonomies["tags"].slug_format == "tag-{slug}"
@@ -167,14 +171,31 @@ class TestSlugFormatIsAString:
             "slug_format": "tag-{slug}"
         }
 
-    def test_the_hint_shows_the_quoted_form(self, project: Path) -> None:
+    @pytest.mark.parametrize(("path", "text"), VERBATIM_STRINGS)
+    def test_a_string_override_is_the_text_as_typed(
+        self, project: Path, path: str, text: str
+    ) -> None:
+        loaded = load_config(project / "bartleby.yml", [f"{path}={text}"])
+
+        node: object = loaded
+        for segment in path.split("."):
+            node = node[segment] if isinstance(node, dict) else getattr(node, segment)
+        assert node == text
+
+    def test_the_hint_for_an_unquoted_file_value_shows_both_forms(self, project: Path) -> None:
+        """A bare ``{slug}`` in the file is a mapping; the fix shows the file and shell forms."""
+        config_path = project / "bartleby.yml"
+        config_path.write_text(
+            BASE_CONFIG.replace("tags: {}", "tags:\n    slug_format: {slug}"), encoding="utf-8"
+        )
+
         with pytest.raises(ConfigError) as exc_info:
-            load_config(project / "bartleby.yml", ["taxonomies.tags.slug_format={slug}"])
+            load_config(config_path)
 
         hint = exc_info.value.hint or ""
         assert "quote" in hint
         assert 'slug_format: "{slug}"' in hint
-        assert "config set taxonomies.<name>.slug_format" in hint
+        assert "config set taxonomies.<name>.slug_format '{slug}'" in hint
 
 
 class TestChoices:

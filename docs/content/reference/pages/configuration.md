@@ -8,6 +8,7 @@ tags:
 The `bartleby.yml` file at the project root is the single source of truth for site behavior.
 Bartleby loads it once at the start of every build.
 The `site` section is the only required one.
+A key written twice in one mapping is a config error naming the line, because the second value would silently replace the first.
 
 Each section below has a short example and the notes that the tables cannot hold.
 The [Option Reference](#option-reference) at the end lists every key with its type, default, allowed values, and whether it is required.
@@ -37,8 +38,9 @@ site:
 ```
 
 `site.title` and `site.url` are the only required keys in the whole file.
-`site.url` is the absolute base for canonical links, feeds, and the sitemap.
+`site.url` is the absolute base for canonical links, feeds, and the sitemap, so it must be an `http` or `https` URL with a host; an empty value or one without a scheme is a config error.
 Override it for one run with `--base-url` or `--set site.url=...`.
+A string key left null in the file (`description:` with nothing after it) reads as its default.
 
 The `site.feed` block controls the aggregate feed that merges items across content types.
 A type listed in `site.feed.include` must define `feeds`.
@@ -200,6 +202,7 @@ The bundled themes read these tokens:
 | `logo.height` | Height of the image from `theme.logo` |
 
 Token values must be strings.
+Token names contain dots, so `config set theme.tokens.color.primary red` and `--set theme.tokens.color.primary=red` address the one key `color.primary`.
 The old mkdocs-style `palette` and `font` keys are config errors, and the message points to `theme.tokens`.
 
 ## `authors_file`
@@ -246,7 +249,7 @@ markdown_extensions:
 
 Settings for the markwright extensions (embeds, code fences, highlighting).
 The section has the shape of a `markwright.toml`: `enable` or `disable` (not both), `warn`, and one table per extension.
-markwright validates it, so an unknown key or bad value fails the build with markwright's own message.
+markwright validates it when the config loads, so an unknown key or bad value fails `bartleby validate`, `config set`, and the build with markwright's own message under the `markwright` key, labeled with the config file or `--set` as its source.
 Only this section counts; a `markwright.toml` or `[tool.markwright]` table next to `bartleby.yml` is ignored, and the build warns about it.
 Embeds load eagerly unless you set `load: click` on one.
 [Configure markwright and Click-to-Load Embeds](../../guides/posts/configure-markwright.md) shows the shape.

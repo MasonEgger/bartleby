@@ -63,21 +63,28 @@ Incremental rebuilds are a non-goal, and the flag always ran a full rebuild.
 `bartleby serve` prints the build summary, the bound URL, and how to stop, after the socket binds, so `--port 0` shows the real port.
 `serve --events` opens with a matching `ready` object, and `--output json` carries the same data as text.
 
-`--full-config` on `bartleby new site` writes every option Bartleby accepts, each at its default with a one-line comment.
+`--full-config` on `bartleby new site` writes every option Bartleby accepts, each at its default with a one-line comment, on top of the minimal scaffold's config.
+The site name, the `nav`, and the six starter theme features are kept, and the `content_types` and `taxonomies` blocks are a commented-out example rather than live keys, so the site builds the same pages as the minimal scaffold and `schema.json` lists no `example` type.
 It is generated from `CONFIG_SCHEMA`, the one schema behind config validation, `config schema`, and the configuration reference, and a test fails when any accepted key is missing from it.
 
 `--set key.path=value` on `build`, `serve`, and `validate` overrides config for one run without touching the file.
-The value parses as YAML and goes through the same validator as the file, and an error names `--set` as its source.
-`--base-url` overrides `site.url` for one run, so canonical and absolute URLs use it.
+The key must be one the schema lists or sit under an open mapping (`markwright`, `theme.tokens`, `theme.icon_packs`, `ai.robots`); a misspelled key is an error that names the closest known one.
+A string key takes the text as typed, and every other key parses the value as YAML and checks it against the key's type, so `--set site.title=Yes` is the text `Yes` and `--set dev_server.port=notaport` is an error naming the expected type.
+The value goes through the same validator as the file, and an error names `--set` as its source, cross-field errors on a parent key (`theme: set only one of name, path, or package`) and markwright errors included.
+A token name keeps its dots: `--set theme.tokens.color.primary=red` sets the one token `color.primary`.
+`--base-url` overrides `site.url` for one run, so canonical and absolute URLs use it; it must be an absolute `http` or `https` URL with a host.
 Environment-variable overrides are not part of this release.
 
 The new `bartleby config` command group reads and writes config.
 `config show` prints the resolved config with the source of each value (default, file, or `--set`).
 `config get` prints one key and exits non-zero on an unknown key.
-`config set` validates the new value and writes it into `bartleby.yml` with the file's comments and key order intact.
+`config set` types the value by the key as `--set` does, validates the edited config (the `markwright` section included), and writes it into `bartleby.yml` with the file's comments, key order, byte order mark, and line endings intact, replacing the file in one step.
+A read-only file, an unwritable directory, a `--config` path that is a directory, a repeated key, and a tab indent are each a `config_error` with a fix, not a traceback.
 `config schema --output json` lists every key with its type, default, allowed values, and a one-line description.
 
-`bartleby enable <content-type> <name>` adds a content type to `bartleby.yml`, and `bartleby disable <content-type> <name>` sets `enabled: false` and keeps the block.
+`bartleby enable <content-type> <name>` adds a content type to `bartleby.yml`, and appends a `nav` entry when `nav` is explicit and has none, so the listing is reachable.
+`bartleby disable <name>` sets `enabled: false` and keeps the block and the `nav` entry; it takes no shape, because the block is already in the file.
+`bartleby new post --type <name>` on a disabled type is a usage error whose fix reads `run bartleby enable blog <name>`, and `bartleby schema <name>` reports `enabled: false` for it.
 `enable` merges the config a blog needs, and running it twice changes nothing.
 A site can enable the same shape more than once, so `bartleby enable blog tutorials` adds a second blog at `tutorials/`.
 
@@ -198,6 +205,11 @@ The docs site builds on the Scrivener theme, with a corrected listing, excerpt, 
 - Posts and listings in both bundled themes now get the section sidebar and table of contents that pages get.
   The sidebar needs the section's pages listed under it in `nav`, because `nav` keeps a content-type directory as one link.
 - Live reload works: the injected script connects to the page's own host and port.
+- A string key left null in `bartleby.yml` (`output_dir:` with nothing after it) reads as its default instead of the text `None`, so a build never writes into `None/`.
+- `site.url` is validated: it must be an absolute `http` or `https` URL with a host, so the sitemap never carries `<loc>/</loc>` or a scheme-less address.
+- A key written twice in one mapping is rejected with its line number, where PyYAML used to keep the second value silently; `bartleby validate` and `config set` now agree.
+- A YAML date in a `config set` or `--set` value is carried as its ISO text, so `config set markwright.x 2026-01-01` no longer crashes in `json.dumps`.
+- A markwright error names the config file that was loaded (`--config other.yml`) or `--set`, instead of a hard-coded `bartleby.yml`.
 - One file edit triggers one rebuild.
   The watcher ignores open and close events, so the build reading its own sources no longer starts another build.
 - `bartleby serve` flushes its startup line, so the URL shows up when output is piped.

@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime
-import json
 import logging
 import os
 import shlex
@@ -31,11 +30,11 @@ from bartleby.build import (
 from bartleby.config import (
     ConfigError,
     load_config,
-    parse_override_value,
+    read_config_text,
     validate_config_text,
 )
-from bartleby.config_edit import render_full_config, set_key
-from bartleby.config_schema import CONFIG_SCHEMA, resolve_parsed_with_sources
+from bartleby.config_edit import append_to_list, render_full_config, set_key, write_config_text
+from bartleby.config_schema import CONFIG_SCHEMA, override_value, resolve_parsed_with_sources
 from bartleby.content import ContentError, discover_content
 from bartleby.content_query import (
     ContentGet,
@@ -94,7 +93,7 @@ from bartleby.theme_loader import (
 from bartleby.urls import generate_all_urls
 
 if TYPE_CHECKING:
-    from collections.abc import Collection
+    from collections.abc import Sequence
 
     from bartleby.config import BartlebyConfig
     from bartleby.content import Page
@@ -276,7 +275,7 @@ def _add_set_flag(parser: argparse.ArgumentParser) -> None:
         action="append",
         default=[],
         metavar="KEY.PATH=VALUE",
-        help="Override a config value for this run (YAML-typed, repeatable)",
+        help="Override a config value for this run (typed by the key's schema, repeatable)",
     )
 
 
@@ -297,7 +296,7 @@ def _config_overrides(args: argparse.Namespace) -> list[str]:
     """
     overrides: list[str] = list(args.set)
     if args.base_url is not None:
-        overrides.append(f"site.url={json.dumps(args.base_url)}")
+        overrides.append(f"site.url={args.base_url}")
     return overrides
 
 
@@ -500,35 +499,37 @@ def _build_parser() -> argparse.ArgumentParser:
         "set", help="Validate a value and write it to bartleby.yml", parents=[flags]
     )
     config_set.add_argument("key", help="Dotted key path, such as site.title")
-    config_set.add_argument("value", help="New value, parsed as YAML (42 is an integer)")
+    config_set.add_argument(
+        "value", help="New value: text for a string key, YAML otherwise (42 is an integer)"
+    )
     config_set.set_defaults(_handler=_cmd_config_set)
     config_schema = config_sub.add_parser(
         "schema", help="List every accepted config key with its type and default", parents=[flags]
     )
     config_schema.set_defaults(_handler=_cmd_config_schema)
 
-    for verb, summary, handler in (
-        (
-            "enable",
-            "Add a content type of a given shape to bartleby.yml",
-            _cmd_enable,
-        ),
-        (
-            "disable",
-            "Stop building a content type, keeping its config",
-            _cmd_disable,
-        ),
-    ):
-        toggle = subparsers.add_parser(verb, help=summary, description=summary, parents=[flags])
-        toggle.add_argument(
-            "shape", choices=sorted(CONTENT_SHAPES), help="The shape of the content type"
-        )
-        toggle.add_argument(
-            "name",
-            type=_instance_name,
-            help="The content type's name, such as tutorials; one shape may be used many times",
-        )
-        toggle.set_defaults(_handler=handler)
+    enable_summary = "Add a content type of a given shape to bartleby.yml"
+    enable_parser = subparsers.add_parser(
+        "enable", help=enable_summary, description=enable_summary, parents=[flags]
+    )
+    enable_parser.add_argument(
+        "shape", choices=sorted(CONTENT_SHAPES), help="The shape of the content type"
+    )
+    enable_parser.add_argument(
+        "name",
+        type=_instance_name,
+        help="The content type's name, such as tutorials; one shape may be used many times",
+    )
+    enable_parser.set_defaults(_handler=_cmd_enable)
+
+    disable_summary = "Stop building a content type, keeping its config"
+    disable_parser = subparsers.add_parser(
+        "disable", help=disable_summary, description=disable_summary, parents=[flags]
+    )
+    disable_parser.add_argument(
+        "name", type=_instance_name, help="The name of a content type in bartleby.yml"
+    )
+    disable_parser.set_defaults(_handler=_cmd_disable)
 
     return parser
 
@@ -595,19 +596,44 @@ def _copy_starter_tree(root: Path, target: Path, values: dict[str, str]) -> None
 
 
 def _merge_content_shape(
-    text: str, shape: ContentShape, name: str, existing_taxonomies: Collection[str]
+    text: str, shape: ContentShape, name: str, config: BartlebyConfig, *, source: Path
 ) -> str:
     """Return config ``text`` with a content type of ``shape`` named ``name`` merged in.
 
-    Taxonomies the shape refers to are added unless the site already has them. The result
-    is not validated or written; the caller does both. Shared by ``enable`` and ``new site --blog``
-    so the two paths cannot drift.
+    Taxonomies the shape refers to are added unless the site already has them. When the
+    site has an explicit ``nav`` with no entry for the type, ``- <Title>: <name>/`` is
+    appended, so the new listing is reachable; a site without ``nav`` builds its
+    navigation from the content tree. The result is not validated or written; the
+    caller does both. Shared by ``enable`` and ``new site --blog`` so the two paths
+    cannot drift.
+
+    :param text: The current ``bartleby.yml`` text.
+    :param shape: The shape to instantiate.
+    :param name: The content type's name.
+    :param config: ``text`` as loaded, for the taxonomies and nav it already holds.
+    :param source: The file ``text`` came from, named in a YAML error.
     """
-    edited = set_key(text, f"content_types.{name}", shape.content_type(name))
+    edited = set_key(text, f"content_types.{name}", shape.content_type(name), source=source)
     for taxonomy, block in shape.taxonomies.items():
-        if taxonomy not in existing_taxonomies:
-            edited = set_key(edited, f"taxonomies.{taxonomy}", dict(block))
+        if taxonomy not in config.taxonomies:
+            edited = set_key(edited, f"taxonomies.{taxonomy}", dict(block), source=source)
+
+    target = f"{name}/"
+    if config.nav is not None and not _nav_links_to(config.nav, target):
+        title = name.replace("-", " ").replace("_", " ").title()
+        edited = append_to_list(edited, "nav", {title: target}, source=source)
     return edited
+
+
+def _nav_links_to(entries: Sequence[object], target: str) -> bool:
+    """Whether any entry in a ``nav`` tree, sections included, points at ``target``."""
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        for value in entry.values():
+            if value == target or (isinstance(value, list) and _nav_links_to(value, target)):
+                return True
+    return False
 
 
 def _cmd_new_site(args: argparse.Namespace) -> NewSiteOutput:
@@ -633,20 +659,23 @@ def _cmd_new_site(args: argparse.Namespace) -> NewSiteOutput:
 
     values = {"name": name, "today": datetime.date.today().isoformat()}
     _copy_starter_tree(_SCAFFOLD_ROOT, target, values)
-    starter_nav = load_config(target / "bartleby.yml").nav or []
+    config_path = target / "bartleby.yml"
 
     if args.full_config:
-        (target / "bartleby.yml").write_text(render_full_config(CONFIG_SCHEMA), encoding="utf-8")
+        full = render_full_config(CONFIG_SCHEMA, base=read_config_text(config_path))
+        write_config_text(config_path, full)
 
     if args.blog:
         _copy_starter_tree(_SCAFFOLD_BLOG_ROOT, target, values)
-        config_path = target / "bartleby.yml"
         edited = _merge_content_shape(
-            config_path.read_text(encoding="utf-8"), CONTENT_SHAPES["blog"], "blog", ()
+            read_config_text(config_path),
+            CONTENT_SHAPES["blog"],
+            "blog",
+            load_config(config_path),
+            source=config_path,
         )
-        edited = set_key(edited, "nav", [*starter_nav, {"Blog": "blog/"}])
         validate_config_text(edited, config_path)
-        config_path.write_text(edited, encoding="utf-8")
+        write_config_text(config_path, edited)
 
     created = sorted(
         f"{entry.name}/" if entry.is_dir() else entry.name for entry in target.iterdir()
@@ -669,6 +698,13 @@ def _cmd_new_post(args: argparse.Namespace) -> NewPostOutput:
     if args.type not in config.content_types:
         raise _unknown_content_type(args.type, config)
     content_type = config.content_types[args.type]
+    if not content_type.enabled:
+        raise UsageError(
+            format_error(
+                f"content type {args.type!r} is disabled, so nothing would build the post",
+                hint=f"run bartleby enable blog {args.type}",
+            )
+        )
     posts_dir = project_dir / "content" / content_type.path
     posts_dir.mkdir(parents=True, exist_ok=True)
     slug = slugify(args.title)
@@ -1163,19 +1199,21 @@ def _cmd_config_get(args: argparse.Namespace) -> ConfigGetOutput:
 def _cmd_config_set(args: argparse.Namespace) -> ConfigSetOutput:
     """Write one value into ``bartleby.yml``, keeping its comments, after validating it.
 
-    The edited text is validated in memory first, so a rejected value leaves the file
-    untouched; a value the file already holds is not rewritten.
+    The key must be one the schema knows, and the value is typed by it: text for a
+    string key, YAML for the rest. The edited text is validated in memory first, so a
+    rejected value leaves the file untouched; a value the file already holds is not
+    rewritten.
     """
     config_path = _resolve_config_path(args)
-    value = parse_override_value(args.key, args.value)
+    value = override_value(args.key, args.value)
 
-    current = config_path.read_text(encoding="utf-8")
-    edited = set_key(current, args.key, value)
+    current = read_config_text(config_path)
+    edited = set_key(current, args.key, value, source=config_path)
     validate_config_text(edited, config_path)
 
     changed = edited != current
     if changed:
-        config_path.write_text(edited, encoding="utf-8")
+        write_config_text(config_path, edited)
     return ConfigSetOutput(args.key, value, config_path.name, changed)
 
 
@@ -1185,8 +1223,8 @@ def _cmd_enable(args: argparse.Namespace) -> ContentTypeToggleOutput:
     The block merges in only when the name is absent, so a type the site already
     customized keeps every key. An existing disabled type is turned back on by setting
     its ``enabled`` flag; an enabled one is left alone. Taxonomies the shape refers to
-    and the site lacks are added too. The edited text is validated in memory before it
-    is written.
+    and the site lacks are added too, as is a ``nav`` entry when ``nav`` is explicit
+    and has none. The edited text is validated in memory before it is written.
     """
     config_path = _resolve_config_path(args)
     config = load_config(config_path)
@@ -1197,28 +1235,34 @@ def _cmd_enable(args: argparse.Namespace) -> ContentTypeToggleOutput:
                 "enable", args.shape, args.name, True, config_path.name, False
             )
         reenabled = set_key(
-            config_path.read_text(encoding="utf-8"), f"content_types.{args.name}.enabled", True
+            read_config_text(config_path),
+            f"content_types.{args.name}.enabled",
+            True,
+            source=config_path,
         )
         validate_config_text(reenabled, config_path)
-        config_path.write_text(reenabled, encoding="utf-8")
+        write_config_text(config_path, reenabled)
         return ContentTypeToggleOutput(
             "enable", args.shape, args.name, True, config_path.name, True, reenabled=True
         )
 
     edited = _merge_content_shape(
-        config_path.read_text(encoding="utf-8"),
+        read_config_text(config_path),
         CONTENT_SHAPES[args.shape],
         args.name,
-        config.taxonomies,
+        config,
+        source=config_path,
     )
     validate_config_text(edited, config_path)
 
-    config_path.write_text(edited, encoding="utf-8")
+    write_config_text(config_path, edited)
     return ContentTypeToggleOutput("enable", args.shape, args.name, True, config_path.name, True)
 
 
 def _cmd_disable(args: argparse.Namespace) -> ContentTypeToggleOutput:
     """Set ``enabled: false`` on the content type ``args.name``, keeping its config.
+
+    ``nav`` is left alone; a build warns about an entry that links to a disabled type.
 
     :raises UsageError: When ``bartleby.yml`` defines no content type with that name.
     """
@@ -1227,16 +1271,14 @@ def _cmd_disable(args: argparse.Namespace) -> ContentTypeToggleOutput:
     if args.name not in config.content_types:
         raise _unknown_content_type(args.name, config)
 
-    current = config_path.read_text(encoding="utf-8")
-    edited = set_key(current, f"content_types.{args.name}.enabled", False)
+    current = read_config_text(config_path)
+    edited = set_key(current, f"content_types.{args.name}.enabled", False, source=config_path)
     validate_config_text(edited, config_path)
 
     changed = edited != current
     if changed:
-        config_path.write_text(edited, encoding="utf-8")
-    return ContentTypeToggleOutput(
-        "disable", args.shape, args.name, False, config_path.name, changed
-    )
+        write_config_text(config_path, edited)
+    return ContentTypeToggleOutput("disable", None, args.name, False, config_path.name, changed)
 
 
 def _cmd_config_schema(args: argparse.Namespace) -> ConfigSchemaOutput:

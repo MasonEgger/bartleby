@@ -12,11 +12,14 @@ from bartleby.cli import _SCAFFOLD_ROOT
 from bartleby.config import ConfigError, load_config
 from bartleby.config_edit import (
     PLACEHOLDER_MARKER,
+    append_to_list,
     example_path,
     render_full_config,
     set_key,
+    write_config_text,
 )
 from bartleby.config_schema import CONFIG_SCHEMA
+from tests.config_helpers import uncomment_examples
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -83,18 +86,27 @@ def test_set_key_rejects_a_path_through_a_scalar() -> None:
 
 
 def test_set_key_emits_scalars_with_their_yaml_types() -> None:
-    """A bool is not quoted, an int is not quoted, a lookalike string is quoted."""
+    """A bool is not quoted, an int is not quoted, a lookalike string is quoted.
+
+    ``Yes`` and ``on`` are strings to ruamel (YAML 1.2) but booleans to PyYAML (YAML
+    1.1), so the writer quotes them for the loader.
+    """
     result = set_key("", "a.flag", True)
     result = set_key(result, "a.count", 3)
     result = set_key(result, "a.word", "true")
+    result = set_key(result, "a.answer", "Yes")
+    result = set_key(result, "a.switch", "on")
     result = set_key(result, "a.items", ["x", "y"])
 
     assert "flag: true" in result
     assert "count: 3" in result
+    assert 'answer: "Yes"' in result
     assert yaml.safe_load(result)["a"] == {
         "flag": True,
         "count": 3,
         "word": "true",
+        "answer": "Yes",
+        "switch": "on",
         "items": ["x", "y"],
     }
 
@@ -132,9 +144,13 @@ def test_render_full_config_loads_without_error(tmp_path: Path) -> None:
 
 
 def test_render_full_config_covers_every_field_with_default_and_comment() -> None:
-    """Every schema field appears at its default, preceded by its description as a comment."""
+    """Every schema field appears at its default, preceded by its description as a comment.
+
+    The ``<name>`` fields sit in the commented-out example block, which parses once
+    uncommented.
+    """
     text = render_full_config(CONFIG_SCHEMA)
-    parsed = yaml.safe_load(text)
+    parsed = yaml.safe_load(uncomment_examples(text))
 
     for entry in CONFIG_SCHEMA:
         node = parsed
@@ -145,6 +161,37 @@ def test_render_full_config_covers_every_field_with_default_and_comment() -> Non
             expected = list(entry.default) if isinstance(entry.default, tuple) else entry.default
             assert node == expected, entry.path
         assert f"# {entry.description}" in text, entry.path
+
+
+def test_render_full_config_comments_out_the_example_blocks() -> None:
+    """The file as written defines no content type or taxonomy; the examples are comments."""
+    text = render_full_config(CONFIG_SCHEMA)
+    parsed = yaml.safe_load(text)
+
+    assert "content_types" not in parsed
+    assert "taxonomies" not in parsed
+    assert "# content_types:" in text
+    assert "#   example:" in text
+    assert "# taxonomies:" in text
+
+
+def test_render_full_config_keeps_the_base_values_and_fills_the_rest() -> None:
+    """Keys the base sets keep their values; every other schema key gets its default."""
+    base = (
+        "site:\n  title: Mine\n  url: https://mine.test\n"
+        "theme:\n  features:\n    - search\n"
+        "nav:\n  - Home: index.md\n"
+    )
+    text = render_full_config(CONFIG_SCHEMA, base=base)
+    parsed = yaml.safe_load(text)
+
+    assert parsed["site"]["title"] == "Mine"
+    assert parsed["site"]["url"] == "https://mine.test"
+    assert parsed["theme"]["features"] == ["search"]
+    assert parsed["nav"] == [{"Home": "index.md"}]
+    assert parsed["dev_server"]["port"] == 8000
+    assert "# The site title.\n" in text
+    assert PLACEHOLDER_MARKER not in text.split("# content_types:")[0]
 
 
 def test_render_full_config_is_deterministic() -> None:
@@ -162,6 +209,125 @@ def test_render_full_config_marks_each_placeholder_in_its_comment() -> None:
         assert f"# {entry.description} {PLACEHOLDER_MARKER}" in text, entry.path
 
 
+def test_set_key_keeps_a_comment_only_document_above_the_new_key() -> None:
+    """A file holding only comments keeps them when the first key is added."""
+    result = set_key("# Site config.\n# Edit me.\n", "site.title", "Hi")
+
+    assert result.startswith("# Site config.\n# Edit me.\n")
+    assert yaml.safe_load(result) == {"site": {"title": "Hi"}}
+
+
+def test_set_key_keeps_a_byte_order_mark_and_crlf_line_endings() -> None:
+    """The edited text starts with the same mark and uses the same line endings as before."""
+    text = "\ufeffsite:\r\n  title: Old\r\n"
+    result = set_key(text, "site.title", "New")
+
+    assert result.startswith("\ufeffsite:\r\n")
+    assert "\r\n" in result
+    assert "\n" not in result.replace("\r\n", "")
+    assert yaml.safe_load(result.removeprefix("\ufeff")) == {"site": {"title": "New"}}
+
+
+@pytest.mark.parametrize(
+    ("text", "problem"),
+    [
+        ("site:\n  title: a\n  title: b\n", "duplicate"),
+        ("site:\n\ttitle: a\n", "line 2"),
+    ],
+)
+def test_set_key_reports_a_yaml_error_with_its_line_and_the_file(text: str, problem: str) -> None:
+    """A repeated key or a tab indent is a ConfigError naming the line and the source file."""
+    with pytest.raises(ConfigError) as error:
+        set_key(text, "site.url", "https://x.test", source="bartleby.yml")
+
+    message = str(error.value)
+    assert message.startswith("bartleby.yml: invalid YAML at line")
+    assert problem in message
+    assert "fix:" in message
+
+
+def test_append_to_list_keeps_the_other_items_and_their_comments() -> None:
+    """Appending a nav entry leaves the existing entries, comments included, in place."""
+    text = "nav:\n  - Home: index.md  # the front page\n  - Docs: docs/\n"
+    result = append_to_list(text, "nav", {"Blog": "blog/"})
+
+    assert "# the front page" in result
+    assert yaml.safe_load(result)["nav"] == [
+        {"Home": "index.md"},
+        {"Docs": "docs/"},
+        {"Blog": "blog/"},
+    ]
+
+
+def test_append_to_list_keeps_the_next_comment_above_its_key() -> None:
+    """The comment above the key after the list stays there; the new item goes before it."""
+    text = (
+        "nav:\n  - Home: index.md\n  - Tour: tour/index.md\n"
+        "# The authors file.\nauthors_file: a.yml\n"
+    )
+    lines = append_to_list(text, "nav", {"Blog": "blog/"}).splitlines()
+
+    assert lines == [
+        "nav:",
+        "  - Home: index.md",
+        "  - Tour: tour/index.md",
+        "  - Blog: blog/",
+        "# The authors file.",
+        "authors_file: a.yml",
+    ]
+
+
+def test_append_to_list_rejects_a_non_list_key() -> None:
+    """Appending under a scalar is a ConfigError naming the key."""
+    with pytest.raises(ConfigError) as error:
+        append_to_list("site:\n  title: T\n", "site.title", "x")
+
+    assert error.value.key_path == "site.title"
+
+
+def test_write_config_text_replaces_the_file_atomically(tmp_path: Path) -> None:
+    """The write lands as one rename, leaving no temp file behind."""
+    config_path = tmp_path / "bartleby.yml"
+    config_path.write_text("site:\n  title: Old\n", encoding="utf-8")
+
+    write_config_text(config_path, "site:\n  title: New\n")
+
+    assert config_path.read_text(encoding="utf-8") == "site:\n  title: New\n"
+    assert [entry.name for entry in tmp_path.iterdir()] == ["bartleby.yml"]
+
+
+def test_write_config_text_refuses_a_read_only_file(tmp_path: Path) -> None:
+    """A read-only bartleby.yml is a ConfigError naming the file, not a traceback."""
+    config_path = tmp_path / "bartleby.yml"
+    config_path.write_text("site:\n  title: Old\n", encoding="utf-8")
+    config_path.chmod(0o444)
+    try:
+        with pytest.raises(ConfigError) as error:
+            write_config_text(config_path, "site:\n  title: New\n")
+    finally:
+        config_path.chmod(0o644)
+
+    assert str(error.value).startswith(str(config_path))
+    assert "fix:" in str(error.value)
+    assert config_path.read_text(encoding="utf-8") == "site:\n  title: Old\n"
+
+
+def test_write_config_text_reports_an_unwritable_directory(tmp_path: Path) -> None:
+    """A directory the temp file cannot be created in is a ConfigError naming the file."""
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    config_path = locked / "bartleby.yml"
+    locked.chmod(0o555)
+    try:
+        with pytest.raises(ConfigError) as error:
+            write_config_text(config_path, "site:\n  title: New\n")
+    finally:
+        locked.chmod(0o755)
+
+    assert "bartleby.yml" in str(error.value)
+    assert "fix:" in str(error.value)
+
+
 def test_render_full_config_leaves_nav_and_color_mode_unset() -> None:
     """Auto-nav and the no-preference color mode are the defaults, so they render as null."""
     parsed = yaml.safe_load(render_full_config(CONFIG_SCHEMA))
@@ -172,9 +338,9 @@ def test_render_full_config_leaves_nav_and_color_mode_unset() -> None:
 
 def test_set_key_new_key_keeps_the_next_comment_above_its_key() -> None:
     """A key added at the end of a mapping lands above the blank line and comment below it."""
-    lines = set_key(SAMPLE, "site.description", "yes").splitlines()
+    lines = set_key(SAMPLE, "site.description", "notes").splitlines()
 
-    assert lines.index("  description: yes") < lines.index("# Theme choice.")
+    assert lines.index("  description: notes") < lines.index("# Theme choice.")
     assert lines[lines.index("theme:") - 1] == "# Theme choice."
     assert lines[lines.index("# Theme choice.") - 1] == ""
 

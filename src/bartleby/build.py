@@ -10,9 +10,11 @@ import re
 import shutil
 import tempfile
 import time
+import tomllib
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NoReturn
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 from jinja2 import TemplateError
 
@@ -22,6 +24,7 @@ from bartleby.assets import (
     AssetCollisionError,
     copy_colocated_assets,
     copy_static_files,
+    copy_theme_static,
     drop_draft_only_assets,
 )
 from bartleby.authors import load_authors
@@ -29,6 +32,7 @@ from bartleby.config import load_config
 from bartleby.content import discover_content
 from bartleby.content_query import select_published
 from bartleby.crossrefs import resolve_all_crossrefs
+from bartleby.errors import format_error
 from bartleby.feeds import generate_feeds
 from bartleby.icons import DEFAULT_ICON_PACKS, tree_shake_icons
 from bartleby.listings import LISTING_KIND_KEY, ListingKind, generate_listing_pages
@@ -37,7 +41,13 @@ from bartleby.llm import (
     generate_llms_txt,
     write_markdown_variant,
 )
-from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
+from bartleby.markdown_pipeline import (
+    create_markdown_renderer,
+    disallowed_environments,
+    fence_environment_limits,
+    html_to_plain_text,
+    render_markdown,
+)
 from bartleby.metadata import validate_all_metadata
 from bartleby.navigation import build_navigation, link_pages
 from bartleby.plugins import PluginCollection, discover_hooks, discover_plugins
@@ -58,15 +68,18 @@ from bartleby.templates import (
     load_data_files,
     resolve_template_name,
 )
-from bartleby.theme import get_theme_templates_dir
+from bartleby.theme_loader import select_theme
 from bartleby.urls import generate_all_urls
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from jinja2 import Environment
 
     from bartleby.authors import Author
     from bartleby.config import BartlebyConfig
     from bartleby.content import ColocatedAsset, Page
+    from bartleby.theme_loader import ResolvedTheme
 
 
 @dataclass(slots=True)
@@ -80,12 +93,19 @@ class _BuildState:
 
     plugins: PluginCollection
     config: BartlebyConfig
+    config_path: Path
     project_dir: Path
     content_dir: Path
     authors: dict[str, Author]
     pages: list[Page]
     assets: list[ColocatedAsset]
+    theme: ResolvedTheme
     all_pages: list[Page] = field(default_factory=list)
+    #: The published content pages, computed once so variants, llms.txt, feeds, and the
+    #: sitemap all agree on which pages exist.
+    published: list[Page] = field(default_factory=list)
+    #: Output URLs that have a Markdown variant; the alternate link renders only for these.
+    markdown_variant_urls: frozenset[str] = frozenset()
     taxonomy_data: AllTaxonomies | None = None
     nav: Any = None
     env: Environment | None = None
@@ -109,10 +129,12 @@ class BuildResult:
         variants, llms.txt files, sitemap, agent-surface JSON, robots.txt,
         tree-shaken icon SVGs).
     :ivar output_dir: The directory the finished site was written to.
+    :ivar config: The configuration the build ran with, after ``on_config`` plugins.
     """
 
     page_count: int
     duration_seconds: float
+    config: BartlebyConfig
     static_file_count: int = 0
     output_dir: str = "site"
 
@@ -152,6 +174,12 @@ class BuildError(Exception):
     the first, so :attr:`errors` carries the full list. The pre-existing
     ``site/`` output is left untouched when this is raised.
 
+    Message contract: each error prints as ``<file>: <message>``, where the message
+    follows :func:`bartleby.errors.format_error` (``<detail> (fix: <hint>)``) when a
+    concrete fix exists. Metadata errors name the schema entry
+    (``content_types.<type>.metadata.<field>``), an unreadable ``content/`` directory
+    names its path, and a shortcode error names the template to create.
+
     :ivar errors: Every :class:`PageError` collected during the build.
     """
 
@@ -179,12 +207,50 @@ def format_page_error(error: PageError) -> str:
     return f"{error.file_path}: {error.message}"
 
 
+@overload
+def build(
+    config_path: Path,
+    *,
+    include_drafts: bool = False,
+    strict: bool = False,
+    dry_run: Literal[False] = False,
+    theme: ResolvedTheme | None = None,
+    overrides: list[str] | None = None,
+) -> BuildResult: ...
+
+
+@overload
+def build(
+    config_path: Path,
+    *,
+    include_drafts: bool = False,
+    strict: bool = False,
+    dry_run: Literal[True],
+    theme: ResolvedTheme | None = None,
+    overrides: list[str] | None = None,
+) -> DryRunResult: ...
+
+
+@overload
+def build(
+    config_path: Path,
+    *,
+    include_drafts: bool = False,
+    strict: bool = False,
+    dry_run: bool,
+    theme: ResolvedTheme | None = None,
+    overrides: list[str] | None = None,
+) -> BuildResult | DryRunResult: ...
+
+
 def build(
     config_path: Path,
     *,
     include_drafts: bool = False,
     strict: bool = False,
     dry_run: bool = False,
+    theme: ResolvedTheme | None = None,
+    overrides: list[str] | None = None,
 ) -> BuildResult | DryRunResult:
     """Run the full Bartleby build pipeline against ``config_path``.
 
@@ -197,6 +263,10 @@ def build(
     :param dry_run: When ``True``, the freshly rendered output is compared to
         the existing ``site/`` and a :class:`DryRunResult` is returned; nothing
         is written to disk and the previous ``site/`` is left untouched.
+    :param theme: The resolved theme chain to render with. Defaults to the
+        default theme until config selects one.
+    :param overrides: ``key.path=value`` config overrides from ``--set``; see
+        :func:`bartleby.config.load_config`.
     :returns: A :class:`BuildResult` for a normal build, or a
         :class:`DryRunResult` when ``dry_run`` is set.
     :raises BuildError: When metadata validation fails, or when ``strict``
@@ -208,11 +278,13 @@ def build(
     """
     started = time.perf_counter()
 
-    state = _load_inputs(config_path)
+    state = _load_inputs(config_path, theme, overrides=overrides)
+    _LOGGER.debug("loaded %s with theme %r", config_path, state.theme.chain[0].name)
     try:
-        _filter_and_validate(state, include_drafts=include_drafts)
-        rendered_html = _render_all_pages(state, strict=strict)
-        _emit_outputs(state, rendered_html)
+        with _pair_failure_hooks(state.plugins):
+            _filter_and_validate(state, include_drafts=include_drafts)
+            rendered_html = _render_all_pages(state, strict=strict)
+            _emit_outputs(state, rendered_html)
 
         return _finish_build(state, started=started, dry_run=dry_run)
     finally:
@@ -225,7 +297,54 @@ def build(
             shutil.rmtree(state.output_dir, ignore_errors=True)
 
 
-def _load_inputs(config_path: Path) -> _BuildState:
+@dataclass(slots=True)
+class RenderedContent:
+    """Published pages with their Markdown bodies rendered to HTML.
+
+    :ivar config: The configuration after ``on_config`` plugins ran.
+    :ivar pages: The published content pages, each with ``rendered_content`` filled.
+    """
+
+    config: BartlebyConfig
+    pages: list[Page]
+
+
+def render_content(config_path: Path, *, command: str = "export") -> RenderedContent:
+    """Render the published pages' bodies through the build's own render phase.
+
+    Runs the build's load, filter, and body-render phases (shortcodes, plugin hooks,
+    Markdown, cross-references) and stops before any template renders or output is
+    written. This is the smallest context the render path needs: the Jinja environment,
+    navigation, and taxonomies that shortcodes and cross-references read.
+    The empty temp directory the filter phase creates is removed before returning.
+    Fires ``on_shutdown`` on success, pairing the ``on_startup`` that loading fired,
+    and never ``on_post_build``, since nothing is written.
+
+    :param config_path: Path to ``bartleby.yml``.
+    :param command: The command name ``on_startup`` receives (``export`` or ``lint``).
+    :returns: The final config and the published pages with ``rendered_content`` set.
+    :raises BuildError: When metadata validation or a page's render fails.
+    """
+    state = _load_inputs(config_path, None, command=command)
+    try:
+        with _pair_failure_hooks(state.plugins):
+            _filter_and_validate(state, include_drafts=False)
+            _render_page_bodies(state, strict=False)
+    finally:
+        if state.output_dir is not None:
+            shutil.rmtree(state.output_dir, ignore_errors=True)
+    # A failed render already fired on_build_error and on_shutdown in _pair_failure_hooks.
+    state.plugins.run_lifecycle("on_shutdown")
+    return RenderedContent(config=state.config, pages=state.published)
+
+
+def _load_inputs(
+    config_path: Path,
+    theme: ResolvedTheme | None,
+    *,
+    command: str = "build",
+    overrides: list[str] | None = None,
+) -> _BuildState:
     """Phase 1: load config, discover plugins/hooks, and read authors + content.
 
     Fires the early lifecycle hooks (``on_startup``, ``on_config``,
@@ -233,29 +352,101 @@ def _load_inputs(config_path: Path) -> _BuildState:
     config, plugin collection, authors, and the discovered pages/assets.
     """
     plugins = PluginCollection()
-    config = load_config(config_path)
+    config = load_config(config_path, overrides)
     project_dir = config.config_dir
     # Registration order at equal priority: internal handlers (already on
     # `plugins`), then installed plugins (alphabetical), then project hooks last.
     plugins.merge(discover_plugins(config.disabled_plugins))
     plugins.merge(discover_hooks(project_dir))
-    plugins.run_event("on_startup", "build")
-    config = plugins.run_event("on_config", config)
-    plugins.run_event("on_pre_build", config)
-    authors = load_authors(project_dir / config.authors_file)
+    plugins.run_event("on_startup", command)
+    with _pair_failure_hooks(plugins):
+        config = plugins.run_event("on_config", config)
+        plugins.run_event("on_pre_build", config)
+        authors = load_authors(project_dir / config.authors_file)
+        active_theme = select_theme(config.theme, project_dir) if theme is None else theme
+        _warn_unimplemented_features(config, active_theme)
+        _warn_ignored_markwright_config(project_dir, config_path.name)
 
-    content_dir = project_dir / "content"
-    pages, assets = discover_content(config, content_dir)
+        content_dir = project_dir / "content"
+        if not content_dir.is_dir():
+            raise BuildError(
+                [
+                    PageError(
+                        file_path=str(content_dir),
+                        message=format_error(
+                            "content directory does not exist",
+                            hint=(
+                                "create it and add Markdown files, or run "
+                                "`bartleby new site <name>` to scaffold a project (builds run "
+                                "from the directory holding bartleby.yml, or pass --config)"
+                            ),
+                        ),
+                    )
+                ]
+            )
+        pages, assets = discover_content(config, content_dir)
+        _LOGGER.debug(
+            "discovered %d content pages and %d co-located assets in %s",
+            len(pages),
+            len(assets),
+            content_dir,
+        )
 
-    return _BuildState(
-        plugins=plugins,
-        config=config,
-        project_dir=project_dir,
-        content_dir=content_dir,
-        authors=authors,
-        pages=pages,
-        assets=assets,
-    )
+        return _BuildState(
+            plugins=plugins,
+            config=config,
+            config_path=config_path,
+            project_dir=project_dir,
+            content_dir=content_dir,
+            authors=authors,
+            pages=pages,
+            assets=assets,
+            theme=active_theme,
+        )
+
+
+def _warn_unimplemented_features(config: BartlebyConfig, theme: ResolvedTheme) -> None:
+    """Warn once per enabled feature that no manifest in the theme chain declares."""
+    implemented = theme.implemented_features()
+    for feature_name in config.theme.features:
+        if feature_name not in implemented:
+            _LOGGER.warning(
+                "theme %r does not implement the enabled feature %r",
+                theme.chain[0].name,
+                feature_name,
+            )
+
+
+def _warn_ignored_markwright_config(project_dir: Path, config_name: str) -> None:
+    """Warn once when a markwright config file sits beside ``bartleby.yml`` and is ignored.
+
+    Only the ``markwright:`` section of the Bartleby config applies. A ``markwright.toml`` or a
+    ``[tool.markwright]`` table in ``pyproject.toml`` is never read, so say so instead of
+    leaving the author to wonder why it has no effect.
+
+    :param project_dir: The directory holding the Bartleby config.
+    :param config_name: The Bartleby config's file name, as named in the warning.
+    """
+    ignored: list[str] = []
+    if (project_dir / "markwright.toml").is_file():
+        ignored.append("markwright.toml")
+
+    pyproject = project_dir / "pyproject.toml"
+    if pyproject.is_file():
+        try:
+            tool_table = tomllib.loads(pyproject.read_text(encoding="utf-8")).get("tool")
+        except tomllib.TOMLDecodeError:
+            # Not Bartleby's file to validate; it cannot hold a markwright table we can read.
+            tool_table = None
+        if isinstance(tool_table, dict) and "markwright" in tool_table:
+            ignored.append("pyproject.toml [tool.markwright]")
+
+    if ignored:
+        _LOGGER.warning(
+            "ignored %s: only the `markwright:` section of %s applies",
+            " and ".join(ignored),
+            config_name,
+        )
 
 
 def _filter_and_validate(state: _BuildState, *, include_drafts: bool) -> None:
@@ -295,15 +486,18 @@ def _filter_and_validate(state: _BuildState, *, include_drafts: bool) -> None:
     taxonomy_pages = generate_taxonomy_pages(state.taxonomy_data, config)
     # Built before listing generation so listing intro content (content/{type}/index.md)
     # renders through the same renderer instance the page render loop uses below.
-    state.md_renderer = create_markdown_renderer(config)
+    state.md_renderer = create_markdown_renderer(config, state.theme.icons_dirs())
     listing_pages = generate_listing_pages(pages, config, state.content_dir, state.md_renderer)
     state.all_pages = pages + taxonomy_pages + listing_pages
+    state.published = select_published(pages)
+    if config.ai.markdown_variants:
+        state.markdown_variant_urls = frozenset(page.output_url for page in state.published)
 
     nav = build_navigation(config, pages)
     link_pages(nav)
     state.nav = plugins.run_event("on_nav", nav, config=config)
 
-    env = create_jinja_env(config, state.project_dir)
+    env = create_jinja_env(config, state.project_dir, state.theme)
     state.env = plugins.run_event("on_env", env, config=config)
 
     state.data = load_data_files(state.project_dir)
@@ -312,30 +506,37 @@ def _filter_and_validate(state: _BuildState, *, include_drafts: bool) -> None:
     state.final_output_dir = state.project_dir / config.output_dir
     # Render into a sibling temp directory and swap it into place only on full
     # success, so a failed build never touches the previous good output dir.
-    state.output_dir = Path(tempfile.mkdtemp(prefix=".bartleby-build-", dir=state.project_dir))
+    try:
+        state.output_dir = Path(tempfile.mkdtemp(prefix=".bartleby-build-", dir=state.project_dir))
+    except PermissionError as exc:
+        raise _unwritable_output(
+            state.project_dir,
+            "write the build in",
+            f"make {state.project_dir} writable (chmod u+w); the build is staged inside it",
+            exc,
+        ) from exc
+    # mkdtemp creates the directory 0700 and the swap keeps that mode, so give
+    # the output the mode a plain mkdir would under the current umask.
+    state.output_dir.chmod(0o777 & ~_current_umask())
 
 
-def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
-    """Phase 3: render markdown, resolve crossrefs, render templates, and the 404.
+def _render_page_bodies(state: _BuildState, *, strict: bool) -> None:
+    """Phase 3a: render every page's Markdown body to HTML and resolve cross-references.
 
-    Both the markdown render loop and the template render loop collect every
-    page-level failure and abort the build (discarding the temp dir) if any
-    occurred, instead of stopping on the first error.
+    Fills ``rendered_content``, ``toc``, ``readtime``, and the excerpt fields on each page
+    in ``state.all_pages``. The build and ``bartleby export --include-html`` both call this,
+    so an exported page body is the HTML the built page embeds.
 
-    :raises BuildError: When ``strict`` is set and a cross-reference is broken.
-    :returns: Every rendered HTML document, including ``404.html``, for icon
-        tree-shaking downstream.
+    :raises BuildError: When a page fails to render, or when ``strict`` is set and a
+        cross-reference is broken.
     """
     config = state.config
     plugins = state.plugins
     assert state.env is not None
     assert state.build_info is not None
-    assert state.output_dir is not None
-    assert state.taxonomy_data is not None
     env = state.env
     build_info = state.build_info
-    output_dir = state.output_dir
-    taxonomy_context = _taxonomy_context(state.taxonomy_data)
+    allowed_environments = fence_environment_limits(config)
 
     page_errors: list[PageError] = []
     for page in state.all_pages:
@@ -347,11 +548,24 @@ def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
         try:
             source = process_shortcodes(raw_source, {"build": build_info, "page": page}, env)
             source = plugins.run_event("on_page_markdown", source, page=page, config=config)
+            # markwright leaves a directive outside allowed_environments in the block as
+            # text and says nothing, so the build names it once per page.
+            for environment in disallowed_environments(source, allowed_environments):
+                _LOGGER.warning(
+                    "%s",
+                    format_error(
+                        f"[environment {environment}] is not in"
+                        " markwright.fence.allowed_environments and stays as text",
+                        source=str(page.source_path),
+                        hint=f"add {environment!r} to the list, or set markwright.warn to false",
+                    ),
+                )
             rendered = render_markdown(source, state.md_renderer)
             html_content = plugins.run_event(
                 "on_page_content", rendered.html, page=page, config=config
             )
             page.rendered_content = html_content
+            page.toc = rendered.toc_tokens
         except (ShortcodeError, ValueError) as exc:
             page_errors.append(PageError(file_path=str(page.source_path), message=str(exc)))
             continue
@@ -362,10 +576,13 @@ def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
         if content_type is not None and content_type.readtime and page.raw_content:
             page.readtime = calculate_readtime(page.raw_content)
         if content_type is not None and content_type.excerpt_separator and page.raw_content:
-            page.excerpt = extract_excerpt(page.raw_content, content_type.excerpt_separator)
+            # Listings show the rendered excerpt; feeds and llms.txt get its plain text.
+            excerpt_markdown = extract_excerpt(source, content_type.excerpt_separator)
+            page.excerpt_html = render_markdown(excerpt_markdown, state.md_renderer).html
+            page.excerpt = html_to_plain_text(page.excerpt_html)
 
     if page_errors:
-        _fail_build(page_errors, plugins)
+        raise BuildError(page_errors)
 
     # Cross-reference resolution needs every page rendered before any rewriting,
     # so it lives between the markdown loop above and the template loop below.
@@ -390,6 +607,32 @@ def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
                 ]
             )
 
+
+def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
+    """Phase 3: render page bodies, then the page templates and the 404.
+
+    Both the markdown render loop and the template render loop collect every
+    page-level failure and abort the build (discarding the temp dir) if any
+    occurred, instead of stopping on the first error.
+
+    :raises BuildError: When ``strict`` is set and a cross-reference is broken.
+    :returns: Every rendered HTML document, including ``404.html``, for icon
+        tree-shaking downstream.
+    """
+    config = state.config
+    plugins = state.plugins
+    assert state.env is not None
+    assert state.build_info is not None
+    assert state.output_dir is not None
+    assert state.taxonomy_data is not None
+    env = state.env
+    build_info = state.build_info
+    output_dir = state.output_dir
+    taxonomy_context = _taxonomy_context(state.taxonomy_data)
+
+    _render_page_bodies(state, strict=strict)
+
+    page_errors: list[PageError] = []
     rendered_html: list[str] = []
     for page in state.all_pages:
         content_type = (
@@ -397,7 +640,9 @@ def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
         )
         template_type = _template_type_for(page, content_type)
         try:
-            template_name = resolve_template_name(page, template_type, state.project_dir)
+            template_name = resolve_template_name(
+                page, template_type, state.project_dir, state.theme
+            )
             template = env.get_template(template_name)
             context = build_page_context(
                 page=page,
@@ -409,6 +654,7 @@ def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
                 build_info=build_info,
                 data=state.data,
                 authors=state.authors,
+                markdown_variant_urls=state.markdown_variant_urls,
             )
             context = plugins.run_event("on_page_context", context, page=page, config=config)
             html = template.render(**context)
@@ -419,7 +665,7 @@ def _render_all_pages(state: _BuildState, *, strict: bool) -> list[str]:
             page_errors.append(PageError(file_path=str(page.source_path), message=str(exc)))
 
     if page_errors:
-        _fail_build(page_errors, plugins)
+        raise BuildError(page_errors)
 
     not_found_html = _render_404(
         env=env,
@@ -451,10 +697,9 @@ def _emit_outputs(state: _BuildState, rendered_html: list[str]) -> None:
     output_dir = state.output_dir
     project_dir = state.project_dir
 
-    theme_static = get_theme_templates_dir().parent / "static"
-    static_file_count = copy_static_files(theme_static, output_dir)
+    static_file_count = copy_theme_static(state.theme.static_dirs(), output_dir)
     static_file_count += copy_static_files(project_dir / "static", output_dir)
-    _apply_compiled_theme_css(project_dir, output_dir)
+    _apply_compiled_theme_css(project_dir, output_dir, state.theme)
     try:
         static_file_count += copy_colocated_assets(
             state.assets, state.pages, state.content_dir, output_dir
@@ -477,27 +722,28 @@ def _emit_outputs(state: _BuildState, rendered_html: list[str]) -> None:
         **{pack: bool(value) for pack, value in config.theme.icon_packs.items()},
     }
     tree_shake_icons(
-        rendered_html + _template_sources(project_dir),
+        rendered_html + _template_sources(project_dir, state.theme),
         icon_packs,
         output_dir,
+        state.theme.icons_dirs(),
     )
     write_search_index(build_search_index(state.pages, config), output_dir)
-    generate_feeds(state.pages, config, output_dir)
+    generate_feeds(state.published, config, output_dir)
     if config.ai.markdown_variants:
-        for page in state.pages:
-            if not page.draft and page.raw_content:
-                write_markdown_variant(page, output_dir)
+        for page in state.published:
+            write_markdown_variant(page, output_dir)
     if config.ai.llms_txt:
         (output_dir / "llms.txt").write_text(
-            generate_llms_txt(state.pages, config), encoding="utf-8"
+            generate_llms_txt(state.published, config), encoding="utf-8"
         )
     if config.ai.llms_full_txt:
         (output_dir / "llms-full.txt").write_text(
-            generate_llms_full_txt(state.pages, config), encoding="utf-8"
+            generate_llms_full_txt(state.published, config), encoding="utf-8"
         )
-    write_sitemap(state.all_pages, config.site, output_dir)
+    # The sitemap lists every rendered page: the published content plus the generated ones.
+    write_sitemap(state.published + state.all_pages[len(state.pages) :], config.site, output_dir)
     if config.ai.agent_surface:
-        write_agent_surface(state.pages, config, state.authors, output_dir)
+        write_agent_surface(state.published, config, state.authors, state.theme, output_dir)
     static_robots_exists = (project_dir / "static" / "robots.txt").exists()
     write_robots_txt(
         config.site, config.ai, output_dir, static_override_exists=static_robots_exists
@@ -528,20 +774,48 @@ def _finish_build(
         plugins.run_lifecycle("on_shutdown")
         return diff
 
-    _swap_output_into_place(build_dir, final_output_dir)
+    _swap_output_into_place(
+        build_dir, final_output_dir, must_keep=(state.config_path, state.content_dir)
+    )
     plugins.run_event("on_post_build", config)
     plugins.run_lifecycle("on_shutdown")
 
     duration = time.perf_counter() - started
+    _LOGGER.debug(
+        "wrote %d pages to %s in %.0f ms", len(state.all_pages), final_output_dir, duration * 1000
+    )
     return BuildResult(
         page_count=len(state.all_pages),
         duration_seconds=duration,
+        config=config,
         static_file_count=state.static_file_count,
-        output_dir=f"{final_output_dir.name}/",
+        output_dir=f"{display_output_dir(final_output_dir, state.project_dir)}/",
     )
 
 
-def _apply_compiled_theme_css(project_dir: Path, output_dir: Path) -> None:
+def display_output_dir(output_dir: Path, project_dir: Path) -> str:
+    """Name the output directory the way the build reports it.
+
+    :param output_dir: The directory the site was written to.
+    :param project_dir: The directory holding ``bartleby.yml``.
+    :returns: The path relative to the project when it sits under the project,
+        otherwise the absolute path.
+    """
+    resolved = output_dir.resolve()
+    project = project_dir.resolve()
+    if resolved.is_relative_to(project) and resolved != project:
+        return resolved.relative_to(project).as_posix()
+    return str(resolved)
+
+
+def _current_umask() -> int:
+    """Read the process umask, which the standard library only exposes by setting it."""
+    umask = os.umask(0)
+    os.umask(umask)
+    return umask
+
+
+def _apply_compiled_theme_css(project_dir: Path, output_dir: Path, theme: ResolvedTheme) -> None:
     """Override the shipped CSS with the project's compiled ``.bartleby/theme.css``.
 
     The compiled CSS wins only when it exists and is at least as new as the
@@ -551,7 +825,7 @@ def _apply_compiled_theme_css(project_dir: Path, output_dir: Path) -> None:
     """
     from bartleby.theme_compile import active_theme_css
 
-    compiled = active_theme_css(project_dir)
+    compiled = active_theme_css(project_dir, theme)
     if compiled is None:
         return
     destination = output_dir / "css" / "main.css"
@@ -559,27 +833,32 @@ def _apply_compiled_theme_css(project_dir: Path, output_dir: Path) -> None:
     shutil.copy2(compiled, destination)
 
 
-def _fail_build(page_errors: list[PageError], plugins: PluginCollection) -> NoReturn:
-    """Fire ``on_build_error`` once and raise, discarding the partial build.
+@contextmanager
+def _pair_failure_hooks(plugins: PluginCollection) -> Iterator[None]:
+    """Fire ``on_build_error`` then ``on_shutdown`` when a :class:`BuildError` leaves the block.
 
-    The hook receives the assembled :class:`BuildError` so a plugin can inspect
-    every collected :class:`PageError` in a single call. This function does not
-    remove the temp build directory itself; :func:`build`'s ``finally`` block
-    is the single removal site and cleans it up once this raise propagates out
-    of it, so a failed build never leaves output behind.
+    Wrap every phase that runs after ``on_startup``. Phases raise a plain
+    :class:`BuildError`, and this is the single place that turns it into the
+    ``on_build_error`` hook (which receives the assembled error, so a plugin can
+    inspect every collected :class:`PageError` in one call) and the
+    ``on_shutdown`` that pairs ``on_startup``. A future raise cannot skip the hooks.
+    The block's own cleanup removes the temp build directory: :func:`build`'s
+    ``finally`` block is the single removal site, so a failed build never leaves
+    output behind.
 
-    :param page_errors: Every page-level failure collected during the pass.
-    :param plugins: The active plugin collection to dispatch the hook through.
-    :raises BuildError: Always, carrying ``page_errors``.
+    :param plugins: The active plugin collection to dispatch the hooks through.
+    :raises BuildError: Re-raised unchanged after the hooks fire.
     """
-    error = BuildError(page_errors)
-    plugins.run_event("on_build_error", error)
-    plugins.run_lifecycle("on_shutdown")
-    raise error
+    try:
+        yield
+    except BuildError as error:
+        plugins.run_event("on_build_error", error)
+        plugins.run_lifecycle("on_shutdown")
+        raise
 
 
 def _template_type_for(page: Page, content_type: object) -> str:
-    """Pick the template type bucket — taxonomy and listing pages bypass post/page logic."""
+    """Pick the template type bucket: taxonomy and listing pages bypass post/page logic."""
     taxonomy_kind = page.custom_metadata.get(TAXONOMY_KIND_KEY)
     if taxonomy_kind == TaxonomyKind.TERM:
         return "taxonomy"
@@ -626,7 +905,7 @@ def _render_404(
     not_found_page = Page(
         source_path=Path("404.md"),
         abs_source_path=not_found_source,
-        title="404 — Not Found",
+        title="404 - Not Found",
         description="The requested page could not be found.",
     )
     not_found_page.output_url = "/404.html"
@@ -645,7 +924,7 @@ def _render_404(
     return template.render(**context)
 
 
-def _template_sources(project_dir: Path) -> list[str]:
+def _template_sources(project_dir: Path, theme: ResolvedTheme) -> list[str]:
     """Return the raw text of every theme and project template.
 
     Tree-shaking scans rendered HTML for icon references, but icons can also be
@@ -654,7 +933,7 @@ def _template_sources(project_dir: Path) -> list[str]:
     the template sources ensures those references are retained too.
     """
     sources: list[str] = []
-    template_roots = [get_theme_templates_dir(), project_dir / "templates"]
+    template_roots = [*theme.templates_dirs(), project_dir / "templates"]
     for root in template_roots:
         if not root.is_dir():
             continue
@@ -664,25 +943,26 @@ def _template_sources(project_dir: Path) -> list[str]:
 
 
 async def async_build(
-    config_path: Path, *, include_drafts: bool = False, strict: bool = False
+    config_path: Path,
+    *,
+    include_drafts: bool = False,
+    strict: bool = False,
+    overrides: list[str] | None = None,
 ) -> BuildResult:
     """Async wrapper around :func:`build` for use with ``asyncio.run``.
 
     The sync build does the heavy lifting; this coroutine offloads it to a
-    worker thread (so the surrounding async program — e.g. the dev server's
-    HTTP loop — can keep running) and returns the same :class:`BuildResult`.
+    worker thread (so the surrounding async program, e.g. the dev server's
+    HTTP loop, can keep running) and returns the same :class:`BuildResult`.
     Plugin hooks always execute in the calling process: by running the build
     in a thread (not a child process) the hook registration, dispatch, and
     Jinja2 environment never cross a process boundary.
     """
     import asyncio
 
-    result = await asyncio.to_thread(
-        build, config_path, include_drafts=include_drafts, strict=strict
+    return await asyncio.to_thread(
+        build, config_path, include_drafts=include_drafts, strict=strict, overrides=overrides
     )
-    # async_build never requests a dry run, so the result is always a BuildResult.
-    assert isinstance(result, BuildResult)
-    return result
 
 
 def extract_excerpt(markdown_source: str, separator: str | None) -> str:
@@ -702,7 +982,7 @@ def extract_excerpt(markdown_source: str, separator: str | None) -> str:
 def calculate_readtime(text: str) -> int:
     """Estimate read time in minutes assuming ~265 words per minute.
 
-    :param text: Page text (markdown or HTML — tags are stripped first).
+    :param text: Page text (markdown or HTML; tags are stripped first).
     :returns: Integer number of minutes, always at least ``1``.
     """
     plain = _HTML_TAG_RE.sub(" ", text)
@@ -714,7 +994,11 @@ def calculate_readtime(text: str) -> int:
 
 
 def build_dry_run(
-    config_path: Path, *, include_drafts: bool = False, strict: bool = False
+    config_path: Path,
+    *,
+    include_drafts: bool = False,
+    strict: bool = False,
+    overrides: list[str] | None = None,
 ) -> DryRunResult:
     """Run the build pipeline in dry-run mode and return what would change.
 
@@ -724,11 +1008,16 @@ def build_dry_run(
     :param config_path: Path to ``bartleby.yml``.
     :param include_drafts: Forwarded to :func:`build`.
     :param strict: Forwarded to :func:`build`.
+    :param overrides: Forwarded to :func:`build`.
     :returns: The :class:`DryRunResult` describing added/modified/unchanged/deleted output.
     """
-    result = build(config_path, include_drafts=include_drafts, strict=strict, dry_run=True)
-    assert isinstance(result, DryRunResult)
-    return result
+    return build(
+        config_path,
+        include_drafts=include_drafts,
+        strict=strict,
+        dry_run=True,
+        overrides=overrides,
+    )
 
 
 def _diff_output_trees(new_dir: Path, current_dir: Path) -> DryRunResult:
@@ -765,20 +1054,81 @@ def _relative_files(root: Path) -> set[str]:
     return {path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file()}
 
 
-def _swap_output_into_place(build_dir: Path, final_output_dir: Path) -> None:
+def _swap_output_into_place(
+    build_dir: Path, final_output_dir: Path, *, must_keep: tuple[Path, ...]
+) -> None:
     """Replace ``final_output_dir`` with the freshly built ``build_dir``.
 
-    The previous output is removed only after the new build is complete, so an
-    interrupted or failed build can never leave a half-written ``site/``. The
-    new directory is renamed into place (an atomic operation on the same
-    filesystem) once the old one is gone.
+    The previous output is moved aside into a sibling holding directory, the
+    new tree is moved into place, and only then is the old one deleted, so
+    there is no moment with no output to serve. When the second move fails
+    (another filesystem that ran out of space, say), the old output is moved
+    back and the error is raised. A symlinked output directory keeps the link
+    and swaps its target.
 
     :param build_dir: The temp directory holding the completed build output.
     :param final_output_dir: The destination ``site/`` directory to swap in.
+    :param must_keep: Paths the build reads (the config file and ``content/``);
+        an output directory holding any of them is refused rather than deleted.
+    :raises BuildError: If the output directory holds a path in ``must_keep``, or
+        the operating system refuses to replace it.
     """
-    if final_output_dir.exists():
-        shutil.rmtree(final_output_dir)
-    os.replace(build_dir, final_output_dir)
+    target = final_output_dir.resolve()
+    for kept in must_keep:
+        if kept.resolve().is_relative_to(target):
+            message = format_error(
+                f"refusing to replace {final_output_dir.name}: it holds {kept.name}",
+                hint="set output_dir in bartleby.yml to a directory the build does not read",
+            )
+            raise BuildError([PageError(file_path=str(final_output_dir), message=message)])
+
+    hint = (
+        f"make {final_output_dir} writable (chmod u+w), "
+        "or set output_dir in bartleby.yml elsewhere"
+    )
+    retired: Path | None = None
+    try:
+        if target.exists():
+            holding = Path(tempfile.mkdtemp(prefix=".bartleby-old-", dir=target.parent))
+            retired = holding / target.name
+            shutil.move(target, retired)
+    except PermissionError as exc:
+        raise _unwritable_output(final_output_dir, "replace", hint, exc) from exc
+
+    try:
+        shutil.move(build_dir, target)
+    except OSError as exc:
+        # A cross-filesystem move copies first, so drop any partial copy before
+        # the old output goes back where it was.
+        if target.exists():
+            shutil.rmtree(target, ignore_errors=True)
+        if retired is not None:
+            shutil.move(retired, target)
+            retired.parent.rmdir()
+        if isinstance(exc, PermissionError):
+            raise _unwritable_output(final_output_dir, "replace", hint, exc) from exc
+        raise
+
+    if retired is not None:
+        try:
+            shutil.rmtree(retired.parent)
+        except PermissionError as exc:
+            raise _unwritable_output(retired, "remove the previous", hint, exc) from exc
+
+
+def _unwritable_output(path: Path, action: str, hint: str, exc: PermissionError) -> BuildError:
+    """Build the labeled error for an output location the build is not allowed to change.
+
+    :param path: The directory the build could not write to.
+    :param action: What the build was doing, completing "cannot ... <path>".
+    :param hint: The concrete fix, which differs by what the build was doing.
+    :param exc: The operating-system error, whose reason is quoted.
+    """
+    message = format_error(
+        f"cannot {action} {path.name}: {exc.strerror}",
+        hint=hint,
+    )
+    return BuildError([PageError(file_path=str(path), message=message)])
 
 
 def _write_page(output_dir: Path, page: Page, html: str) -> None:

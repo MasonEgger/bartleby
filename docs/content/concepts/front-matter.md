@@ -1,11 +1,13 @@
 ---
-title: "Front matter"
-description: "Standard fields, taxonomy values, custom metadata, and build-time validation."
+title: "Front Matter"
+description: "How Bartleby reads the YAML block at the top of a page and when it validates it."
 ---
 
-Every Markdown file may start with a YAML front matter block delimited by `---` lines. Bartleby parses the block, slots the standard fields onto the page object, and validates per-content-type schemas at build time.
+Every Markdown file may start with a YAML block between two `---` lines.
+That block is the page's front matter.
+Bartleby parses it, moves the fields it knows onto the page object, and checks the rest against the schema for the page's content type.
 
-## A complete example
+## A Complete Example
 
 ```yaml
 ---
@@ -29,48 +31,34 @@ last_verified: 2026-03-10
 ---
 ```
 
-## Standard fields
+## Three Kinds of Keys
 
-These fields are recognised on every page regardless of content type:
+Bartleby sorts every key in the block into one of three groups.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `title` | string | Page title — **required** for every page |
-| `description` | string | Used for meta description, OG description, Twitter card |
-| `date` | date | Publication date, used in feeds, taxonomy sort, JSON-LD `datePublished` |
-| `draft` | bool | Defaults to `false`; `true` excludes the page from production builds |
-| `template` | string | Override the template lookup for this page |
-| `url` | string | Replace the generated URL with a custom path |
-| `url_base` | string | Replace just the URL base prefix; `url_format` still applies |
-| `slug` | string | Override the slug used by `{slug}` placeholders in `url_format` |
-| `authors` | list | Author keys from `.authors.yml` |
+**Standard fields** have a meaning built into the build.
+`title`, `description`, `date`, `draft`, `template`, `url`, `url_base`, `slug`, and `authors` all belong here.
+They set the page's metadata, its URL, its template, and its byline.
 
-## Taxonomy values
+**Taxonomy values** are keys that match a taxonomy name in `bartleby.yml`.
+In the example, `tags` and `categories` are taxonomy values.
+Bartleby collects them across the site to build the taxonomy listing pages.
+See [Taxonomies](taxonomies.md).
 
-Any front matter key that matches a configured taxonomy name (`tags`, `categories`, etc.) becomes a taxonomy value list on the page. They're collected during the build to populate `/tags/`, `/tags/python/`, and per-content-type variants.
+**Custom metadata** is everything else.
+In the example, `difficulty` and `last_verified` are custom metadata.
+Bartleby stores them on the page as `page.custom_metadata`, where templates can read them.
+A content type can declare a schema for these fields.
 
-## Custom metadata
+The [front matter fields reference](../reference/pages/front-matter-fields.md) lists each standard field with its type and default.
 
-Anything else lands in `page.custom_metadata` and can be validated by a content type's `metadata` schema:
+## When Validation Happens
 
-```yaml
-content_types:
-  tutorials:
-    path: tutorials/posts
-    metadata:
-      difficulty:
-        type: string
-        required: true
-        choices:
-          - beginner
-          - intermediate
-          - advanced
-      last_verified:
-        type: date
-```
+Validation runs before any page renders.
+It checks custom metadata against the content type's `metadata` schema, and it checks author keys against `.authors.yml`.
+It also rejects a page whose title is empty.
+A failure stops `bartleby build` and is reported by `bartleby validate`, with the file path and field name in the message.
 
-If a tutorial is missing `difficulty`, has a non-date `last_verified`, or sets `difficulty: expert`, `bartleby build` fails with the file path and field name in the error message. `bartleby validate` runs the same checks without rendering.
+Fields that the schema does not name are allowed.
+The schema only constrains the fields it lists.
 
-## Author validation
-
-Author keys are validated against `.authors.yml`. An unknown key produces a build error pointing at the offending page.
+The [validation guide](../guides/posts/validate-metadata.md) walks through declaring a schema and reading the errors.

@@ -58,6 +58,25 @@ def copy_static_files(static_dir: Path, output_dir: Path) -> int:
     return copied
 
 
+def copy_theme_static(static_dirs: list[Path], output_dir: Path) -> int:
+    """Copy a theme chain's ``static/`` directories into ``output_dir``, child winning.
+
+    ``static_dirs`` is leaf-first (the order of
+    :meth:`bartleby.theme_loader.ResolvedTheme.static_dirs`). The copy runs
+    root-first so a child layer overwrites a parent's file at the same path.
+
+    :returns: The number of distinct output files written, so a path shared by
+        two layers counts once.
+    """
+    written: set[Path] = set()
+    for static_dir in reversed(static_dirs):
+        copy_static_files(static_dir, output_dir)
+        written.update(
+            source.relative_to(static_dir) for source in static_dir.rglob("*") if source.is_file()
+        )
+    return len(written)
+
+
 def copy_colocated_assets(
     assets: list[ColocatedAsset],
     pages: list[Page],
@@ -75,7 +94,7 @@ def copy_colocated_assets(
     :raises AssetCollisionError: When an asset's directory holds more than
         one page (see :class:`AssetCollisionError`).
     """
-    del content_dir  # currently unused — kept to match spec signature
+    del content_dir  # currently unused, kept to match spec signature
     pages_by_dir: dict[str, list[Page]] = {}
     for page in pages:
         pages_by_dir.setdefault(page.source_path.parent.as_posix(), []).append(page)
@@ -96,7 +115,7 @@ def drop_draft_only_assets(
 
     An asset survives when its directory still contains a published page, or
     when it never had any associated page to begin with (a genuine orphan,
-    unaffected by draft filtering — see the fallback in
+    unaffected by draft filtering; see the fallback in
     :func:`copy_colocated_assets`). Without this, a draft's co-located asset
     falls through that same orphan fallback and leaks into the output at its
     source path once the draft page itself is filtered out.

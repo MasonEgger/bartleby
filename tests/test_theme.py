@@ -4,15 +4,23 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TypedDict
 
 import jinja2
 import pytest
 
-from bartleby.assets import copy_static_files
-from bartleby.theme import get_theme_static_dir, get_theme_templates_dir
+from bartleby.assets import copy_theme_static
+from bartleby.themes import bundled_theme_root
+from tests.theme_helpers import material_theme
+
+
+class _VendoredBundle(TypedDict):
+    min_size: int
+    signature: str
+
 
 # Pinned vendored bundle versions. Keep these in sync with THIRD-PARTY-NOTICES.
-VENDORED_BUNDLES = {
+VENDORED_BUNDLES: dict[str, _VendoredBundle] = {
     "alpine.min.js": {"min_size": 20_000, "signature": "Alpine"},
     "htmx.min.js": {"min_size": 20_000, "signature": "htmx"},
     "lunr.min.js": {"min_size": 20_000, "signature": "lunr"},
@@ -20,11 +28,11 @@ VENDORED_BUNDLES = {
 
 
 def _env(features: list[str] | None = None) -> jinja2.Environment:
-    from bartleby.config import KNOWN_FEATURES
     from bartleby.templates import make_feature_checker
+    from bartleby.theme_loader import THEME_FEATURES
 
-    enabled = list(KNOWN_FEATURES) if features is None else features
-    loader = jinja2.FileSystemLoader([str(get_theme_templates_dir())])
+    enabled = list(THEME_FEATURES) if features is None else features
+    loader = jinja2.FileSystemLoader([str(path) for path in material_theme().templates_dirs()])
     env = jinja2.Environment(loader=loader, autoescape=True)
     env.globals["feature"] = make_feature_checker(enabled)
     return env
@@ -52,7 +60,7 @@ def _base_context(**overrides: object) -> dict[str, object]:
         "nav": [{"title": "Home", "url": "/"}, {"title": "Blog", "url": "/blog/"}],
         "pages": [],
         "build": {"date": "2026-05-23", "bartleby_version": "0.1.0"},
-        "config": {"theme": {"color_mode": {"toggle": True}}},
+        "config": {"theme": {"color_mode": {}}},
         "extra_css": [],
         "extra_js": [],
         "seo": None,
@@ -120,7 +128,7 @@ def test_header_has_site_title() -> None:
 
 
 def test_dark_mode_toggle() -> None:
-    """The theme toggle button is present when color_mode.toggle is true."""
+    """The theme toggle button is present when the color-mode.toggle feature is on."""
     rendered = _env().get_template("base.html").render(**_base_context())
     assert "theme-toggle" in rendered
     assert "x-data" in rendered
@@ -154,16 +162,16 @@ def test_code_copy_feature_disabled_removes_markup() -> None:
     assert "data-code-copy" not in rendered
 
 
-def test_navigation_top_feature_enabled_includes_markup() -> None:
-    """Enabling ``navigation.top`` puts the back-to-top button in the HTML."""
+def test_back_to_top_feature_enabled_includes_markup() -> None:
+    """Enabling ``nav.back-to-top`` puts the back-to-top button in the HTML."""
     rendered = (
-        _env(features=["navigation.top"]).get_template("base.html").render(**_base_context())
+        _env(features=["nav.back-to-top"]).get_template("base.html").render(**_base_context())
     )
     assert "back-to-top" in rendered
 
 
-def test_navigation_top_feature_disabled_removes_markup() -> None:
-    """Disabling ``navigation.top`` removes the back-to-top button entirely."""
+def test_back_to_top_feature_disabled_removes_markup() -> None:
+    """Disabling ``nav.back-to-top`` removes the back-to-top button entirely."""
     rendered = _env(features=[]).get_template("base.html").render(**_base_context())
     assert "back-to-top" not in rendered
 
@@ -218,7 +226,7 @@ def test_footer_shows_prev_next() -> None:
 
 
 def test_all_templates_render() -> None:
-    """Every theme template renders without raising."""
+    """Every theme template renders to a non-empty document."""
     env = _env()
     for template_name in (
         "base.html",
@@ -229,7 +237,8 @@ def test_all_templates_render() -> None:
         "taxonomy_index.html",
         "404.html",
     ):
-        env.get_template(template_name).render(**_base_context(paginator=None))
+        html = env.get_template(template_name).render(**_base_context(paginator=None))
+        assert html.strip(), f"{template_name} rendered nothing"
 
 
 @pytest.mark.parametrize("filename", sorted(VENDORED_BUNDLES))
@@ -240,11 +249,11 @@ def test_vendored_bundle_is_real(filename: str) -> None:
     string from the library; the old placeholder stubs were ~200 bytes.
     """
     expected = VENDORED_BUNDLES[filename]
-    bundle = get_theme_static_dir() / "js" / filename
+    bundle = bundled_theme_root("base") / "static" / "js" / filename
     assert bundle.exists(), f"missing vendored bundle: {filename}"
     text = bundle.read_text(encoding="utf-8")
     assert len(text.encode("utf-8")) >= expected["min_size"], (
-        f"{filename} is smaller than a real bundle — still a stub?"
+        f"{filename} is smaller than a real bundle; still a stub?"
     )
     assert expected["signature"] in text, (
         f"{filename} lacks the {expected['signature']!r} signature string"
@@ -259,7 +268,9 @@ def test_vendored_bundles_have_no_stub_comment() -> None:
     """
     stub_markers = ("ABOUTME: Vendored", "console.debug && console.debug")
     for filename in VENDORED_BUNDLES:
-        text = (get_theme_static_dir() / "js" / filename).read_text(encoding="utf-8")
+        text = (bundled_theme_root("base") / "static" / "js" / filename).read_text(
+            encoding="utf-8"
+        )
         for marker in stub_markers:
             assert marker not in text, f"{filename} still contains a stub comment ({marker!r})"
 
@@ -271,7 +282,7 @@ def test_third_party_notices_lists_vendored_libraries() -> None:
     text = notices.read_text(encoding="utf-8")
     for library, license_name in (
         ("Alpine.js", "MIT"),
-        ("HTMX", "BSD 2-Clause"),
+        ("HTMX", "Zero-Clause BSD"),
         ("lunr.js", "MIT"),
     ):
         assert library in text, f"{library} not listed in THIRD-PARTY-NOTICES"
@@ -282,9 +293,9 @@ def test_third_party_notices_lists_vendored_libraries() -> None:
 
 
 def test_build_copies_real_bundles_into_site_js(tmp_path: Path) -> None:
-    """copy_static_files places the real bundles under site/js/."""
+    """copy_theme_static places the real bundles under site/js/."""
     output_dir = tmp_path / "site"
-    copy_static_files(get_theme_static_dir(), output_dir)
+    copy_theme_static(material_theme().static_dirs(), output_dir)
     for filename in VENDORED_BUNDLES:
         copied = output_dir / "js" / filename
         assert copied.exists(), f"{filename} was not copied into site/js/"
@@ -300,8 +311,14 @@ def test_base_html_wires_search_and_dark_mode_to_bundles() -> None:
     assert "/js/lunr.min.js" in rendered
     # Search container wired to Alpine + the lunr-backed search hook.
     assert "search-modal" in rendered
-    assert 'x-on:click="open = true"' in rendered
-    assert "__bartlebySearch" in rendered
+    assert "bartleby:search-open" in rendered
+    assert 'x-data="bartlebySearch()"' in rendered
+    # The engine is a base static script loaded ahead of Alpine, not inline markup.
+    assert "/js/search.js" in rendered
+    assert rendered.index("/js/search.js") < rendered.index("/js/alpine.min.js")
+    engine = (bundled_theme_root("base") / "static" / "js" / "search.js").read_text()
+    assert "/search/search_index.json" in engine
+    assert "lunr(" in engine
     # Dark-mode toggle wired to Alpine.
     assert "theme-toggle" in rendered
     assert "document.documentElement.dataset.theme" in rendered

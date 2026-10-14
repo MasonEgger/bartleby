@@ -18,8 +18,18 @@ _DATE_PLACEHOLDER = re.compile(r"\{date(?::([^}]+))?\}")
 _SLUG_REPLACEMENTS: list[list[str]] = [["&", " and "]]
 
 
+def absolute_url(site_url: str, path: str) -> str:
+    """Join the site URL and a path with exactly one ``/`` between them.
+
+    :param site_url: The configured ``site.url``, with or without a trailing slash.
+    :param path: A root-relative path or output URL, with or without a leading slash.
+    :returns: The absolute URL.
+    """
+    return site_url.rstrip("/") + "/" + path.lstrip("/")
+
+
 def slugify(text: str) -> str:
-    """Bartleby's URL slug helper — python-slugify with ``&`` mapped to ``and``."""
+    """Bartleby's URL slug helper: python-slugify with ``&`` mapped to ``and``."""
     return _raw_slugify(text, replacements=_SLUG_REPLACEMENTS)
 
 
@@ -103,7 +113,7 @@ def _resolve_field(field_name: str, page: Page) -> str:
 
 
 def _slug_for(page: Page) -> str:
-    """The page's URL slug — front-matter override wins, else slugified filename stem."""
+    """The page's URL slug: front-matter override wins, else slugified filename stem."""
     if page.slug_override:
         return slugify(page.slug_override)
     return slugify(page.abs_source_path.stem)

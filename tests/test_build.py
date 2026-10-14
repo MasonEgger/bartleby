@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from bartleby.assets import AssetCollisionError
 from bartleby.build import (
     BuildError,
     BuildResult,
@@ -18,7 +19,9 @@ from bartleby.build import (
     extract_excerpt,
 )
 from bartleby.config import ConfigError
-from bartleby.theme import get_theme_static_dir
+from bartleby.theme_loader import resolve_theme
+from tests.config_helpers import replace_top_level_keys
+from tests.theme_helpers import material_theme
 
 
 @pytest.fixture
@@ -27,6 +30,8 @@ def project(tmp_path: Path) -> Path:
     source = Path(__file__).parent / "fixtures" / "site"
     destination = tmp_path / "site_project"
     shutil.copytree(source, destination)
+    # The sample site exercises material's templates; name it so the default theme can change.
+    replace_top_level_keys(destination / "bartleby.yml", "theme:\n  name: material\n")
     return destination
 
 
@@ -149,10 +154,7 @@ def test_icon_packs_single_false_entry_leaves_other_packs_enabled(project: Path)
     naming one pack must not silently drop the other three defaults.
     """
     config_path = project / "bartleby.yml"
-    config_path.write_text(
-        config_path.read_text(encoding="utf-8") + "\ntheme:\n  icon_packs:\n    simple: false\n",
-        encoding="utf-8",
-    )
+    replace_top_level_keys(config_path, "theme:\n  icon_packs:\n    simple: false\n")
     _write_template_with_icon_spans(
         project,
         ["material-home", "fontawesome-github", "octicons-star-16", "simple-github"],
@@ -179,10 +181,8 @@ def test_icon_packs_two_false_entries_disable_exactly_those_two(project: Path) -
     still land in the output.
     """
     config_path = project / "bartleby.yml"
-    config_path.write_text(
-        config_path.read_text(encoding="utf-8")
-        + "\ntheme:\n  icon_packs:\n    fontawesome: false\n    simple: false\n",
-        encoding="utf-8",
+    replace_top_level_keys(
+        config_path, "theme:\n  icon_packs:\n    fontawesome: false\n    simple: false\n"
     )
     _write_template_with_icon_spans(
         project,
@@ -329,7 +329,7 @@ def test_build_reports_shared_directory_asset_collision(project: Path) -> None:
 
 
 def test_build_cleans_output_dir(project: Path) -> None:
-    """``site/`` is cleaned at the start of each build — stale files vanish."""
+    """``site/`` is cleaned at the start of each build; stale files vanish."""
     site_dir = project / "site"
     site_dir.mkdir()
     (site_dir / "stale.html").write_text("stale")
@@ -374,7 +374,12 @@ def test_static_file_count_excludes_generated_artifacts(project: Path) -> None:
     assert (site_dir / "schema.json").exists()
     assert (site_dir / "content-index.json").exists()
 
-    theme_static_count = sum(1 for path in get_theme_static_dir().rglob("*") if path.is_file())
+    theme_static_count = sum(
+        1
+        for static_dir in material_theme().static_dirs()
+        for path in static_dir.rglob("*")
+        if path.is_file()
+    )
     project_static_count = sum(1 for path in (project / "static").rglob("*") if path.is_file())
     colocated_asset_count = 2  # published-with-asset/photo.png + orphaned media/diagram.png
     expected_count = theme_static_count + project_static_count + colocated_asset_count
@@ -525,6 +530,107 @@ def test_build_fails_on_metadata_validation_errors(project: Path) -> None:
     assert "first-post.md" in collected[0].file_path
 
 
+def _install_lifecycle_recorder(project: Path) -> Path:
+    """Add a project hook that logs on_startup, on_build_error, and on_shutdown calls.
+
+    :returns: The log file the hook appends one event name per line to.
+    """
+    hooks_dir = project / "hooks"
+    hooks_dir.mkdir()
+    record_path = project / "fired.log"
+    (hooks_dir / "recorder.py").write_text(
+        "# ABOUTME: Test hook that records lifecycle events.\n"
+        "# Appends one line per on_startup, on_build_error, and on_shutdown call.\n"
+        "from pathlib import Path\n"
+        "\n"
+        "LOG = Path(__file__).parent.parent / 'fired.log'\n"
+        "\n"
+        "def _record(name):\n"
+        "    with LOG.open('a', encoding='utf-8') as handle:\n"
+        "        handle.write(name + '\\n')\n"
+        "\n"
+        "def on_startup(*args, **kwargs):\n"
+        "    _record('on_startup')\n"
+        "\n"
+        "def on_build_error(*args, **kwargs):\n"
+        "    _record('on_build_error')\n"
+        "\n"
+        "def on_shutdown(*args, **kwargs):\n"
+        "    _record('on_shutdown')\n",
+        encoding="utf-8",
+    )
+    return record_path
+
+
+def test_metadata_failure_fires_build_error_then_shutdown_once(project: Path) -> None:
+    """A metadata BuildError fires ``on_build_error`` then ``on_shutdown``, once each.
+
+    ``on_startup`` already fired while loading, so ``on_shutdown`` must pair it
+    even when the build dies in the validation phase.
+    """
+    record_path = _install_lifecycle_recorder(project)
+    post_path = project / "content" / "blog" / "posts" / "first-post.md"
+    post_path.write_text(
+        post_path.read_text(encoding="utf-8").replace(
+            "authors:\n  - mason", "authors:\n  - nobody-such-author"
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(BuildError):
+        build(project / "bartleby.yml")
+
+    fired = record_path.read_text(encoding="utf-8").splitlines()
+    assert fired == ["on_startup", "on_build_error", "on_shutdown"]
+
+
+def test_missing_content_dir_fires_build_error_then_shutdown_once(project: Path) -> None:
+    """A missing ``content/`` fires ``on_build_error`` then ``on_shutdown``, once each."""
+    record_path = _install_lifecycle_recorder(project)
+    shutil.rmtree(project / "content")
+
+    with pytest.raises(BuildError):
+        build(project / "bartleby.yml")
+
+    fired = record_path.read_text(encoding="utf-8").splitlines()
+    assert fired == ["on_startup", "on_build_error", "on_shutdown"]
+
+
+def test_strict_crossref_failure_fires_build_error_then_shutdown_once(project: Path) -> None:
+    """A strict-mode crossref failure fires ``on_build_error`` then ``on_shutdown``, once each."""
+    record_path = _install_lifecycle_recorder(project)
+    post_path = project / "content" / "blog" / "posts" / "first-post.md"
+    post_path.write_text(
+        post_path.read_text(encoding="utf-8") + "\nSee [missing page](missing-target.md).\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(BuildError):
+        build(project / "bartleby.yml", strict=True)
+
+    fired = record_path.read_text(encoding="utf-8").splitlines()
+    assert fired == ["on_startup", "on_build_error", "on_shutdown"]
+
+
+def test_asset_collision_fires_build_error_then_shutdown_once(project: Path) -> None:
+    """An asset collision fires ``on_build_error`` then ``on_shutdown``, once each."""
+    record_path = _install_lifecycle_recorder(project)
+    shared_dir = project / "content" / "blog" / "posts" / "shared-bundle"
+    shared_dir.mkdir()
+    for name in ("page-a", "page-b"):
+        (shared_dir / f"{name}.md").write_text(
+            f'---\ntitle: "{name}"\ndraft: false\n---\n\nBody.\n', encoding="utf-8"
+        )
+    (shared_dir / "diagram.png").write_bytes(b"stub-png")
+
+    with pytest.raises(BuildError) as excinfo:
+        build(project / "bartleby.yml")
+
+    assert isinstance(excinfo.value.__cause__, AssetCollisionError)
+    fired = record_path.read_text(encoding="utf-8").splitlines()
+    assert fired == ["on_startup", "on_build_error", "on_shutdown"]
+
+
 def test_build_non_strict_warns_on_broken_crossref(
     project: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -621,7 +727,7 @@ def test_strict_mode_failure_leaves_no_temp_dir(
     """A strict-mode crossref failure (BuildError) leaves no ``.bartleby-build-*`` dir behind.
 
     Strict-crossref failures raise directly from ``_render_all_pages`` without
-    routing through ``_fail_build``, so this exercises the failure path a
+    routing through ``_pair_failure_hooks``, so this exercises the failure path a
     per-helper cleanup would miss.
     """
     post_path = project / "content" / "blog" / "posts" / "first-post.md"
@@ -777,3 +883,325 @@ def test_build_ignores_stale_compiled_theme_css(project: Path) -> None:
 
     rendered_css = (project / "site" / "css" / "main.css").read_text(encoding="utf-8")
     assert "compiled-but-stale" not in rendered_css
+
+
+def test_build_renders_with_path_theme_chain(tmp_path: Path) -> None:
+    """A child path theme supplies page.html; the parent supplies 404.html and static files."""
+    themes = Path(__file__).parent / "fixtures" / "themes"
+    (tmp_path / "content").mkdir()
+    (tmp_path / "content" / "index.md").write_text("---\ntitle: Home\n---\n\nHello.\n")
+    (tmp_path / "bartleby.yml").write_text(
+        'site:\n  title: "Themed"\n  url: "https://themed.example.com"\n', encoding="utf-8"
+    )
+    theme = resolve_theme(project_dir=tmp_path, path=str(themes / "child"))
+
+    build(tmp_path / "bartleby.yml", theme=theme)
+
+    site_dir = tmp_path / "site"
+    assert "CHILD-PAGE-TEMPLATE Home" in (site_dir / "index.html").read_text(encoding="utf-8")
+    assert "Parent 404" in (site_dir / "404.html").read_text(encoding="utf-8")
+    assert (site_dir / "parent.txt").exists()
+    assert (site_dir / "shared.txt").read_text(encoding="utf-8") == "child version\n"
+
+
+def _write_themed_project(tmp_path: Path, theme_body: str) -> Path:
+    """Create a one-page project whose ``theme:`` section is ``theme_body``."""
+    (tmp_path / "content").mkdir()
+    (tmp_path / "content" / "index.md").write_text("---\ntitle: Home\n---\n\nHello.\n")
+    config_path = tmp_path / "bartleby.yml"
+    config_path.write_text(
+        'site:\n  title: "Themed"\n  url: "https://themed.example.com"\ntheme:\n' + theme_body,
+        encoding="utf-8",
+    )
+    return config_path
+
+
+def _write_bare_theme(directory: Path) -> Path:
+    """Create a path theme that extends base and declares no features."""
+    directory.mkdir()
+    (directory / "theme.yml").write_text(
+        "name: bare\nextends: base\nfeatures: []\n", encoding="utf-8"
+    )
+    return directory
+
+
+def _unimplemented_warnings(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelname == "WARNING" and "does not implement" in record.getMessage()
+    ]
+
+
+def test_unimplemented_feature_warns_once_and_build_succeeds(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """An enabled feature the active theme lacks warns once, naming feature and theme."""
+    bare_theme = _write_bare_theme(tmp_path / "bare-theme")
+    config_path = _write_themed_project(
+        tmp_path, f"  path: {bare_theme}\n  features:\n    - nav.tabs\n"
+    )
+
+    with caplog.at_level("WARNING", logger="bartleby"):
+        result = build(config_path)
+
+    assert isinstance(result, BuildResult)
+    assert (tmp_path / "site" / "index.html").exists()
+    warnings = _unimplemented_warnings(caplog)
+    assert len(warnings) == 1
+    assert "nav.tabs" in warnings[0]
+    assert "bare" in warnings[0]
+
+
+def test_implemented_features_emit_no_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Features the default theme implements produce no warning."""
+    features = "  features:\n    - search\n    - nav.back-to-top\n    - content.code.copy\n"
+    config_path = _write_themed_project(tmp_path, features + "    - color-mode.toggle\n")
+
+    with caplog.at_level("WARNING", logger="bartleby"):
+        build(config_path)
+
+    assert _unimplemented_warnings(caplog) == []
+
+
+def test_configured_path_theme_is_resolved_and_checked(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """``theme.path`` selects the theme, and its chain's manifests define what is implemented."""
+    themes = Path(__file__).parent / "fixtures" / "themes"
+    body = f"  path: {themes / 'child'}\n  features:\n    - search\n    - nav.tabs\n"
+    config_path = _write_themed_project(tmp_path, body)
+
+    with caplog.at_level("WARNING", logger="bartleby"):
+        build(config_path)
+
+    warnings = _unimplemented_warnings(caplog)
+    assert len(warnings) == 1
+    assert "nav.tabs" in warnings[0]
+    assert "child" in warnings[0]
+
+
+def test_build_docs_page_renders_toc_and_sidebar(project: Path) -> None:
+    """A material docs page carries a TOC of its headings, a tab bar, and a marked sidebar."""
+    config_path = project / "bartleby.yml"
+    replace_top_level_keys(
+        config_path,
+        "nav:\n  - Home: index.md\n  - About:\n      - Overview: about.md\n"
+        "theme:\n  name: material\n  features:\n    - nav.tabs\n    - nav.sidebar\n",
+    )
+    (project / "content" / "about.md").write_text(
+        "---\ntitle: About\n---\n\n## First Heading\n\nText.\n\n### Nested Heading\n\nMore.\n",
+        encoding="utf-8",
+    )
+    build(config_path)
+    rendered = (project / "site" / "about" / "index.html").read_text(encoding="utf-8")
+    assert 'class="toc-nav"' in rendered
+    assert 'href="#first-heading"' in rendered
+    assert 'href="#nested-heading"' in rendered
+    assert 'class="nav-tabs"' in rendered
+    assert 'class="sidebar-nav"' in rendered
+    assert 'aria-current="page"' in rendered
+
+
+@pytest.mark.parametrize("theme_name", ["material", "scrivener"])
+def test_build_docs_layout_opens_current_group_and_marks_current_link(
+    project: Path, theme_name: str
+) -> None:
+    """The sidebar opens only the group holding the current page; listings stay single-column."""
+    config_path = project / "bartleby.yml"
+    replace_top_level_keys(
+        config_path,
+        "nav:\n"
+        + "  - Home: index.md\n"
+        + "  - Guide:\n"
+        + "      - Overview: guide/index.md\n"
+        + "      - Setup:\n"
+        + "          - Install: guide/setup/install.md\n"
+        + "          - Configure: guide/setup/configure.md\n"
+        + "      - Advanced:\n"
+        + "          - Tuning: guide/advanced/tuning.md\n"
+        + "  - Blog: blog/\n"
+        + f"theme:\n  name: {theme_name}\n  features:\n"
+        + "    - nav.tabs\n    - nav.sidebar\n    - nav.section-index\n",
+    )
+    guide = project / "content" / "guide"
+    for relative in ("index.md", "setup/install.md", "setup/configure.md", "advanced/tuning.md"):
+        page_path = guide / relative
+        page_path.parent.mkdir(parents=True, exist_ok=True)
+        page_path.write_text(
+            f"---\ntitle: {page_path.stem.title()}\n---\n\n"
+            f"## Heading In {page_path.stem}\n\nText.\n",
+            encoding="utf-8",
+        )
+    build(config_path)
+
+    rendered = (project / "site" / "guide" / "setup" / "install" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert "<details open" in rendered
+    assert rendered.count("<details open") == 1
+    assert "<details>" in rendered
+    assert 'aria-current="page"' in rendered
+    assert 'href="/guide/setup/install/" class="active" aria-current="page"' in rendered
+    assert 'class="toc-nav"' in rendered
+    assert 'href="#heading-in-install"' in rendered
+
+    listing = (project / "site" / "blog" / "index.html").read_text(encoding="utf-8")
+    assert "layout-prose" in listing
+    assert "sidebar-nav" not in listing
+    assert "layout-docs" not in listing
+
+
+def test_build_rewrites_md_links_in_listing_intro(project: Path) -> None:
+    """A relative ``.md`` link in ``content/{type}/index.md`` renders as the target's URL."""
+    (project / "content" / "blog" / "index.md").write_text(
+        "---\ntitle: Blog\n---\nStart with [the first post](posts/first-post.md).\n",
+        encoding="utf-8",
+    )
+    build(project / "bartleby.yml")
+    rendered = (project / "site" / "blog" / "index.html").read_text(encoding="utf-8")
+    assert 'href="/blog/posts/first-post/"' in rendered
+    assert "first-post.md" not in rendered
+
+
+def _write_code_excerpt_post(project: Path) -> None:
+    """Add a blog post whose excerpt holds inline code and a link."""
+    (project / "content" / "blog" / "posts" / "code-post.md").write_text(
+        "---\ntitle: Code Post\ndate: 2026-05-01\n---\n\n"
+        "Run `bartleby build` and read [the first post](first-post.md).\n\n"
+        "<!-- more -->\n\nBody text.\n",
+        encoding="utf-8",
+    )
+
+
+def test_build_listing_renders_excerpt_inline_code(project: Path) -> None:
+    """The HTML listing shows an excerpt's inline code as code, with no literal backticks."""
+    _write_code_excerpt_post(project)
+    build(project / "bartleby.yml")
+    rendered = (project / "site" / "blog" / "index.html").read_text(encoding="utf-8")
+    assert "<code>bartleby build</code>" in rendered
+    assert "`bartleby build`" not in rendered
+    assert 'href="/blog/posts/first-post/"' in rendered
+
+
+def test_build_agent_outputs_use_plain_text_excerpts(project: Path) -> None:
+    """The excerpt that reaches llms.txt and feeds is plain text without Markdown syntax."""
+    _write_code_excerpt_post(project)
+    build(project / "bartleby.yml")
+    llms_txt = (project / "site" / "llms.txt").read_text(encoding="utf-8")
+    assert "Run bartleby build and read the first post." in llms_txt
+    assert "`" not in llms_txt.split("Code Post", 1)[1].splitlines()[0]
+
+
+def test_missing_content_directory_names_the_path_and_a_fix(project: Path) -> None:
+    """A project without ``content/`` fails with the path and how to create it."""
+    shutil.rmtree(project / "content")
+    with pytest.raises(BuildError) as excinfo:
+        build(project / "bartleby.yml")
+    message = str(excinfo.value)
+    assert str(project / "content") in message
+    assert "fix:" in message
+    assert "bartleby new site" in message
+
+
+# --- Output directory handling: guards, symlinks, modes, and the swap --------
+
+
+def test_build_refuses_to_replace_an_output_dir_holding_the_project(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The swap refuses an output directory that holds bartleby.yml, and the project survives.
+
+    The config layer rejects such a value first; this is the last guard for a
+    config that reached the build another way (a plugin's ``on_config``, say).
+    """
+    import dataclasses
+
+    import bartleby.build as build_module
+    from bartleby.config import BartlebyConfig, load_config
+
+    real_load_config = load_config
+
+    def load_with_project_output(
+        config_path: Path, overrides: list[str] | None = None
+    ) -> BartlebyConfig:
+        return dataclasses.replace(real_load_config(config_path, overrides), output_dir=".")
+
+    monkeypatch.setattr(build_module, "load_config", load_with_project_output)
+    with pytest.raises(BuildError) as excinfo:
+        build(project / "bartleby.yml")
+
+    assert "bartleby.yml" in str(excinfo.value)
+    assert (project / "bartleby.yml").is_file()
+    assert (project / "content" / "index.md").is_file()
+    assert _leftover_temp_dirs(project) == []
+
+
+def test_build_follows_a_symlinked_output_dir(project: Path, tmp_path: Path) -> None:
+    """A ``site/`` symlink keeps pointing at its target, and the target gets the new build."""
+    target = tmp_path / "served-from-elsewhere"
+    target.mkdir()
+    (target / "stale.html").write_text("old", encoding="utf-8")
+    (project / "site").symlink_to(target, target_is_directory=True)
+
+    build(project / "bartleby.yml")
+
+    assert (project / "site").is_symlink()
+    assert (project / "site").resolve() == target.resolve()
+    assert (target / "index.html").is_file()
+    assert not (target / "stale.html").exists()
+
+
+def test_output_dir_mode_matches_a_plain_mkdir(project: Path) -> None:
+    """The output directory gets the umask's mode, not mkdtemp's private 0700."""
+    build(project / "bartleby.yml")
+    sibling = project / "mode-probe"
+    sibling.mkdir()
+
+    assert (project / "site").stat().st_mode & 0o777 == sibling.stat().st_mode & 0o777
+
+
+def test_failed_swap_restores_the_previous_output(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the new tree cannot move into place, the old output is back and intact."""
+    site_dir = project / "site"
+    site_dir.mkdir()
+    sentinel = site_dir / "sentinel.html"
+    sentinel.write_text("previous good build", encoding="utf-8")
+    real_move = shutil.move
+
+    def move_refusing_the_build_tree(src: Path, dst: Path) -> Path | str:
+        if src.name.startswith(".bartleby-build-"):
+            raise OSError("disk full")
+        return real_move(src, dst)
+
+    monkeypatch.setattr(shutil, "move", move_refusing_the_build_tree)
+    with pytest.raises(OSError, match="disk full"):
+        build(project / "bartleby.yml")
+
+    assert sentinel.read_text(encoding="utf-8") == "previous good build"
+    assert not (site_dir / "index.html").exists()
+    assert [child.name for child in project.iterdir() if child.name.startswith(".bartleby")] == []
+
+
+def test_build_result_reports_the_output_dir_as_written(project: Path, tmp_path: Path) -> None:
+    """``output_dir`` is project-relative when under the project and absolute otherwise."""
+    config_path = project / "bartleby.yml"
+    outside = tmp_path / "elsewhere" / "out"
+    replace_top_level_keys(config_path, f"output_dir: {str(outside)!r}\n")
+    assert build(config_path).output_dir == f"{outside}/"
+
+    replace_top_level_keys(config_path, "output_dir: build/site\n")
+    assert build(config_path).output_dir == "build/site/"
+
+
+def test_build_accepts_a_runtime_dry_run_flag(project: Path) -> None:
+    """``dry_run`` typed as a plain ``bool`` returns either result without a narrowing assert."""
+    flag: bool = True
+    assert isinstance(build(project / "bartleby.yml", dry_run=flag), DryRunResult)
+    flag = False
+    assert isinstance(build(project / "bartleby.yml", dry_run=flag), BuildResult)
+    assert isinstance(build_dry_run(project / "bartleby.yml"), DryRunResult)

@@ -4,39 +4,55 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+import shutil
+import socket
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from bartleby import cli
 from bartleby.cli import _discover_shortcode_names, main
 from bartleby.config import load_config
+from bartleby.plugins import KNOWN_EVENTS
+from bartleby.theme_loader import ResolvedTheme, ThemeLayer, ThemeManifest
+from tests.config_helpers import replace_top_level_keys
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 
-def _last_json(stdout: str) -> dict[str, object]:
+def _last_json(stdout: str) -> dict[str, Any]:
     """Parse the last non-empty stdout line as JSON.
 
     Scaffolding helpers print their own result line before the command under
     test runs, so the JSON we care about is the final line.
     """
     line = [ln for ln in stdout.splitlines() if ln.strip()][-1]
-    parsed: dict[str, object] = json.loads(line)
+    parsed: dict[str, Any] = json.loads(line)
     return parsed
 
 
 def test_new_site_creates_structure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """``bartleby new site mysite`` creates the standard project skeleton."""
+    """``bartleby new site mysite`` creates the docs-shaped project skeleton."""
     monkeypatch.chdir(tmp_path)
     main(["new", "site", "mysite"])
     site = tmp_path / "mysite"
     assert (site / "bartleby.yml").exists()
-    assert (site / ".authors.yml").exists()
     assert (site / "content" / "index.md").exists()
+    assert (site / "content" / "tour" / "index.md").exists()
     assert (site / "templates").is_dir()
     assert (site / "static").is_dir()
     assert (site / "hooks").is_dir()
+
+
+def test_new_site_writes_readme(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The scaffold ships a README titled with the site name that lists the everyday commands."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    readme = (tmp_path / "mysite" / "README.md").read_text(encoding="utf-8")
+    assert readme.startswith("# mysite\n")
+    for command in ("bartleby serve", "bartleby build", "bartleby validate", "bartleby lint"):
+        assert command in readme
 
 
 def test_new_site_valid_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -47,30 +63,18 @@ def test_new_site_valid_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     assert config.site.title
 
 
-def test_new_site_blog_opted_into_tags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The scaffolded blog content type opts into the tags taxonomy.
-
-    Without this, a fresh user writing ``tags:`` in a post's front matter
-    sees no /tags/ pages generated and has no obvious way to discover why.
-    """
-    monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
-    config = load_config(tmp_path / "mysite" / "bartleby.yml")
-    assert "tags" in config.content_types["blog"].taxonomies
-
-
 def test_new_site_directory_exists_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Re-scaffolding into an existing site directory errors out."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / "mysite").mkdir()
     with pytest.raises(SystemExit):
-        main(["new", "site", "mysite"])
+        main(["new", "site", "mysite", "--blog"])
 
 
 def test_new_post_creates_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """``bartleby new post 'Title' --type blog`` writes a slugified .md file."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
     main(["new", "post", "My Cool Post", "--type", "blog"])
     target = tmp_path / "mysite" / "content" / "blog" / "posts" / "my-cool-post.md"
@@ -80,7 +84,7 @@ def test_new_post_creates_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 def test_new_post_front_matter(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A new post has title and date front matter at minimum."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
     main(["new", "post", "Hello World", "--type", "blog"])
     body = (tmp_path / "mysite" / "content" / "blog" / "posts" / "hello-world.md").read_text()
@@ -91,18 +95,23 @@ def test_new_post_front_matter(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 def test_build_command_invokes_pipeline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """``bartleby build`` runs the full build and produces ``site/``."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
     main(["build"])
     assert (tmp_path / "mysite" / "site" / "index.html").exists()
 
 
-def test_validate_command_zero_exit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """``bartleby validate`` exits 0 on a clean config."""
+def test_validate_command_zero_exit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby validate`` exits 0 on a clean config and reports it valid."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
-    main(["validate"])
+    main(["validate", "--output", "json"])
+    report = _last_json(capsys.readouterr().out)
+    assert report["valid"] is True
+    assert report["errors"] == []
 
 
 def test_validate_flags_missing_template_override(
@@ -223,7 +232,7 @@ def test_serve_command_constructs_devserver(
 ) -> None:
     """``bartleby serve`` instantiates a DevServer with config-derived host/port."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
 
     captured: dict[str, object] = {}
@@ -241,10 +250,77 @@ def test_serve_command_constructs_devserver(
     assert captured["ran"] is True
 
 
+def test_serve_on_a_busy_port_fails_fast_with_a_labeled_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A busy port exits non-zero with a fix hint, no traceback, and before any build."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite", "--blog"])
+    project = tmp_path / "mysite"
+    monkeypatch.chdir(project)
+    capsys.readouterr()
+
+    with socket.create_server(("127.0.0.1", 0)) as occupied:
+        port = occupied.getsockname()[1]
+        with pytest.raises(SystemExit) as exit_info:
+            main(["serve", "--host", "127.0.0.1", "--port", str(port)])
+
+    stderr = capsys.readouterr().err
+    assert exit_info.value.code == 2, "a busy port is a usage error"
+    assert f"127.0.0.1:{port}" in stderr
+    assert "fix: pass --port with a free port, or --port 0 to pick one" in stderr
+    assert "Traceback" not in stderr
+    assert not (project / "site").exists(), "the port check must run before the build"
+
+
+@pytest.mark.parametrize("port", ["70000", "-1", "eighty"])
+def test_serve_rejects_a_port_outside_the_range_as_a_usage_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], port: str
+) -> None:
+    """``--port`` must be 0 to 65535; anything else is an argparse usage error, exit 2."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite"])
+    monkeypatch.chdir(tmp_path / "mysite")
+    capsys.readouterr()
+
+    with pytest.raises(SystemExit) as exit_info:
+        main(["serve", "--port", port])
+
+    stderr = capsys.readouterr().err
+    assert exit_info.value.code == 2
+    assert "0 to 65535" in stderr
+    assert "Traceback" not in stderr
+
+
+def test_serve_build_time_oserror_is_not_labeled_a_port_problem(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A write failure in the initial build reports as a build error, not as a bind error."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite", "--blog"])
+    project = tmp_path / "mysite"
+    monkeypatch.chdir(project)
+    capsys.readouterr()
+    site = project / "site"
+    site.mkdir()
+    site.chmod(0o000)
+    try:
+        with pytest.raises(SystemExit) as exc_info:
+            main(["serve", "--host", "127.0.0.1", "--port", "0"])
+    finally:
+        site.chmod(0o755)
+
+    assert exc_info.value.code == 1
+    stderr = capsys.readouterr().err
+    assert "cannot replace" in stderr
+    assert "--port" not in stderr
+    assert "cannot serve on" not in stderr
+
+
 def _scaffold_and_enter(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Create a fresh site and chdir into it so build/validate can run."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
 
 
@@ -386,7 +462,7 @@ def test_new_post_missing_type_json_is_usage_error(
 ) -> None:
     """An unknown content type in JSON mode is a usage error (exit 2), never a prompt."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
 
     with pytest.raises(SystemExit) as exc:
@@ -398,12 +474,49 @@ def test_new_post_missing_type_json_is_usage_error(
     assert payload["code"] == "usage_error"
 
 
+def test_new_post_on_a_disabled_type_is_a_usage_error_with_the_enable_hint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A post for a disabled type would never build, so the command refuses and names the fix."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite", "--blog"])
+    monkeypatch.chdir(tmp_path / "mysite")
+    main(["disable", "blog"])
+    capsys.readouterr()
+
+    with pytest.raises(SystemExit) as exc:
+        main(["new", "post", "Hi", "--type", "blog"])
+
+    assert exc.value.code == 2
+    error = capsys.readouterr().err
+    assert "'blog' is disabled" in error
+    assert "run bartleby enable blog blog" in error
+    assert not list((tmp_path / "mysite" / "content" / "blog" / "posts").glob("hi.md"))
+
+
+def test_schema_reports_a_disabled_type_in_text_and_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``schema <type>`` says the type is off instead of printing it as a live schema."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite", "--blog"])
+    monkeypatch.chdir(tmp_path / "mysite")
+    main(["disable", "blog"])
+    capsys.readouterr()
+
+    main(["schema", "blog"])
+    assert "enabled: false" in capsys.readouterr().out.splitlines()
+
+    main(["schema", "blog", "--output", "json"])
+    assert _last_json(capsys.readouterr().out)["enabled"] is False
+
+
 def test_schema_content_type_json(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """``bartleby schema blog --output json`` emits the content type's field schema."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
 
     main(["schema", "blog", "--output", "json"])
@@ -418,7 +531,7 @@ def test_schema_authors_json(
 ) -> None:
     """``bartleby schema authors --output json`` lists configured authors."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
 
     main(["schema", "authors", "--output", "json"])
@@ -433,7 +546,7 @@ def test_schema_taxonomies_json(
 ) -> None:
     """``bartleby schema taxonomies --output json`` lists taxonomies and in-use terms."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
 
     main(["schema", "taxonomies", "--output", "json"])
@@ -448,7 +561,7 @@ def test_schema_taxonomies_json_omits_draft_only_terms(
 ) -> None:
     """``bartleby schema taxonomies`` never lists a term contributed only by a draft."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     project = tmp_path / "mysite"
     monkeypatch.chdir(project)
 
@@ -467,6 +580,7 @@ def test_schema_taxonomies_json_omits_draft_only_terms(
     main(["schema", "taxonomies", "--output", "json"])
     payload = _last_json(capsys.readouterr().out)
     taxonomies = payload["taxonomies"]
+    assert isinstance(taxonomies, list)
     tags = next(tax for tax in taxonomies if tax["name"] == "tags")
     terms = {term["term"]: term["count"] for term in tags["terms"]}
     assert "draft-only" not in terms
@@ -478,7 +592,7 @@ def test_schema_unknown_content_type_is_usage_error(
 ) -> None:
     """``bartleby schema nope`` for an undefined content type fails as a usage error."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
 
     with pytest.raises(SystemExit) as exc:
@@ -502,14 +616,16 @@ def test_content_list_json(
 ) -> None:
     """``bartleby content list --output json`` lists published pages with curated fields."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     _write_published_post(tmp_path / "mysite")
     monkeypatch.chdir(tmp_path / "mysite")
 
     main(["content", "list", "--output", "json"])
     payload = _last_json(capsys.readouterr().out)
     assert payload["count"] >= 1
-    titles = {entry["title"] for entry in payload["content"]}
+    content = payload["content"]
+    assert isinstance(content, list)
+    titles = {entry["title"] for entry in content}
     assert "Hello World" in titles
 
 
@@ -518,13 +634,15 @@ def test_content_list_excludes_drafts_json(
 ) -> None:
     """``bartleby content list`` omits draft posts by default."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
     main(["new", "post", "Secret Draft", "--type", "blog"])
 
     main(["content", "list", "--output", "json"])
     payload = _last_json(capsys.readouterr().out)
-    titles = {entry["title"] for entry in payload["content"]}
+    content = payload["content"]
+    assert isinstance(content, list)
+    titles = {entry["title"] for entry in content}
     assert "Secret Draft" not in titles
 
 
@@ -533,14 +651,16 @@ def test_content_get_json(
 ) -> None:
     """``bartleby content get <path> --output json`` returns one page's metadata and body."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     _write_published_post(tmp_path / "mysite")
     monkeypatch.chdir(tmp_path / "mysite")
 
     main(["content", "get", "content/blog/posts/hello-world.md", "--output", "json"])
     payload = _last_json(capsys.readouterr().out)
     assert payload["content_type"] == "blog"
-    assert payload["metadata"]["title"] == "Hello World"
+    metadata = payload["metadata"]
+    assert isinstance(metadata, dict)
+    assert metadata["title"] == "Hello World"
     assert "word_count" in payload
 
 
@@ -549,7 +669,7 @@ def test_content_get_unknown_path_is_usage_error(
 ) -> None:
     """``bartleby content get`` for a missing page fails as a usage error."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
 
     with pytest.raises(SystemExit) as exc:
@@ -564,7 +684,7 @@ def test_render_command_html_json(
 ) -> None:
     """``bartleby render <path> --output json`` renders one page to HTML without a build."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     _write_published_post(tmp_path / "mysite")
     monkeypatch.chdir(tmp_path / "mysite")
 
@@ -573,7 +693,9 @@ def test_render_command_html_json(
     assert payload["path"] == "content/blog/posts/hello-world.md"
     assert payload["url"]
     assert "A short body" in str(payload["html"])
-    assert payload["metadata"]["title"] == "Hello World"
+    metadata = payload["metadata"]
+    assert isinstance(metadata, dict)
+    assert metadata["title"] == "Hello World"
     assert payload["word_count"] >= 1
     assert isinstance(payload["warnings"], list)
     assert "site" not in [p.name for p in (tmp_path / "mysite").iterdir()]
@@ -582,7 +704,7 @@ def test_render_command_html_json(
 def test_render_command_no_full_build(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """``bartleby render`` does not write the ``site/`` output tree."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     _write_published_post(tmp_path / "mysite")
     monkeypatch.chdir(tmp_path / "mysite")
 
@@ -595,7 +717,7 @@ def test_render_command_markdown_format(
 ) -> None:
     """``--format markdown`` returns processed markdown without HTML conversion."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     _write_published_post(tmp_path / "mysite")
     monkeypatch.chdir(tmp_path / "mysite")
 
@@ -619,7 +741,7 @@ def test_render_unknown_path_is_usage_error(
 ) -> None:
     """``bartleby render`` for a missing page fails as a usage error."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
 
     with pytest.raises(SystemExit) as exc:
@@ -634,7 +756,7 @@ def test_lint_command_json_shape(
 ) -> None:
     """``bartleby lint --output json`` emits issues plus a severity summary."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
     # A post that links to a real page, so the fixture also exercises the
     # orphan check: linked.md must not be reported orphaned.
@@ -658,10 +780,14 @@ def test_lint_command_json_shape(
     payload = _last_json(capsys.readouterr().out)
     assert "issues" in payload
     assert "summary" in payload
-    assert payload["summary"]["errors"] >= 1
-    rules = {issue["rule"] for issue in payload["issues"]}
+    summary = payload["summary"]
+    assert isinstance(summary, dict)
+    assert summary["errors"] >= 1
+    issues = payload["issues"]
+    assert isinstance(issues, list)
+    rules = {issue["rule"] for issue in issues}
     assert "broken-crossref" in rules
-    orphans = {issue["file"] for issue in payload["issues"] if issue["rule"] == "orphaned-page"}
+    orphans = {issue["file"] for issue in issues if issue["rule"] == "orphaned-page"}
     assert "blog/posts/linked.md" not in orphans
 
 
@@ -676,7 +802,7 @@ def test_lint_relative_md_link_resolves_before_orphan_check(
     every page orphaned.
     """
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     site = tmp_path / "mysite"
     (site / "content" / "blog" / "posts" / "linked.md").write_text(
         '---\ntitle: "Linked"\ndate: 2026-05-01\ndraft: false\ndescription: "d"\n---\n\nBody.\n',
@@ -691,7 +817,9 @@ def test_lint_relative_md_link_resolves_before_orphan_check(
 
     main(["lint", "--output", "json"])
     payload = _last_json(capsys.readouterr().out)
-    orphans = {issue["file"] for issue in payload["issues"] if issue["rule"] == "orphaned-page"}
+    issues = payload["issues"]
+    assert isinstance(issues, list)
+    orphans = {issue["file"] for issue in issues if issue["rule"] == "orphaned-page"}
     assert "blog/posts/linked.md" not in orphans
 
 
@@ -700,22 +828,20 @@ def test_lint_nav_page_never_reported_orphaned(
 ) -> None:
     """A page present in navigation is never reported orphaned, inbound links or not."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     site = tmp_path / "mysite"
     (site / "content" / "blog" / "posts" / "lonely.md").write_text(
         '---\ntitle: "Lonely"\ndate: 2026-05-01\ndraft: false\ndescription: "d"\n---\n\nBody.\n',
         encoding="utf-8",
     )
-    config_path = site / "bartleby.yml"
-    config_path.write_text(
-        config_path.read_text(encoding="utf-8") + '\nnav:\n  - "Lonely": blog/posts/lonely.md\n',
-        encoding="utf-8",
-    )
     monkeypatch.chdir(site)
+    _append_to_config('nav:\n  - "Lonely": blog/posts/lonely.md\n')
 
     main(["lint", "--output", "json"])
     payload = _last_json(capsys.readouterr().out)
-    orphans = {issue["file"] for issue in payload["issues"] if issue["rule"] == "orphaned-page"}
+    issues = payload["issues"]
+    assert isinstance(issues, list)
+    orphans = {issue["file"] for issue in issues if issue["rule"] == "orphaned-page"}
     assert "blog/posts/lonely.md" not in orphans
 
 
@@ -724,7 +850,7 @@ def test_lint_check_external_off_by_default(
 ) -> None:
     """``bartleby lint`` does not check external URLs unless --check-external is given."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
     post = tmp_path / "mysite" / "content" / "blog" / "posts" / "ext.md"
     post.write_text(
@@ -742,6 +868,82 @@ def test_lint_check_external_off_by_default(
     monkeypatch.setattr("bartleby.linting.check_external_url", fake_checker)
     main(["lint", "--output", "json"])
     assert called["checked"] is False
+
+
+def test_lint_runs_accessibility_rules_and_prints_line_and_fix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A page with an unlabeled image fails lint with the file, line, message, and fix."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    page = tmp_path / "mysite" / "content" / "chart.md"
+    page.write_text(
+        '---\ntitle: "Chart"\ndescription: "d"\n---\n\nSee the chart.\n\n<img src="chart.png">\n',
+        encoding="utf-8",
+    )
+    _append_to_config("nav:\n  - Home: index.md\n  - Chart: chart.md\n")
+
+    with pytest.raises(SystemExit) as exc:
+        main(["lint"])
+    assert exc.value.code == 1
+
+    out = capsys.readouterr().out
+    assert (
+        "error [image-missing-alt] chart.md:8: <img src='chart.png'> has no alt attribute" in out
+    )
+    assert "(fix: write alt text" in out
+
+
+def test_lint_rules_and_skip_select_rules(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--rules`` runs only the named rules and ``--skip`` leaves the named ones out."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    page = tmp_path / "mysite" / "content" / "chart.md"
+    page.write_text('---\ntitle: "Chart"\n---\n\n<img src="chart.png">\n', encoding="utf-8")
+    _append_to_config("nav:\n  - Home: index.md\n  - Chart: chart.md\n")
+
+    main(["lint", "--rules", "missing-description,orphaned-page", "--output", "json"])
+    issues = _last_json(capsys.readouterr().out)["issues"]
+    assert isinstance(issues, list)
+    rules = {issue["rule"] for issue in issues}
+    assert rules == {"missing-description", "orphaned-page"}
+
+    with pytest.raises(SystemExit):
+        main(["lint", "--skip", "missing-description", "--output", "json"])
+    issues = _last_json(capsys.readouterr().out)["issues"]
+    assert isinstance(issues, list)
+    rules = {issue["rule"] for issue in issues}
+    assert "image-missing-alt" in rules
+    assert "missing-description" not in rules
+
+
+def test_lint_unknown_rule_id_is_a_usage_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    with pytest.raises(SystemExit) as exc:
+        main(["lint", "--rules", "image-missing-alt,no-such-rule"])
+    assert exc.value.code == 2
+    assert "no-such-rule" in capsys.readouterr().err
+
+
+def test_lint_list_rules_prints_the_table_without_a_site(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--list-rules`` needs no bartleby.yml and prints every rule in text and JSON."""
+    from bartleby.linting import RULES
+
+    monkeypatch.chdir(tmp_path)
+    main(["lint", "--list-rules"])
+    text = capsys.readouterr().out
+    for rule in RULES:
+        assert rule.id in text
+        assert rule.hint in text
+
+    main(["lint", "--list-rules", "--output", "json"])
+    payload = _last_json(capsys.readouterr().out)
+    assert payload["rules"] == [rule.to_dict() for rule in RULES]
+    assert [rule["id"] for rule in payload["rules"]][:1] == ["broken-crossref"]
 
 
 def test_build_dry_run_reports_without_writing(
@@ -763,7 +965,7 @@ def test_export_jsonl_emits_one_object_per_line(
 ) -> None:
     """``bartleby export`` defaults to JSONL with one published page per line."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
     post = tmp_path / "mysite" / "content" / "blog" / "posts" / "p.md"
     post.write_text(
@@ -784,7 +986,7 @@ def test_export_include_content_embeds_body(
 ) -> None:
     """``bartleby export --include-content`` embeds the markdown body."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     monkeypatch.chdir(tmp_path / "mysite")
     post = tmp_path / "mysite" / "content" / "blog" / "posts" / "p.md"
     post.write_text(
@@ -798,12 +1000,183 @@ def test_export_include_content_embeds_body(
     assert "Unique body text." in captured.out
 
 
+def test_export_include_html_returns_the_built_page_body(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby export --include-html`` embeds the HTML the build puts in the page."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite", "--blog"])
+    site = tmp_path / "mysite"
+    monkeypatch.chdir(site)
+    post = site / "content" / "blog" / "posts" / "p.md"
+    post.write_text(
+        '---\ntitle: "P"\ndate: 2026-05-01\ndraft: false\ndescription: "d"\n---\n\n'
+        "## Heading\n\nUnique *body* text.\n",
+        encoding="utf-8",
+    )
+    draft = site / "content" / "blog" / "posts" / "d.md"
+    draft.write_text('---\ntitle: "D"\ndate: 2026-05-02\ndraft: true\n---\n\nHidden.\n')
+    capsys.readouterr()
+
+    main(["export", "--include-html"])
+    records = [
+        json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")
+    ]
+    exported = next(record for record in records if record["title"] == "P")
+    assert "<em>body</em>" in str(exported["html"])
+    assert all(record["title"] != "D" for record in records)
+    assert all(record["html"] for record in records)
+
+    # The export and the build share one render path: the built page holds the same HTML.
+    main(["build"])
+    page_dir = site / "site" / str(exported["url"]).strip("/")
+    built = (page_dir / "index.html").read_text(encoding="utf-8")
+    assert str(exported["html"]) in built
+    assert not [path for path in site.iterdir() if path.name.startswith(".bartleby-build-")]
+
+
+def _site_with_event_recorder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Scaffold a site whose project hook appends every event it receives to fired.log."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite", "--blog"])
+    site = tmp_path / "mysite"
+    monkeypatch.chdir(site)
+    hooks_dir = site / "hooks"
+    hooks_dir.mkdir(exist_ok=True)
+    handlers = "".join(
+        f"def {event}(*args, **kwargs):\n    record({event!r}, args)\n\n\n"
+        for event in sorted(KNOWN_EVENTS)
+    )
+    (hooks_dir / "recorder.py").write_text(
+        "# ABOUTME: Test hook that records every event it receives.\n"
+        "# Appends one line per event to fired.log in the project root.\n"
+        "from pathlib import Path\n\n"
+        "LOG = Path(__file__).parent.parent / 'fired.log'\n\n\n"
+        "def record(event, args):\n"
+        "    argument = args[0] if event == 'on_startup' else ''\n"
+        "    with LOG.open('a', encoding='utf-8') as handle:\n"
+        "        handle.write(f'{event} {argument}'.strip() + '\\n')\n\n\n" + handlers,
+        encoding="utf-8",
+    )
+    return site
+
+
+def test_export_include_html_fires_the_documented_hooks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``export --include-html`` fires the load, body-render, and shutdown hooks only.
+
+    ``on_shutdown`` fires exactly once, last, as it does at the end of a build.
+    ``docs/content/reference/pages/plugin-hooks.md`` lists these events. Change the set
+    here and in that page together.
+    """
+    site = _site_with_event_recorder(tmp_path, monkeypatch)
+    capsys.readouterr()
+
+    main(["export", "--include-html"])
+
+    fired = (site / "fired.log").read_text(encoding="utf-8").splitlines()
+    assert fired[0] == "on_startup export"
+    assert fired[-1] == "on_shutdown"
+    assert fired.count("on_shutdown") == 1
+    assert {line.split()[0] for line in fired} == {
+        "on_startup",
+        "on_config",
+        "on_pre_build",
+        "on_files",
+        "on_nav",
+        "on_env",
+        "on_pre_page",
+        "on_page_read_source",
+        "on_page_markdown",
+        "on_page_content",
+        "on_shutdown",
+    }
+
+
+def test_export_include_html_failure_fires_build_error_then_shutdown_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A page that fails to render fires ``on_build_error`` then ``on_shutdown``, once each."""
+    site = _site_with_event_recorder(tmp_path, monkeypatch)
+    first_page = next((site / "content").rglob("*.md"))
+    first_page.write_text(
+        first_page.read_text(encoding="utf-8") + "\n[% totally_unknown_shortcode %]\n",
+        encoding="utf-8",
+    )
+    capsys.readouterr()
+
+    with pytest.raises(SystemExit):
+        main(["export", "--include-html"])
+
+    fired = (site / "fired.log").read_text(encoding="utf-8").splitlines()
+    assert fired[-2:] == ["on_build_error", "on_shutdown"]
+    assert fired.count("on_build_error") == 1
+    assert fired.count("on_shutdown") == 1
+
+
+def test_export_include_html_metadata_failure_fires_build_error_then_shutdown_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Invalid metadata fires ``on_build_error`` then ``on_shutdown``, once each."""
+    site = _site_with_event_recorder(tmp_path, monkeypatch)
+    welcome = site / "content" / "blog" / "posts" / "welcome.md"
+    welcome.write_text(
+        welcome.read_text(encoding="utf-8").replace(
+            "authors: [default]", "authors: [nobody-such-author]"
+        ),
+        encoding="utf-8",
+    )
+    capsys.readouterr()
+
+    with pytest.raises(SystemExit):
+        main(["export", "--include-html"])
+
+    fired = (site / "fired.log").read_text(encoding="utf-8").splitlines()
+    assert fired[-2:] == ["on_build_error", "on_shutdown"]
+    assert fired.count("on_build_error") == 1
+    assert fired.count("on_shutdown") == 1
+
+
+def test_export_include_html_missing_content_dir_fires_build_error_then_shutdown_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A missing ``content/`` fires ``on_build_error`` then ``on_shutdown``, once each."""
+    site = _site_with_event_recorder(tmp_path, monkeypatch)
+    shutil.rmtree(site / "content")
+    capsys.readouterr()
+
+    with pytest.raises(SystemExit):
+        main(["export", "--include-html"])
+
+    fired = (site / "fired.log").read_text(encoding="utf-8").splitlines()
+    assert fired[-2:] == ["on_build_error", "on_shutdown"]
+    assert fired.count("on_build_error") == 1
+    assert fired.count("on_shutdown") == 1
+
+
+def test_export_without_include_html_does_not_render(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Plain ``bartleby export`` carries no ``html`` key."""
+    monkeypatch.chdir(tmp_path)
+    main(["new", "site", "mysite", "--blog"])
+    monkeypatch.chdir(tmp_path / "mysite")
+    capsys.readouterr()
+    main(["export"])
+    records = [
+        json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")
+    ]
+    assert records
+    assert all("html" not in record for record in records)
+
+
 def test_generate_skill_writes_three_skills(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """``bartleby generate-skill`` writes the three skills under the configured output dir."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     site = tmp_path / "mysite"
     (site / "shortcodes").mkdir()
     (site / "shortcodes" / "callout.html").write_text("{{ text }}\n", encoding="utf-8")
@@ -900,14 +1273,21 @@ def test_discover_shortcode_names_finds_templates_shortcodes_location(tmp_path: 
     assert _discover_shortcode_names(tmp_path) == ["bar"]
 
 
+def _single_layer_theme(root: Path) -> ResolvedTheme:
+    manifest = ThemeManifest(name="stub")
+    return ResolvedTheme(chain=[ThemeLayer(name="stub", root=root, manifest=manifest)])
+
+
 def test_discover_shortcode_names_includes_builtin_theme_shortcodes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Built-in theme shortcodes (``get_theme_templates_dir()/shortcodes/*.html``) are included."""
+    """Built-in theme shortcodes (``<theme>/templates/shortcodes/*.html``) are included."""
     theme_dir = tmp_path / "theme"
-    (theme_dir / "shortcodes").mkdir(parents=True)
-    (theme_dir / "shortcodes" / "baked_in.html").write_text("baked in\n", encoding="utf-8")
-    monkeypatch.setattr("bartleby.templates.get_theme_templates_dir", lambda: theme_dir)
+    (theme_dir / "templates" / "shortcodes").mkdir(parents=True)
+    (theme_dir / "templates" / "shortcodes" / "baked_in.html").write_text(
+        "baked in\n", encoding="utf-8"
+    )
+    monkeypatch.setattr("bartleby.templates.default_theme", lambda: _single_layer_theme(theme_dir))
 
     project_dir = tmp_path / "project"
     project_dir.mkdir()
@@ -936,7 +1316,7 @@ def test_generate_skill_includes_overrides_only_shortcode(
 ) -> None:
     """A shortcode defined only under ``overrides/shortcodes`` reaches the generated skill."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
     site = tmp_path / "mysite"
     (site / "overrides" / "shortcodes").mkdir(parents=True)
     (site / "overrides" / "shortcodes" / "onlyoverride.html").write_text(
@@ -956,9 +1336,11 @@ def test_discover_shortcode_names_deduplicates_across_locations(
 ) -> None:
     """A name defined in multiple locations appears once, sorted."""
     theme_dir = tmp_path / "theme"
-    (theme_dir / "shortcodes").mkdir(parents=True)
-    (theme_dir / "shortcodes" / "note.html").write_text("theme note\n", encoding="utf-8")
-    monkeypatch.setattr("bartleby.templates.get_theme_templates_dir", lambda: theme_dir)
+    (theme_dir / "templates" / "shortcodes").mkdir(parents=True)
+    (theme_dir / "templates" / "shortcodes" / "note.html").write_text(
+        "theme note\n", encoding="utf-8"
+    )
+    monkeypatch.setattr("bartleby.templates.default_theme", lambda: _single_layer_theme(theme_dir))
 
     project_dir = tmp_path / "project"
     (project_dir / "shortcodes").mkdir(parents=True)
@@ -970,3 +1352,555 @@ def test_discover_shortcode_names_deduplicates_across_locations(
     )
 
     assert _discover_shortcode_names(project_dir) == ["note", "warning"]
+
+
+def _append_to_config(extra: str) -> None:
+    """Merge ``extra`` YAML into ``./bartleby.yml``, replacing any top-level key it repeats."""
+    from pathlib import Path as RuntimePath
+
+    replace_top_level_keys(RuntimePath("bartleby.yml"), extra)
+
+
+def test_build_with_old_material_feature_name_exits_one_with_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A mkdocs-material feature name fails the build with a message naming the native name."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    _append_to_config("\ntheme:\n  features:\n    - navigation.tabs\n")
+
+    with pytest.raises(SystemExit) as exc:
+        main(["build"])
+    assert exc.value.code == 1
+
+    captured = capsys.readouterr()
+    assert "Traceback" not in captured.err
+    assert "config_error" in captured.err
+    assert "theme.features" in captured.err
+    assert "navigation.tabs" in captured.err
+    assert "nav.tabs" in captured.err
+
+
+def test_build_with_palette_key_exits_one_pointing_to_tokens(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The removed ``palette`` key fails the build with a pointer to ``theme.tokens``."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    _append_to_config("\ntheme:\n  palette:\n    primary: indigo\n")
+
+    with pytest.raises(SystemExit) as exc:
+        main(["build"])
+    assert exc.value.code == 1
+
+    captured = capsys.readouterr()
+    assert "config_error" in captured.err
+    assert "theme.tokens" in captured.err
+
+
+def test_build_warns_when_theme_lacks_enabled_feature_and_still_succeeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """An enabled feature the theme lacks prints a warning but the build completes."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    bare_theme = tmp_path / "bare-theme"
+    bare_theme.mkdir()
+    (bare_theme / "theme.yml").write_text(
+        "name: bare\nextends: base\nfeatures: []\n", encoding="utf-8"
+    )
+    _append_to_config(f"\ntheme:\n  path: {bare_theme}\n  features:\n    - nav.tabs\n")
+
+    with caplog.at_level("WARNING", logger="bartleby"):
+        main(["build"])
+
+    assert (tmp_path / "mysite" / "site" / "index.html").exists()
+    messages = [record.getMessage() for record in caplog.records if record.levelname == "WARNING"]
+    assert any("nav.tabs" in message and "does not implement" in message for message in messages)
+
+
+# --- error-message contract through the CLI --------------------------------
+
+
+def _run_failing_build(capsys: pytest.CaptureFixture[str], *argv: str) -> str:
+    """Run the CLI expecting exit 1 and no traceback; return the stderr text."""
+    with pytest.raises(SystemExit) as exc:
+        main(list(argv))
+    assert exc.value.code == 1
+    captured = capsys.readouterr()
+    assert "Traceback" not in captured.err
+    assert "Traceback" not in captured.out
+    return captured.err
+
+
+def test_build_unknown_top_level_key_surfaces_file_key_and_hint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A misspelled top-level key exits 1 with the file, the key, and the suggestion."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    _append_to_config("\ncontent_type:\n  docs:\n    path: docs\n")
+    err = _run_failing_build(capsys, "build")
+    assert "config_error" in err
+    assert "bartleby.yml" in err
+    assert "content_type" in err
+    assert "content_types" in err
+
+
+def test_build_bad_metadata_schema_type_surfaces_content_type_and_field(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A metadata field with an unknown type names the content type and field."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    config_path = tmp_path / "mysite" / "bartleby.yml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace(
+            "    readtime: true\n",
+            "    readtime: true\n    metadata:\n      rating:\n        type: number\n",
+        ),
+        encoding="utf-8",
+    )
+    err = _run_failing_build(capsys, "build")
+    assert "content_types.blog.metadata.rating.type" in err
+    assert "string" in err
+
+
+def test_build_duplicate_author_id_surfaces_file_and_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A duplicated author id exits 1 as author_error naming the authors file and the id."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    (tmp_path / "mysite" / ".authors.yml").write_text(
+        "authors:\n  default:\n    name: A\n  default:\n    name: B\n", encoding="utf-8"
+    )
+    err = _run_failing_build(capsys, "build")
+    assert "author_error" in err
+    assert ".authors.yml" in err
+    assert "default" in err
+    assert "duplicate" in err
+
+
+def test_build_unknown_post_author_surfaces_known_ids(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A post naming an unknown author fails the build listing the known author ids."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    post = tmp_path / "mysite" / "content" / "blog" / "posts" / "hello.md"
+    post.write_text("---\ntitle: Hello\nauthors: [nobody]\n---\n\nHi\n", encoding="utf-8")
+    err = _run_failing_build(capsys, "build")
+    assert "build_error" in err
+    assert "hello.md" in err
+    assert "nobody" in err
+    assert "default" in err
+
+
+def test_build_theme_path_without_manifest_surfaces_what_a_theme_needs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A theme.path directory with no theme.yml exits 1 as theme_error with the fix."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    (tmp_path / "mysite" / "my-theme").mkdir()
+    _append_to_config("\ntheme:\n  path: my-theme\n")
+    err = _run_failing_build(capsys, "build")
+    assert "theme_error" in err
+    assert "my-theme" in err
+    assert "theme.yml" in err
+    assert "fix:" in err
+
+
+def test_build_missing_content_directory_surfaces_path_and_fix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A project without content/ exits 1 as build_error naming the directory."""
+    import shutil
+
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    shutil.rmtree(tmp_path / "mysite" / "content")
+    err = _run_failing_build(capsys, "build")
+    assert "build_error" in err
+    assert str(tmp_path / "mysite" / "content") in err
+    assert "fix:" in err
+
+
+def test_build_page_colliding_with_schema_json_is_a_clean_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A page that would overwrite schema.json exits 1 as agent_surface_error, no traceback."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    page = tmp_path / "mysite" / "content" / "schema.md"
+    page.write_text("---\ntitle: Schema\nurl: schema.json\n---\n\nHi\n", encoding="utf-8")
+    err = _run_failing_build(capsys, "build")
+    assert "agent_surface_error" in err
+    assert "schema.md" in err
+    assert "schema.json" in err
+    assert "fix:" in err
+
+
+def test_build_page_colliding_with_schema_json_json_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """In JSON mode the collision is one error object with the stable code."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    page = tmp_path / "mysite" / "content" / "schema.md"
+    page.write_text("---\ntitle: Schema\nurl: schema.json\n---\n\nHi\n", encoding="utf-8")
+    with pytest.raises(SystemExit) as exc:
+        main(["build", "--output", "json"])
+    assert exc.value.code == 1
+    payload = _last_json(capsys.readouterr().out)
+    assert payload["code"] == "agent_surface_error"
+    assert "schema.json" in str(payload["error"])
+
+
+def test_build_unknown_shortcode_surfaces_template_to_create(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An unknown shortcode fails the build naming the page and the template to add."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    page = tmp_path / "mysite" / "content" / "blog" / "posts" / "hello.md"
+    page.write_text("---\ntitle: Hello\n---\n\n[% banner %]\n", encoding="utf-8")
+    err = _run_failing_build(capsys, "build")
+    assert "hello.md" in err
+    assert "shortcodes/banner.html" in err
+
+
+def test_missing_config_names_the_path_and_how_to_create_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Running build outside a project is a usage error (exit 2) with the next step."""
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit) as exc:
+        main(["build"])
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert "bartleby.yml" in err
+    assert "bartleby new site" in err
+    assert "--config" in err
+
+
+# --- global flags: --quiet and --verbose ------------------------------------
+
+
+def test_quiet_build_prints_no_summary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--quiet`` suppresses the text summary of a successful build."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    capsys.readouterr()
+    main(["build", "--quiet"])
+    assert capsys.readouterr().out == ""
+    assert (tmp_path / "mysite" / "site" / "index.html").exists()
+
+
+def test_quiet_does_not_hide_json_or_data_commands(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """JSON output and data-returning commands are the product, so quiet leaves them alone."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    capsys.readouterr()
+    main(["build", "--quiet", "--output", "json"])
+    assert "pages" in _last_json(capsys.readouterr().out)
+    main(["content", "list", "--quiet"])
+    assert capsys.readouterr().out.strip() != ""
+
+
+def test_quiet_still_reports_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--quiet`` never hides a failure."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    _append_to_config("\nbogus_key: 1\n")
+    with pytest.raises(SystemExit) as exc:
+        main(["build", "--quiet"])
+    assert exc.value.code == 1
+    assert "bogus_key" in capsys.readouterr().err
+
+
+def test_quiet_raises_log_threshold_and_verbose_lowers_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--quiet`` keeps only errors from the log; ``--verbose`` adds debug detail."""
+    import logging
+
+    monkeypatch.delenv("BARTLEBY_DEBUG", raising=False)
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["build", "--quiet"])
+    assert logging.getLogger("bartleby").level == logging.ERROR
+    main(["build", "--verbose"])
+    assert logging.getLogger("bartleby").level == logging.DEBUG
+    main(["build"])
+    assert logging.getLogger("bartleby").level == logging.INFO
+
+
+def test_verbose_build_logs_progress_detail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """``--verbose`` surfaces per-phase detail that a normal build does not log."""
+    monkeypatch.delenv("BARTLEBY_DEBUG", raising=False)
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    with caplog.at_level("DEBUG", logger="bartleby"):
+        main(["build", "--verbose"])
+    messages = [record.getMessage() for record in caplog.records if record.levelname == "DEBUG"]
+    assert any("discovered" in message for message in messages)
+    assert any("wrote" in message for message in messages)
+
+
+def test_quiet_and_verbose_conflict_is_a_usage_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Asking for both is contradictory; argparse reports it and exits 2."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    with pytest.raises(SystemExit) as exc:
+        main(["build", "--quiet", "--verbose"])
+    assert exc.value.code == 2
+    assert "not allowed with" in capsys.readouterr().err
+
+
+# --- ai.skills.regenerate_on_build -------------------------------------------
+
+
+def test_build_regenerates_skills_when_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``ai.skills.regenerate_on_build: true`` writes the three skills after a build."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    _append_to_config("\nai:\n  skills:\n    regenerate_on_build: true\n")
+    main(["build"])
+    skills_dir = tmp_path / "mysite" / ".claude" / "skills"
+    assert sorted(path.name for path in skills_dir.iterdir()) == [
+        "bartleby-ops.md",
+        "bartleby-review.md",
+        "bartleby-write.md",
+    ]
+
+
+def test_build_leaves_skills_alone_by_default_and_on_dry_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without the setting, or on a dry run, a build writes no skills."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["build"])
+    assert not (tmp_path / "mysite" / ".claude").exists()
+    _append_to_config("\nai:\n  skills:\n    regenerate_on_build: true\n")
+    main(["build", "--dry-run"])
+    assert not (tmp_path / "mysite" / ".claude").exists()
+
+
+# --- serve --dirty -----------------------------------------------------------
+
+
+def test_serve_dirty_flag_is_gone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Incremental rebuilds are a non-goal, so ``serve --dirty`` is an unknown argument."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    with pytest.raises(SystemExit) as exc:
+        main(["serve", "--dirty"])
+    assert exc.value.code == 2
+    assert "--dirty" in capsys.readouterr().err
+
+
+def test_build_set_overrides_the_site_title(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``build --set site.title=...`` renders the overridden title."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["build", "--set", "site.title=Overridden Title Zed"])
+    html = (tmp_path / "mysite" / "site" / "index.html").read_text(encoding="utf-8")
+    assert "Overridden Title Zed" in html
+
+
+def test_build_set_is_repeatable_and_last_wins(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Repeated ``--set`` flags accumulate and a repeated key keeps the last value."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["build", "--set", "site.title=Stale Name", "--set", "site.title=Second Title"])
+    html = (tmp_path / "mysite" / "site" / "index.html").read_text(encoding="utf-8")
+    assert "Second Title" in html
+    assert "Stale Name" not in html
+
+
+def test_build_set_without_equals_exits_nonzero_naming_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A ``--set`` token with no ``=`` fails with a ``--set``-labeled message."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    with pytest.raises(SystemExit) as exc:
+        main(["build", "--set", "site.title"])
+    assert exc.value.code != 0
+    err = capsys.readouterr().err
+    assert "--set" in err
+    assert "site.title" in err
+
+
+def test_validate_set_failure_is_labeled_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``validate --set`` runs the override through the validator and labels the failure."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    with pytest.raises(SystemExit) as exc:
+        main(["validate", "--set", "dev_server.port=notaport"])
+    assert exc.value.code != 0
+    assert "--set: dev_server.port" in capsys.readouterr().err
+
+
+def test_validate_accepts_valid_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``validate --set`` with a legal override passes, and the override reaches the validator.
+
+    The file holds a port the validator rejects, so the run can only pass if the
+    override replaced it before validation.
+    """
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    _append_to_config("\ndev_server:\n  port: notaport\n")
+    with pytest.raises(SystemExit):
+        main(["validate"])
+    main(["validate", "--set", "dev_server.port=9100", "--output", "json"])
+    assert _last_json(capsys.readouterr().out)["valid"] is True
+
+
+def test_serve_passes_set_overrides_to_devserver(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``serve --set`` applies to the host/port lookup and reaches the DevServer."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    captured: dict[str, object] = {}
+
+    class FakeDevServer:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            captured["kwargs"] = kwargs
+
+        def run(self) -> None:
+            captured["ran"] = True
+
+    monkeypatch.setattr("bartleby.server.DevServer", FakeDevServer)
+    main(["serve", "--set", "dev_server.port=9123"])
+    kwargs = captured["kwargs"]
+    assert isinstance(kwargs, dict)
+    assert kwargs["port"] == 9123
+    assert kwargs["overrides"] == ["dev_server.port=9123"]
+
+
+def test_build_base_url_renders_canonical_urls_against_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``build --base-url`` makes the canonical link absolute against that base."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["build", "--base-url", "https://x.test"])
+    html = (tmp_path / "mysite" / "site" / "index.html").read_text(encoding="utf-8")
+    assert 'rel="canonical" href="https://x.test/' in html
+
+
+def test_validate_accepts_base_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``validate --base-url`` is accepted and the override reaches the validator.
+
+    The file holds a ``site.url`` the validator rejects, so the run can only pass
+    if ``--base-url`` replaced it before validation.
+    """
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    _append_to_config("\nsite:\n  title: Base URL Site\n  url: not-a-url\n")
+    with pytest.raises(SystemExit):
+        main(["validate"])
+    main(["validate", "--base-url", "https://x.test", "--output", "json"])
+    assert _last_json(capsys.readouterr().out)["valid"] is True
+
+
+# --- global flags before the subcommand name ---------------------------------
+
+
+def test_output_json_before_the_subcommand_prints_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby --output json validate`` prints JSON; the subparser keeps the value."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["--output", "json", "validate"])
+    assert _last_json(capsys.readouterr().out)["valid"] is True
+
+
+def test_quiet_before_the_subcommand_silences_the_confirmation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby --quiet build`` prints nothing on success."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    capsys.readouterr()
+    main(["--quiet", "build"])
+    assert capsys.readouterr().out == ""
+
+
+def test_config_before_the_subcommand_is_honored(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby --config PATH validate`` finds the config from another directory."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    main(["--config", str(tmp_path / "mysite" / "bartleby.yml"), "validate", "--output", "json"])
+    assert _last_json(capsys.readouterr().out)["valid"] is True
+
+
+def test_global_flag_after_the_subcommand_wins_over_one_before(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``bartleby --output text validate --output json`` prints JSON."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["--output", "text", "validate", "--output", "json"])
+    assert _last_json(capsys.readouterr().out)["valid"] is True
+
+
+def test_serve_passes_base_url_as_a_site_url_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``serve --base-url`` is accepted and reaches the DevServer as a ``site.url`` override."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    captured: dict[str, object] = {}
+
+    class FakeDevServer:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            captured["kwargs"] = kwargs
+
+        def run(self) -> None:
+            captured["ran"] = True
+
+    monkeypatch.setattr("bartleby.server.DevServer", FakeDevServer)
+    main(["serve", "--base-url", "https://x.test"])
+    kwargs = captured["kwargs"]
+    assert isinstance(kwargs, dict)
+    assert kwargs["overrides"] == ["site.url=https://x.test"]
+
+
+def test_base_url_wins_over_a_set_of_site_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--base-url`` is applied after ``--set``, so it wins on ``site.url``."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    main(["build", "--set", "site.url=https://set.test", "--base-url", "https://x.test"])
+    html = (tmp_path / "mysite" / "site" / "index.html").read_text(encoding="utf-8")
+    assert 'rel="canonical" href="https://x.test/' in html
+
+
+def test_new_site_quotes_a_name_with_a_double_quote_and_a_backslash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The site name lands in ``site.title`` exactly, however it needs quoting in YAML."""
+    monkeypatch.chdir(tmp_path)
+    name = 'q"uo\\te'
+    main(["new", "site", name])
+    config = load_config(tmp_path / name / "bartleby.yml")
+    assert config.site.title == name
+    monkeypatch.chdir(tmp_path / name)
+    main(["build"])
+    html = (tmp_path / name / "site" / "index.html").read_text(encoding="utf-8")
+    assert "q&#34;uo\\te" in html or 'q"uo\\te' in html
+
+
+def test_new_site_removes_its_directory_when_scaffolding_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failure after the directory is made leaves nothing behind, so a retry can run."""
+    monkeypatch.chdir(tmp_path)
+
+    def _fail(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(cli, "_copy_starter_tree", _fail)
+    with pytest.raises(RuntimeError, match="disk full"):
+        main(["new", "site", "mysite"])
+    assert not (tmp_path / "mysite").exists()

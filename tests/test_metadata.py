@@ -16,7 +16,7 @@ from bartleby.metadata import (
 )
 
 if TYPE_CHECKING:
-    import datetime
+    from bartleby.content import PageMetadataValue
 
 
 def _make_page(
@@ -24,10 +24,10 @@ def _make_page(
     source: str = "blog/posts/sample.md",
     title: str = "Sample",
     content_type_name: str | None = "blog",
-    custom: dict[str, str | int | bool | list[str] | datetime.date] | None = None,
+    custom: dict[str, PageMetadataValue] | None = None,
     author_keys: list[str] | None = None,
 ) -> Page:
-    """Build a minimal Page with overrides — keeps each test focused on one field."""
+    """Build a minimal Page with overrides; keeps each test focused on one field."""
     return Page(
         source_path=Path(source),
         abs_source_path=Path("/abs") / source,
@@ -168,7 +168,7 @@ def test_valid_choice_passes() -> None:
 
 
 def test_multiple_errors_all_reported() -> None:
-    """All independent field errors surface — validation does not short-circuit."""
+    """All independent field errors surface; validation does not short-circuit."""
     schema = {
         "difficulty": MetadataFieldSchema(field_type="string", required=True),
         "count": MetadataFieldSchema(field_type="integer"),
@@ -239,3 +239,56 @@ def test_validate_all_metadata_dispatches_per_content_type() -> None:
     assert len(errors) == 1
     assert "b.md" in errors[0].file_path
     assert isinstance(errors[0], ValidationError)
+
+
+# --- error-message contract: content type + field + fix hint ---------------
+
+
+def test_required_field_error_names_content_type_field_and_a_fix() -> None:
+    """A missing required field names the content type and field, and says how to fix it."""
+    schema = {"difficulty": MetadataFieldSchema(field_type="string", required=True)}
+    errors = validate_page_metadata(
+        _make_page(custom={}), _make_content_type(metadata=schema), _authors()
+    )
+    message = errors[0].message
+    assert "content_types.blog.metadata.difficulty" in message
+    assert "difficulty" in message
+    assert "fix:" in message
+    assert "front matter" in message
+
+
+def test_type_error_names_content_type_field_and_expected_type() -> None:
+    """A wrong-typed value names where the schema lives and what to write instead."""
+    schema = {"count": MetadataFieldSchema(field_type="integer")}
+    errors = validate_page_metadata(
+        _make_page(custom={"count": "three"}), _make_content_type(metadata=schema), _authors()
+    )
+    message = errors[0].message
+    assert "content_types.blog.metadata.count" in message
+    assert "integer" in message
+    assert "fix:" in message
+
+
+def test_choice_error_lists_the_allowed_values() -> None:
+    """An out-of-choices value lists the allowed values and the schema key."""
+    schema = {"level": MetadataFieldSchema(field_type="string", choices=["easy", "hard"])}
+    errors = validate_page_metadata(
+        _make_page(custom={"level": "medium"}),
+        _make_content_type(metadata=schema),
+        _authors(),
+    )
+    message = errors[0].message
+    assert "content_types.blog.metadata.level" in message
+    assert "'easy'" in message
+    assert "'hard'" in message
+
+
+def test_unknown_author_error_lists_known_ids_and_a_fix() -> None:
+    """An unknown author key lists the known ids and says where to add it."""
+    errors = validate_page_metadata(
+        _make_page(author_keys=["nobody"]), _make_content_type(), _authors()
+    )
+    message = errors[0].message
+    assert "nobody" in message
+    assert "mason" in message
+    assert "fix:" in message

@@ -7,6 +7,7 @@ site:
 content_types:
   guides:
     path: guides/posts
+    feeds: [rss, atom]
     readtime: true
     excerpt_separator: "<!-- more -->"
     taxonomies:
@@ -21,6 +22,9 @@ content_types:
           - theme-author
   reference:
     path: reference/pages
+    # These pages never end an excerpt by hand, so the first paragraph is the excerpt.
+    # This marker is not "<!-- more -->" because configuration.md prints that string in a code block.
+    excerpt_separator: "<!-- end-excerpt -->"
     taxonomies:
       - tags
 
@@ -33,15 +37,47 @@ nav:
   - Installation: installation.md
   - Quickstart: quickstart.md
   - Concepts: concepts/
-  - Guides: guides/
-  - Reference: reference/
+  # Guides and Reference are content types, which nav keeps as single links.
+  # Listing their pages here is what gives their pages a section sidebar.
+  - Guides:
+      - All Guides: guides/
+      - Choose and Customize a Theme: guides/posts/choose-and-customize-a-theme.md
+      - Write a Theme: guides/posts/write-a-theme.md
+      - Override a Single Theme Template: guides/posts/override-theme-template.md
+      - Add a Custom Jinja2 Filter: guides/posts/add-jinja-filter.md
+      - Validate Post Metadata at Build Time: guides/posts/validate-metadata.md
+      - Enable Content Types: guides/posts/enable-content-types.md
+      - Configure Bartleby from the Command Line: guides/posts/configure-from-the-command-line.md
+      - Configure markwright and Click-to-Load Embeds: guides/posts/configure-markwright.md
+      - Write a Custom Shortcode: guides/posts/write-a-shortcode.md
+      - Inject Content with a Hook: guides/posts/inject-content-with-hook.md
+      - Configure AI Crawler Directives: guides/posts/ai-crawler-directives.md
+      - Check Accessibility Before You Publish: guides/posts/check-accessibility-before-you-publish.md
+  - Reference:
+      - All Reference Pages: reference/
+      - bartleby.yml Configuration: reference/pages/configuration.md
+      - CLI Commands: reference/pages/cli.md
+      - Themes: reference/pages/themes.md
+      - Front Matter Fields: reference/pages/front-matter-fields.md
+      - Template Context: reference/pages/template-context.md
+      - Plugin Hook Events: reference/pages/plugin-hooks.md
+      - Shortcodes: reference/pages/shortcodes.md
+      - Markdown Extensions: reference/pages/markdown-extensions.md
+      - Agent Output Formats: reference/pages/agent-surface.md
+      - Build Pipeline: reference/pages/build-pipeline.md
+      - Error Messages: reference/pages/errors.md
 
 theme:
+  name: scrivener
   features:
     - search
-    - navigation.tabs
-  color_mode:
-    toggle: true
+    - search.highlight
+    - nav.tabs
+    - nav.sidebar
+    - nav.section-index
+    - nav.back-to-top
+    - content.code.copy
+    - color-mode.toggle
 
 exclude_patterns:
   - "_drafts/**"

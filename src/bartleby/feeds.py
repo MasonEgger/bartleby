@@ -1,11 +1,14 @@
 # ABOUTME: RSS 2.0 and Atom 1.0 feed generation per content type and site-wide.
-# Emits per-type feeds plus the homepage aggregate firehose from bartleby.yml.
+# Each enabled type with feeds gets its own pair; one combined site feed merges them.
 
 from __future__ import annotations
 
 import datetime
 from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
+
+from bartleby.content_query import select_published
+from bartleby.urls import absolute_url
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -40,16 +43,16 @@ def aggregate_feed_path(feed_format: str) -> str:
 
 def generate_rss(pages: list[Page], content_type_name: str, site: SiteConfig) -> str:
     """Render an RSS 2.0 feed for ``pages`` belonging to ``content_type_name``."""
-    title = f"{site.title} — {content_type_name.title()}"
-    link = _absolute(site.url, f"/{content_type_name}/")
+    title = f"{site.title} - {content_type_name.title()}"
+    link = absolute_url(site.url, f"/{content_type_name}/")
     return _render_rss(_sorted_pages(pages), title, link, site, category=False)
 
 
 def generate_atom(pages: list[Page], content_type_name: str, site: SiteConfig) -> str:
     """Render an Atom 1.0 feed for ``pages`` belonging to ``content_type_name``."""
-    title = f"{site.title} — {content_type_name.title()}"
-    feed_id = _absolute(site.url, f"/{content_type_name}/")
-    self_href = _absolute(site.url, f"/{content_type_name}/atom.xml")
+    title = f"{site.title} - {content_type_name.title()}"
+    feed_id = absolute_url(site.url, f"/{content_type_name}/")
+    self_href = absolute_url(site.url, f"/{content_type_name}/atom.xml")
     return _render_atom(_sorted_pages(pages), title, feed_id, self_href, site, category=False)
 
 
@@ -59,18 +62,20 @@ def compute_aggregate_types(config: BartlebyConfig) -> list[str]:
     An empty ``site.feed.include`` covers every content type that has its own
     ``feeds`` enabled (config order). A non-empty list restricts the aggregate to
     exactly those types (validated at load time to all have their own feeds).
+    A disabled content type is never in the aggregate.
     """
+    enabled = config.enabled_content_types()
     include = config.site.feed.include
     if include:
-        return list(include)
-    return [name for name, content_type in config.content_types.items() if content_type.feeds]
+        return [name for name in include if name in enabled]
+    return [name for name, content_type in enabled.items() if content_type.feeds]
 
 
 def generate_aggregate_rss(pages: list[Page], config: BartlebyConfig) -> str:
     """Render the site-wide aggregate RSS 2.0 feed from ``pages``."""
     feed = config.site.feed
     title = feed.title or config.site.title
-    link = _absolute(config.site.url, "/")
+    link = absolute_url(config.site.url, "/")
     items = _aggregate_pages(pages, config)
     return _render_rss(items, title, link, config.site, category=True)
 
@@ -79,8 +84,8 @@ def generate_aggregate_atom(pages: list[Page], config: BartlebyConfig) -> str:
     """Render the site-wide aggregate Atom 1.0 feed from ``pages``."""
     feed = config.site.feed
     title = feed.title or config.site.title
-    feed_id = _absolute(config.site.url, "/")
-    self_href = _absolute(config.site.url, "/atom.xml")
+    feed_id = absolute_url(config.site.url, "/")
+    self_href = absolute_url(config.site.url, "/atom.xml")
     items = _aggregate_pages(pages, config)
     return _render_atom(items, title, feed_id, self_href, config.site, category=True)
 
@@ -128,14 +133,21 @@ def generate_feeds(pages: list[Page], config: BartlebyConfig, output_dir: Path) 
     Per-content-type feeds land under ``{type}/feed.xml`` and ``{type}/atom.xml``.
     The site-wide aggregate, when enabled, lands at the output root as
     ``feed.xml`` and ``atom.xml`` per ``site.feed.formats``.
+
+    Only enabled content types publish feeds, and only published (non-draft)
+    pages become entries. An enabled type whose ``feeds`` is empty (the
+    opt-out) writes no files. An enabled type with ``feeds`` set but no
+    published pages still writes a valid feed with zero entries, so the
+    alternate link in page heads never 404s. ``site.feed.enabled: false``
+    suppresses only the combined feed; per-type feeds remain.
     """
-    publishable = [page for page in pages if not page.draft and page.content_type_name is not None]
+    publishable = [page for page in select_published(pages) if page.content_type_name is not None]
     by_type: dict[str, list[Page]] = {}
     for page in publishable:
         assert page.content_type_name is not None
         by_type.setdefault(page.content_type_name, []).append(page)
 
-    for content_type_name, content_type in config.content_types.items():
+    for content_type_name, content_type in config.enabled_content_types().items():
         type_pages = by_type.get(content_type_name, [])
         if not content_type.feeds:
             continue
@@ -183,7 +195,7 @@ def _render_rss(
     for page in pages:
         item = ET.SubElement(channel, "item")
         ET.SubElement(item, "title").text = page.title
-        ET.SubElement(item, "link").text = _absolute(site.url, page.output_url)
+        ET.SubElement(item, "link").text = absolute_url(site.url, page.output_url)
         ET.SubElement(item, "description").text = page.excerpt or page.description or ""
         if category and page.content_type_name is not None:
             ET.SubElement(item, "category").text = page.content_type_name
@@ -214,10 +226,10 @@ def _render_atom(
         ET.SubElement(
             entry,
             f"{{{_ATOM_NS}}}link",
-            href=_absolute(site.url, page.output_url),
+            href=absolute_url(site.url, page.output_url),
             rel="alternate",
         )
-        ET.SubElement(entry, f"{{{_ATOM_NS}}}id").text = _absolute(site.url, page.output_url)
+        ET.SubElement(entry, f"{{{_ATOM_NS}}}id").text = absolute_url(site.url, page.output_url)
         ET.SubElement(entry, f"{{{_ATOM_NS}}}summary").text = (
             page.excerpt or page.description or ""
         )
@@ -242,11 +254,6 @@ def _sorted_pages(pages: list[Page]) -> list[Page]:
     )
     undated = [page for page in pages if page.date is None]
     return dated + undated
-
-
-def _absolute(site_url: str, path: str) -> str:
-    """Join the site URL with a path, ensuring a single ``/`` between them."""
-    return site_url.rstrip("/") + "/" + path.lstrip("/")
 
 
 def _rfc822(date: datetime.date) -> str:

@@ -8,6 +8,7 @@ import shutil
 import sys
 import types
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import pytest
@@ -21,14 +22,21 @@ from bartleby.plugins import (
     event_priority,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 
 def test_base_plugin_hooks_are_noop() -> None:
-    """Every BasePlugin hook method returns ``None`` by default."""
+    """Every BasePlugin hook method does nothing by default.
+
+    Hooks that may return a replacement value return ``None``; hooks typed to
+    return nothing accept the call and raise nothing.
+    """
     plugin = BasePlugin()
-    assert plugin.on_config(None) is None  # type: ignore[arg-type]
-    assert plugin.on_pre_build(None) is None  # type: ignore[arg-type]
-    assert plugin.on_post_build(None) is None  # type: ignore[arg-type]
-    assert plugin.on_page_markdown("md", None, None) is None  # type: ignore[arg-type]
+    assert plugin.on_config(None) is None
+    assert plugin.on_page_markdown("md", None, None) is None
+    plugin.on_pre_build(None)
+    plugin.on_post_build(None)
 
 
 def test_plugin_collection_register_and_run() -> None:
@@ -129,7 +137,7 @@ def test_discover_hooks_module_level_only() -> None:
     """Functions named ``on_<event>`` are registered; private/helper names are not."""
     project_dir = Path(__file__).parent / "fixtures" / "hooks_site"
     collection = discover_hooks(project_dir)
-    # No "_helper" or arbitrary helpers got picked up — only on_* names map to events.
+    # No "_helper" or arbitrary helpers got picked up; only on_* names map to events.
     for event_name in collection.events:
         assert event_name.startswith("on_")
 
@@ -473,7 +481,7 @@ def test_on_serve_fires_with_server_and_config(project: Path) -> None:
         "        'ok' if ok else 'bad', encoding='utf-8')\n",
         encoding="utf-8",
     )
-    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0, dirty=False)
+    server = DevServer(project / "bartleby.yml", host="127.0.0.1", port=0)
     sentinel_server = object()
     server.dispatch_on_serve(sentinel_server)
     assert (project / "serve.txt").read_text(encoding="utf-8") == "ok"
@@ -602,7 +610,7 @@ def test_discover_plugins_ignores_non_event_functions() -> None:
 def test_discover_plugins_orders_entry_points_alphabetically() -> None:
     """Installed plugins register in alphabetical entry-point name order at equal priority."""
 
-    def make_handler(tag: str) -> object:
+    def make_handler(tag: str) -> Callable[..., None]:
         def on_files(files: object, **_: object) -> None:
             files.append(tag)  # type: ignore[attr-defined]
             return None
@@ -656,7 +664,7 @@ def test_combined_registration_order_internal_plugins_hooks() -> None:
     collection = PluginCollection()
     collection.register("on_files", internal)
 
-    def make_handler(tag: str) -> object:
+    def make_handler(tag: str) -> Callable[..., None]:
         def on_files(files: object, **_: object) -> None:
             order.append(tag)
             return None

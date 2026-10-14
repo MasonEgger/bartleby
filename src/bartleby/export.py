@@ -1,4 +1,4 @@
-# ABOUTME: Content export — serialise published pages as JSONL, JSON, or CSV.
+# ABOUTME: Content export: serialise published pages as JSONL, JSON, or CSV.
 # Reuses the published-content selection so export and build agree on what ships.
 
 from __future__ import annotations

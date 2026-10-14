@@ -1,0 +1,27 @@
+{% extends "doc_layout.html" %}
+{# Scrivener listing: ledger lines with the date in the margin column (rows without a date drop the column) and Previous/Next below. #}
+{% block article_body %}
+{% set intro_content = page.custom_metadata.intro_content %}
+      {% if intro_content %}{{ intro_content | safe }}{% endif %}
+{% endblock %}
+{% block article_foot %}
+{% set paginator = page.custom_metadata.paginator %}
+{% set listed = paginator.items if paginator else page.custom_metadata.posts %}
+    <ul class="post-list">
+      {% for post in listed %}
+      <li class="post-list-item{% if not post.date %} post-list-item--undated{% endif %}">
+        {% if post.date %}<time datetime="{{ post.date }}">{{ post.date }}</time>{% endif %}
+        <div>
+          <h2><a href="{{ post.output_url }}">{{ post.title }}</a></h2>
+          {% if post.excerpt_html %}<div class="prose dark:prose-invert max-w-none">{{ post.excerpt_html | safe }}</div>{% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% if paginator and (paginator.has_prev or paginator.has_next) %}
+    <nav class="prev-next" aria-label="Pagination">
+      {% if paginator.has_prev %}<a href="{{ paginator.prev_url }}" rel="prev">&larr; Previous</a>{% endif %}
+      {% if paginator.has_next %}<a href="{{ paginator.next_url }}" rel="next">Next &rarr;</a>{% endif %}
+    </nav>
+    {% endif %}
+{% endblock %}

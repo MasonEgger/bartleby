@@ -3,11 +3,20 @@
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
+from typing import TYPE_CHECKING, ClassVar, Literal
 
+import markdown
+import markwright
+import pytest
+from markwright import ConfigWarning, config_from_mapping, selected_extensions
+
+from bartleby import config as config_module
 from bartleby.config import (
     AIConfig,
     BartlebyConfig,
+    ConfigError,
     DevServerConfig,
     SiteConfig,
     ThemeConfig,
@@ -15,13 +24,21 @@ from bartleby.config import (
 from bartleby.markdown_pipeline import (
     RenderedContent,
     create_markdown_renderer,
+    disallowed_environments,
+    html_to_plain_text,
     render_markdown,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
+
+    from markdown.extensions import Extension
 
 
 def _config(
     *,
     markdown_extensions: list[dict[str, object] | str] | None = None,
+    markwright: dict[str, object] | None = None,
 ) -> BartlebyConfig:
     """A minimal BartlebyConfig for renderer tests."""
     return BartlebyConfig(
@@ -39,6 +56,7 @@ def _config(
         ai=AIConfig(),
         dev_server=DevServerConfig(),
         config_dir=Path("/tmp"),
+        markwright=markwright or {},
     )
 
 
@@ -104,6 +122,27 @@ def test_pymdownx_tasklist() -> None:
     assert "checkbox" in html
 
 
+_TABS_SOURCE = '=== "Python"\n\n    one\n\n=== "Bash"\n\n    two\n'
+
+
+def test_tabs_render_in_the_alternate_style_the_themes_style() -> None:
+    """Tabs carry the ``tabbed-alternate`` class and a ``.tabbed-labels`` row."""
+    renderer = create_markdown_renderer(_config())
+    html = render_markdown(_TABS_SOURCE, renderer).html
+    assert 'class="tabbed-set tabbed-alternate"' in html
+    assert '<div class="tabbed-labels">' in html
+
+
+def test_tabs_option_override_wins_over_the_bundled_alternate_style() -> None:
+    """A ``markdown_extensions`` entry for ``pymdownx.tabbed`` replaces the bundled option."""
+    overrides: list[dict[str, object] | str] = [
+        {"name": "pymdownx.tabbed", "config": {"alternate_style": False}}
+    ]
+    renderer = create_markdown_renderer(_config(markdown_extensions=overrides))
+    html = render_markdown(_TABS_SOURCE, renderer).html
+    assert "tabbed-alternate" not in html
+
+
 def test_extension_ordering_fence_before_superfences() -> None:
     """A markwright fence directive survives superfences processing in the same block."""
     source = "```python\n[label script.py]\nprint('hi')\n```\n"
@@ -143,3 +182,374 @@ def test_config_override_applied() -> None:
     renderer = create_markdown_renderer(_config(markdown_extensions=overrides))
     html = render_markdown("hello", renderer).html
     assert "hello" in html
+
+
+def test_html_to_plain_text_drops_tags_and_collapses_whitespace() -> None:
+    """Tags vanish, entities decode, and runs of whitespace become single spaces."""
+    html = (
+        "<p>Run <code>bartleby build</code>\n  and read "
+        "<a href='/x/'>the&nbsp;docs</a> &amp; more.</p>"
+    )
+    assert html_to_plain_text(html) == "Run bartleby build and read the docs & more."
+
+
+_MARKWRIGHT_EXTENSIONS = (
+    "fence",
+    "highlight",
+    "youtube",
+    "codepen",
+    "twitter",
+    "instagram",
+    "slideshow",
+    "image_compare",
+)
+
+
+class _RecordingMarkdown(markdown.Markdown):
+    """A Markdown that remembers the extension names it was built with.
+
+    The block-markers extension is an instance, not a name, so it is left out.
+    """
+
+    built_with: ClassVar[list[list[str]]] = []
+
+    def __init__(
+        self,
+        *,
+        extensions: list[str | Extension],
+        extension_configs: dict[str, dict[str, object]],
+        output_format: Literal["html"],
+    ) -> None:
+        type(self).built_with.append([name for name in extensions if isinstance(name, str)])
+        super().__init__(
+            extensions=extensions, extension_configs=extension_configs, output_format=output_format
+        )
+
+
+@pytest.fixture
+def loaded_extensions(monkeypatch: pytest.MonkeyPatch) -> Callable[[BartlebyConfig], list[str]]:
+    """Factory: the dotted extension names `create_markdown_renderer` loads for a config."""
+    monkeypatch.setattr(markdown, "Markdown", _RecordingMarkdown)
+    _RecordingMarkdown.built_with.clear()
+
+    def _loaded(config: BartlebyConfig) -> list[str]:
+        create_markdown_renderer(config)
+        return _RecordingMarkdown.built_with[-1]
+
+    return _loaded
+
+
+def test_no_markwright_section_loads_markwright_default_extensions(
+    loaded_extensions: Callable[[BartlebyConfig], list[str]],
+) -> None:
+    """An absent section loads exactly what markwright selects from an empty config."""
+    selected = selected_extensions(config_from_mapping({}, "bartleby.yml: markwright"))
+    assert sorted(selected) == sorted(_MARKWRIGHT_EXTENSIONS)
+
+    loaded = loaded_extensions(_config())
+    assert {name for name in loaded if name.startswith("markwright.")} == {
+        f"markwright.{name}" for name in selected
+    }
+
+
+def test_markwright_disable_drops_the_extension(
+    loaded_extensions: Callable[[BartlebyConfig], list[str]],
+) -> None:
+    """`markwright: {disable: [youtube]}` leaves youtube out and keeps the rest."""
+    loaded = set(loaded_extensions(_config(markwright={"disable": ["youtube"]})))
+    assert "markwright.youtube" not in loaded
+    assert {f"markwright.{name}" for name in _MARKWRIGHT_EXTENSIONS if name != "youtube"} <= loaded
+
+
+def test_markwright_extensions_load_before_pymdownx(
+    loaded_extensions: Callable[[BartlebyConfig], list[str]],
+) -> None:
+    """markwright.fence precedes superfences, so its preprocessor extracts directives first."""
+    loaded = loaded_extensions(_config())
+    assert loaded.index("markwright.fence") < loaded.index("pymdownx.superfences")
+
+
+def test_invalid_markwright_option_raises_a_config_error_under_the_markwright_key() -> None:
+    """Markwright's own validation error comes back under the ``markwright`` key.
+
+    The source is left for ``load_config`` to attach, so a ``--config other.yml`` or a
+    ``--set`` override is named correctly instead of a hard-coded ``bartleby.yml``.
+    """
+    with pytest.raises(ConfigError) as exc_info:
+        create_markdown_renderer(_config(markwright={"youtube": {"bogus": 1}}))
+    error = exc_info.value
+    assert error.source is None
+    assert error.key_path == "markwright"
+    assert error.hint
+    assert str(error).startswith("markwright: [youtube] unknown option 'bogus'")
+
+
+def test_markwright_option_error_for_a_bad_value_is_translated() -> None:
+    """A bad option value (markwright's OptionError) also surfaces as a Bartleby ConfigError."""
+    with pytest.raises(ConfigError, match="'load' must be one of"):
+        create_markdown_renderer(_config(markwright={"youtube": {"load": "sometimes"}}))
+
+
+def test_section_goes_to_config_from_mapping_and_options_reach_the_extensions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The section reaches config_from_mapping with warn defaulted on; options reach Markdown."""
+    section: dict[str, object] = {"youtube": {"load": "click"}}
+    seen_tables: list[Mapping[str, object]] = []
+
+    def record_table(table: Mapping[str, object], source: str) -> markwright.Config:
+        seen_tables.append(table)
+        return config_from_mapping(table, source)
+
+    monkeypatch.setattr(config_module, "config_from_mapping", record_table)
+
+    renderer = create_markdown_renderer(_config(markwright=section))
+    html = render_markdown("[youtube dQw4w9WgXcQ]", renderer).html
+
+    assert seen_tables == [{"warn": True, **section}]
+    # `load: click` only takes effect when extension_configs reaches the youtube extension.
+    assert 'data-mw-load="click"' in html
+    assert "<template" in html
+
+
+def test_markwright_embeds_load_eagerly_without_a_section() -> None:
+    """Bartleby sets no `load` default, so markwright's own eager mode applies."""
+    html = render_markdown("[youtube dQw4w9WgXcQ]", create_markdown_renderer(_config())).html
+    assert "<template" not in html
+    assert "<iframe" in html
+
+
+def test_markwright_config_warning_goes_to_the_bartleby_log(
+    loaded_extensions: Callable[[BartlebyConfig], list[str]],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An empty `enable` turns markwright off; its ConfigWarning is logged, not swallowed."""
+    with caplog.at_level("WARNING", logger="bartleby"):
+        loaded = loaded_extensions(_config(markwright={"enable": []}))
+    assert not any(name.startswith("markwright.") for name in loaded)
+    assert [
+        record.getMessage()
+        for record in caplog.records
+        if "no markwright extensions selected" in record.getMessage()
+    ]
+
+
+def test_option_validation_warning_is_logged_once_and_never_raw(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A ConfigWarning raised in validation and at init logs once, never as a raw warning."""
+    section: dict[str, object] = {"fence": {"allowed_environments": []}}
+    with (
+        warnings.catch_warnings(record=True) as raw,
+        caplog.at_level("WARNING", logger="bartleby"),
+    ):
+        warnings.simplefilter("always")
+        create_markdown_renderer(_config(markwright=section))
+    assert [warning for warning in raw if issubclass(warning.category, ConfigWarning)] == []
+    logged = [record.getMessage() for record in caplog.records if record.name == "bartleby"]
+    assert len(logged) == 1
+    assert "allowed_environments" in logged[0]
+
+
+def test_markdown_extensions_still_configure_non_markwright_extensions(
+    loaded_extensions: Callable[[BartlebyConfig], list[str]],
+) -> None:
+    """The `markdown_extensions` list keeps working beside a `markwright:` section."""
+    overrides: list[dict[str, object] | str] = [
+        {"name": "pymdownx.snippets", "config": {"base_path": ["/tmp"]}}
+    ]
+    loaded = loaded_extensions(
+        _config(markdown_extensions=overrides, markwright={"disable": ["youtube"]})
+    )
+    assert "pymdownx.snippets" in loaded
+
+
+def test_tabs_override_with_an_unrelated_key_keeps_the_alternate_style() -> None:
+    """A ``pymdownx.tabbed`` override merges over the bundled options instead of replacing them."""
+    overrides: list[dict[str, object] | str] = [
+        {"name": "pymdownx.tabbed", "config": {"separator": "_"}}
+    ]
+    renderer = create_markdown_renderer(_config(markdown_extensions=overrides))
+    html = render_markdown(_TABS_SOURCE, renderer).html
+    assert '<div class="tabbed-labels">' in html
+
+
+def test_math_renders_with_the_delimiters_mathjax_and_katex_read() -> None:
+    """Arithmatex runs in generic mode: ``\\(...\\)`` inline and ``\\[...\\]`` for a block."""
+    renderer = create_markdown_renderer(_config())
+    html = render_markdown("Inline $x = 1$ here.\n\n$$\nE = mc^2\n$$\n", renderer).html
+    assert '<span class="arithmatex">\\(x = 1\\)</span>' in html
+    assert '<div class="arithmatex">\\[\nE = mc^2\n\\]</div>' in html
+    assert "math/tex" not in html
+
+
+def test_emoji_render_as_text_with_no_remote_image() -> None:
+    """The bundled emoji config writes the character itself, so the page fetches nothing."""
+    renderer = create_markdown_renderer(_config())
+    html = render_markdown(":smile: :rocket:", renderer).html
+    assert "\U0001f604" in html
+    assert "\U0001f680" in html
+    assert "<img" not in html
+
+
+def test_emoji_override_names_a_generator_by_dotted_path() -> None:
+    """A string ``emoji_generator`` or ``emoji_index`` in bartleby.yml resolves to the callable."""
+    overrides: list[dict[str, object] | str] = [
+        {"name": "pymdownx.emoji", "config": {"emoji_generator": "pymdownx.emoji.to_svg"}}
+    ]
+    renderer = create_markdown_renderer(_config(markdown_extensions=overrides))
+    html = render_markdown(":smile:", renderer).html
+    assert '<img alt="\U0001f604" class="twemoji"' in html
+
+
+def test_emoji_override_with_an_unknown_dotted_path_is_a_config_error() -> None:
+    """A dotted path that names nothing is a ConfigError with the key path and a fix."""
+    overrides: list[dict[str, object] | str] = [
+        {"name": "pymdownx.emoji", "config": {"emoji_index": "pymdownx.emoji.nope"}}
+    ]
+    with pytest.raises(ConfigError, match="markdown_extensions.*pymdownx.emoji.nope.*fix"):
+        create_markdown_renderer(_config(markdown_extensions=overrides))
+
+
+_ENVIRONMENT_SOURCE = (
+    "Prose with [environment third] in it.\n\n"
+    "```\n[label app.py]\n[environment third]\nssh host\n```\n\n"
+    "````\n```\n[environment third]\nnested source\n```\n````\n\n"
+    "```\n[environment local]\nssh host\n```\n\n"
+    "```\n[environment third]\nssh again\n```\n"
+)
+
+
+def test_disallowed_environments_names_each_directive_a_fence_would_drop() -> None:
+    """Only a leading directive in a fenced block counts, and each name is reported once."""
+    assert disallowed_environments(_ENVIRONMENT_SOURCE, ["local", "second"]) == ["third"]
+    assert disallowed_environments(_ENVIRONMENT_SOURCE, None) == []
+    assert disallowed_environments(_ENVIRONMENT_SOURCE, ["third"]) == ["local"]
+
+
+def test_pygments_long_classes_carry_the_short_class_the_palette_styles() -> None:
+    """A token outside Pygments' short-name table still gets its ancestor's short class."""
+    renderer = create_markdown_renderer(_config())
+    html = render_markdown("```yaml\nsite:\n  title: Bartleby\n```\n", renderer).html
+    assert '<span class="l l-Scalar l-Scalar-Plain">Bartleby</span>' in html
+    assert '<span class="p p-Indicator">' in html or '<span class="p">:</span>' in html
+    themes = Path(__file__).parent.parent / "src" / "bartleby" / "themes"
+    for theme in ("scrivener", "material"):
+        css = (themes / theme / "static" / "css" / "main.css").read_text(encoding="utf-8")
+        assert ".highlight .l" in css, theme
+        assert ".highlight .p" in css, theme
+
+
+# Type markers: the pipeline gives every admonition, collapsible block, and environment
+# fence a cue that does not depend on color, so the type reaches a screen reader and a
+# reader who cannot tell the washes apart.
+
+
+def _render(source: str) -> str:
+    return render_markdown(source, create_markdown_renderer(_config())).html
+
+
+def test_custom_titled_admonition_carries_the_type_icon_and_hidden_type() -> None:
+    """A danger admonition with its own title gets the stop icon and a hidden "Danger: "."""
+    html = _render('!!! danger "Custom Title"\n\n    Body.\n')
+    title_start = html.index('<p class="admonition-title">')
+    title = html[title_start : html.index("</p>", title_start)]
+    assert '<svg aria-hidden="true" class="admonition-icon" focusable="false"' in title
+    assert 'viewBox="0 0 16 16"' in title
+    assert "M4.47.22A.749.749" in title, "the stop glyph's path is missing"
+    assert '<span class="visually-hidden">Danger: </span>Custom Title' in title
+    assert title.index("admonition-icon") < title.index("visually-hidden")
+
+
+def test_default_titled_admonition_gets_the_icon_only() -> None:
+    """A tip titled "Tip" by the extension gets the light bulb and no hidden text."""
+    html = _render("!!! tip\n\n    Body.\n")
+    assert 'class="admonition-icon"' in html
+    assert "M8 1.5c-2.363" in html, "the light-bulb glyph's path is missing"
+    assert "visually-hidden" not in html
+    assert "</svg>Tip</p>" in html
+
+
+def test_details_block_gets_the_same_marker() -> None:
+    """``???`` blocks (pymdownx.details) are marked in their summary like admonitions."""
+    html = _render('??? warning "Click to expand"\n\n    Hidden.\n')
+    summary_start = html.index("<summary>")
+    summary = html[summary_start : html.index("</summary>", summary_start)]
+    assert 'class="admonition-icon"' in summary
+    assert "M6.457 1.047c.659" in summary, "the alert glyph's path is missing"
+    assert '<span class="visually-hidden">Warning: </span>Click to expand' in summary
+
+
+def test_unknown_admonition_type_falls_back_to_info() -> None:
+    """A type outside the map gets the info glyph and its own word as the hidden type."""
+    html = _render('!!! weird "Odd one"\n\n    Body.\n')
+    assert "M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5" in html, "the info glyph is missing"
+    assert '<span class="visually-hidden">Weird: </span>Odd one' in html
+
+
+def test_admonition_icon_is_hidden_from_assistive_technology() -> None:
+    html = _render("!!! note\n\n    Body.\n")
+    assert 'aria-hidden="true"' in html
+    assert 'focusable="false"' in html
+    assert 'width="16"' not in html, "the icon sizes from the stylesheet, not the file"
+
+
+def test_environment_fence_announces_its_environment() -> None:
+    """A ``[environment NAME]`` fence names the environment in hidden text before the code."""
+    html = _render("```\n[environment local]\nssh user@local-server\n```\n")
+    assert (
+        '<pre class="environment-local"><span class="visually-hidden">Environment local. </span>'
+        in html
+    )
+    assert html.index("Environment local.") < html.index("<code>")
+
+
+def test_environment_fence_with_other_classes_is_still_announced() -> None:
+    source = "```\n[label server.sh]\n[environment third]\n[prefix command]\nssh user@prod\n```\n"
+    html = _render(source)
+    assert '<span class="visually-hidden">Environment third. </span>' in html
+    assert html.count("visually-hidden") == 1
+
+
+def test_plain_fence_gets_no_environment_text() -> None:
+    html = _render("```python\nprint('hi')\n```\n")
+    assert "visually-hidden" not in html
+
+
+def test_task_list_checkbox_is_named_after_its_item() -> None:
+    """A task-list checkbox takes the item text as its accessible name."""
+    html = _render("- [x] Run `bartleby serve`\n- [ ] Edit the home page\n")
+    assert 'aria-label="Run bartleby serve"' in html
+    assert 'aria-label="Edit the home page"' in html
+
+
+def test_task_list_label_stops_at_a_nested_list() -> None:
+    html = _render("- [ ] Parent task\n    - [ ] Child task\n")
+    assert 'aria-label="Parent task"' in html
+    assert 'aria-label="Child task"' in html
+
+
+def test_loose_task_list_item_is_labeled_too() -> None:
+    """With a blank line between items the checkbox sits in a paragraph; the label still lands."""
+    html = _render('- [ ] First "quoted" task\n\n- [x] Second task\n')
+    assert 'aria-label="First &quot;quoted&quot; task"' in html
+    assert 'aria-label="Second task"' in html
+
+
+def test_table_is_keyboard_focusable() -> None:
+    """A table carries tabindex=0 so it scrolls from the keyboard when the theme clips it."""
+    html = _render("| a | b |\n|---|---|\n| 1 | 2 |\n")
+    assert '<table tabindex="0">' in html
+
+
+def test_markwright_embeds_get_their_missing_attributes() -> None:
+    """The YouTube iframe, image-compare slider, and slideshow scroller are repaired."""
+    source = (
+        "[youtube jNQXAC9IVRw]\n\n"
+        "[compare before.svg after.svg]\n\n"
+        "[slideshow slide-1.svg slide-2.svg]\n"
+    )
+    html = _render(source)
+    assert '<iframe title="YouTube video" src="https://www.youtube.com/embed/jNQXAC9IVRw"' in html
+    assert '<input type="range" class="control" aria-label="Image comparison position"' in html
+    assert '<div class="slides" tabindex="0">' in html

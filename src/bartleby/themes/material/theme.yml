@@ -1,0 +1,13 @@
+name: material
+description: Material-style theme with header, navigation, footer, search, and color-mode toggle.
+extends: base
+features:
+  - search
+  - search.highlight
+  - nav.tabs
+  - nav.sidebar
+  - nav.toc-fold
+  - nav.section-index
+  - nav.back-to-top
+  - content.code.copy
+  - color-mode.toggle

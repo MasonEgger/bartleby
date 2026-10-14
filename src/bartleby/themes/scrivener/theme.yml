@@ -1,0 +1,13 @@
+name: scrivener
+description: Bartleby's own theme. A plain reading layout in the system sans, neutral colors, and one accent for the current page.
+extends: base
+features:
+  - search
+  - search.highlight
+  - nav.tabs
+  - nav.sidebar
+  - nav.toc-fold
+  - nav.section-index
+  - nav.back-to-top
+  - content.code.copy
+  - color-mode.toggle

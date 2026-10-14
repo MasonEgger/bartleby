@@ -5,7 +5,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from bartleby.build import BuildResult
+    from bartleby.config_schema import ConfigField
 
 # Meaningful exit codes (spec.md "Global Flags"): 0 success, 1 error, 2 usage error.
 EXIT_SUCCESS = 0
@@ -72,6 +76,16 @@ class BuildOutput:
     output_dir: str
     warnings: list[Warning] = field(default_factory=list)
     errors: list[Warning] = field(default_factory=list)
+
+    @classmethod
+    def from_result(cls, result: BuildResult) -> BuildOutput:
+        """Summarize a finished build the way ``build`` and ``serve`` both report it."""
+        return cls(
+            pages=result.page_count,
+            static_files=result.static_file_count,
+            duration_ms=round(result.duration_seconds * 1000),
+            output_dir=result.output_dir,
+        )
 
     @property
     def exit_code(self) -> int:
@@ -161,20 +175,82 @@ class ValidateOutput:
 
 @dataclass(slots=True)
 class NewSiteOutput:
-    """Result of ``bartleby new site`` (spec.md JSON output)."""
+    """Result of ``bartleby new site`` (spec.md JSON output).
+
+    :ivar path: The new project directory, with a trailing slash.
+    :ivar config: The path of the written ``bartleby.yml``.
+    :ivar created: The top-level entries the scaffold wrote, directories with a trailing slash.
+    :ivar next_command: The shell command that serves the new site, from the directory the
+        author typed.
+    :ivar blog: ``True`` when ``--blog`` added the blog content type.
+    :ivar full_config: ``True`` when ``--full-config`` wrote the complete annotated config.
+    """
 
     path: str
     config: str
+    created: list[str]
+    next_command: str
+    blog: bool = False
+    full_config: bool = False
 
     @property
     def exit_code(self) -> int:
         return EXIT_SUCCESS
 
     def to_dict(self) -> dict[str, object]:
-        return {"path": self.path, "config": self.config}
+        return {
+            "path": self.path,
+            "config": self.config,
+            "created": self.created,
+            "next_command": self.next_command,
+            "blog": self.blog,
+            "full_config": self.full_config,
+        }
 
     def to_text(self) -> str:
-        return f"Created site at {self.path}"
+        notes = {}
+        if self.full_config:
+            notes["bartleby.yml"] = "every option, from --full-config"
+        if self.blog:
+            notes["content/"] = "with a blog in content/blog/"
+        lines = [f"Created site at {self.path}"]
+        for entry in self.created:
+            note = f" ({notes[entry]})" if entry in notes else ""
+            lines.append(f"  {entry}{note}")
+        lines.append(f"Next: {self.next_command}")
+        return "\n".join(lines)
+
+
+STOP_HINT = "Press Ctrl+C to stop"
+
+
+@dataclass(slots=True)
+class ServeStartOutput:
+    """What ``bartleby serve`` prints once it is listening.
+
+    :ivar url: The address the server is bound to, with the real port.
+    :ivar build: The initial build's summary, shown in the build command's own words.
+    """
+
+    url: str
+    build: BuildOutput
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_SUCCESS
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "type": "ready",
+            "url": self.url,
+            "pages": self.build.pages,
+            "static_files": self.build.static_files,
+            "output_dir": self.build.output_dir,
+            "stop_hint": STOP_HINT,
+        }
+
+    def to_text(self) -> str:
+        return "\n".join([self.build.to_text(), f"Serving at {self.url}", STOP_HINT])
 
 
 @dataclass(slots=True)
@@ -334,11 +410,218 @@ class LintOutput:
     def to_text(self) -> str:
         if not self.issues:
             return "lint: no issues"
-        lines = [
-            f"{issue['severity']} [{issue['rule']}] {issue['file']}: {issue['message']}"
-            for issue in self.issues
-        ]
+        lines = [_issue_line(issue) for issue in self.issues]
         lines.append(f"{self.errors} error(s), {self.warnings} warning(s), {self.info} info")
+        return "\n".join(lines)
+
+
+def _issue_line(issue: dict[str, object]) -> str:
+    """One finding as ``severity [rule] file:line: message (fix: hint)``; absent parts drop."""
+    location = f"{issue['file']}:{issue['line']}" if issue.get("line") else str(issue["file"])
+    line = f"{issue['severity']} [{issue['rule']}] {location}: {issue['message']}"
+    hint = issue.get("hint")
+    return f"{line} (fix: {hint})" if hint else line
+
+
+@dataclass(slots=True)
+class LintRulesOutput:
+    """Result of ``bartleby lint --list-rules``: every rule with its severity and fix."""
+
+    rules: list[dict[str, str]]
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_SUCCESS
+
+    def to_dict(self) -> dict[str, object]:
+        return {"rules": self.rules}
+
+    def to_text(self) -> str:
+        width = max(len(rule["id"]) for rule in self.rules)
+        return "\n".join(
+            f"{rule['id']:<{width}}  {rule['severity']:<7}  {rule['description']}"
+            f" (fix: {rule['hint']})"
+            for rule in self.rules
+        )
+
+
+def format_config_value(value: object) -> str:
+    """Show a config value as ``config get`` prints it: strings bare, anything else as JSON.
+
+    A value JSON cannot encode, such as a date from the YAML parser, prints as its ``str``.
+    """
+    return value if isinstance(value, str) else json.dumps(value, default=str)
+
+
+@dataclass(slots=True)
+class ConfigValue:
+    """One resolved config value and where it came from."""
+
+    path: str
+    value: object
+    source: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {"path": self.path, "value": self.value, "source": self.source}
+
+
+@dataclass(slots=True)
+class ConfigShowOutput:
+    """Result of ``bartleby config show``: every resolved value with its source."""
+
+    values: list[ConfigValue]
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_SUCCESS
+
+    def to_dict(self) -> dict[str, object]:
+        return {"status": "success", "values": [entry.to_dict() for entry in self.values]}
+
+    def to_text(self) -> str:
+        width = max((len(entry.path) for entry in self.values), default=0)
+        return "\n".join(
+            f"{entry.path:<{width}} = {json.dumps(entry.value, default=str)}  ({entry.source})"
+            for entry in self.values
+        )
+
+
+@dataclass(slots=True)
+class ConfigGetOutput:
+    """Result of ``bartleby config get KEY``: one resolved value."""
+
+    key: str
+    value: object
+    source: str
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_SUCCESS
+
+    def to_dict(self) -> dict[str, object]:
+        return {"status": "success", "key": self.key, "value": self.value, "source": self.source}
+
+    def to_text(self) -> str:
+        return format_config_value(self.value)
+
+
+@dataclass(slots=True)
+class ContentTypeToggleOutput:
+    """Result of ``bartleby enable SHAPE NAME`` and ``bartleby disable NAME``.
+
+    ``action`` is ``enable`` or ``disable``. ``shape`` is the shape ``enable`` wrote and
+    ``None`` for ``disable``, which takes none. ``enabled`` is the state the type is left
+    in. ``changed`` is false when the config already held that state, so the file was
+    not rewritten. ``reenabled`` is true when ``enable`` flipped an existing disabled type on.
+    """
+
+    action: str
+    shape: str | None
+    name: str
+    enabled: bool
+    file: str
+    changed: bool
+    reenabled: bool = False
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_SUCCESS
+
+    def to_dict(self) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "status": "success",
+            "action": self.action,
+            "name": self.name,
+            "enabled": self.enabled,
+            "file": self.file,
+            "changed": self.changed,
+        }
+        if self.shape is not None:
+            payload["shape"] = self.shape
+        return payload
+
+    def to_text(self) -> str:
+        if self.action == "enable":
+            if self.reenabled:
+                return f"Re-enabled content type {self.name!r} in {self.file}"
+            if self.changed:
+                return f"Added {self.shape} content type {self.name!r} to {self.file}"
+            return f"Content type {self.name!r} is already in {self.file}; left unchanged"
+        if self.changed:
+            return f"Disabled content type {self.name!r} in {self.file}"
+        return f"Content type {self.name!r} is already disabled in {self.file}"
+
+
+@dataclass(slots=True)
+class ConfigSetOutput:
+    """Result of ``bartleby config set KEY VALUE``.
+
+    ``changed`` is false when the file already held the value, so it was not rewritten.
+    """
+
+    key: str
+    value: object
+    file: str
+    changed: bool
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_SUCCESS
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "status": "success",
+            "key": self.key,
+            "value": self.value,
+            "file": self.file,
+            "changed": self.changed,
+        }
+
+    def to_text(self) -> str:
+        shown = format_config_value(self.value)
+        if self.changed:
+            return f"Set {self.key} to {shown} in {self.file}"
+        return f"{self.key} is already {shown} in {self.file}"
+
+
+@dataclass(slots=True)
+class ConfigSchemaOutput:
+    """Result of ``bartleby config schema``: every accepted key from the config schema."""
+
+    fields: list[ConfigField]
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_SUCCESS
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "status": "success",
+            "fields": [
+                {
+                    "path": entry.path,
+                    "type": entry.type_name,
+                    "default": entry.default,
+                    "choices": list(entry.choices) if entry.choices is not None else None,
+                    "repeatable": entry.repeatable,
+                    "required": entry.required,
+                    "description": entry.description,
+                }
+                for entry in self.fields
+            ],
+        }
+
+    def to_text(self) -> str:
+        lines: list[str] = []
+        for entry in self.fields:
+            detail = [entry.type_name]
+            if entry.required:
+                detail.append("required")
+            elif entry.default is not None:
+                detail.append(f"default {json.dumps(entry.default)}")
+            if entry.choices:
+                detail.append(f"one of {', '.join(entry.choices)}")
+            lines.append(f"{entry.path} ({'; '.join(detail)}): {entry.description}")
         return "\n".join(lines)
 
 
@@ -358,5 +641,5 @@ def render(result: Result, fmt: str) -> str:
     if isinstance(result, RawOutput):
         return result.text
     if fmt == "json":
-        return json.dumps(result.to_dict(), sort_keys=True)
+        return json.dumps(result.to_dict(), sort_keys=True, default=str)
     return result.to_text()

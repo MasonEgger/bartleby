@@ -1,0 +1,31 @@
+{# Section navigation for the current page: which tree the sidebar shows. #}
+{# Import it with context: {% import "partials/section_nav.html" as section with context %}. #}
+{# Exports sidebar_items (NavItems, empty when the page gets no sidebar), sidebar_title, sidebar_index_url, and toc_folded. #}
+{# toc_folded is true when nav.toc-fold is on, the page has headings, and the sidebar tree holds the page, so the sidebar can print the headings under the page's own entry and the right column can go. #}
+{% from "partials/nav_macros.html" import holds %}
+{% set tabs = feature is defined and feature('nav.tabs') %}
+{% set ns = namespace(items=[], title=none, index_url=none) %}
+{% if feature is defined and feature('nav.sidebar') %}
+  {% if tabs %}
+    {# With tabs the sidebar shows the tree of the section the page belongs to. #}
+    {% for item in nav %}
+      {% if item.children and (holds(item, page.url) | trim) %}
+        {% set ns.items = item.children %}
+        {% set ns.title = item.title %}
+        {% set ns.index_url = item.index_url %}
+      {% endif %}
+    {% endfor %}
+  {% else %}
+    {% set ns.items = nav %}
+  {% endif %}
+{% endif %}
+{% set sidebar_items = ns.items %}
+{% set sidebar_title = ns.title %}
+{% set sidebar_index_url = ns.index_url %}
+{% set fold = namespace(held=false) %}
+{% if ns.items and page.toc and feature is defined and feature('nav.toc-fold') %}
+  {% for item in ns.items %}
+    {% if holds(item, page.url) | trim %}{% set fold.held = true %}{% endif %}
+  {% endfor %}
+{% endif %}
+{% set toc_folded = fold.held %}

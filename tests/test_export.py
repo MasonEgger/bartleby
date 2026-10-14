@@ -1,4 +1,4 @@
-# ABOUTME: Tests for content export — JSONL, JSON, and CSV of published content.
+# ABOUTME: Tests for content export: JSONL, JSON, and CSV of published content.
 # Covers curated fields, content-type filtering, optional body/HTML, and the export formats.
 
 from __future__ import annotations
@@ -111,7 +111,7 @@ def test_jsonl_export_one_object_per_published_page() -> None:
     """JSONL export emits one JSON object per line, drafts excluded."""
     output = export_content(_pages(), _config(), fmt="jsonl")
     lines = [line for line in output.splitlines() if line]
-    assert len(lines) == 3  # first, second, about — not the draft
+    assert len(lines) == 3  # first, second, about; not the draft
     records = [json.loads(line) for line in lines]
     titles = {record["title"] for record in records}
     assert titles == {"First", "Second", "About"}

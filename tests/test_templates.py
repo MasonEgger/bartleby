@@ -30,7 +30,10 @@ from bartleby.templates import (
     load_data_files,
     make_feature_checker,
     resolve_template_name,
+    template_search_bases,
 )
+from bartleby.theme_loader import ResolvedTheme, resolve_theme
+from tests.theme_helpers import material_theme
 
 _JSONLD_SCRIPT_RE = re.compile(
     r'<script type="application/ld\+json">\n?(.*?)\n?</script>', re.DOTALL
@@ -364,14 +367,15 @@ def test_taxonomy_template_lookup(tmp_path: Path) -> None:
 
 def test_jinja_env_has_correct_search_paths(tmp_path: Path) -> None:
     """Search paths are overrides → templates → project_dir → theme, in order."""
-    env = create_jinja_env(_empty_config(), tmp_path)
+    env = create_jinja_env(_empty_config(), tmp_path, theme=material_theme())
     loader = env.loader
     assert loader is not None
     paths = getattr(loader, "searchpath", [])
     assert paths[0].endswith("overrides")
     assert paths[1].endswith("templates")
     assert paths[2] == str(tmp_path)
-    assert paths[3].endswith("theme/templates")
+    assert paths[3].endswith("themes/material/templates")
+    assert paths[4].endswith("themes/base/templates")
 
 
 def test_extra_css_paths_in_context(tmp_path: Path) -> None:
@@ -486,9 +490,9 @@ def test_jsonld_partial_escapes_script_close_tag() -> None:
 
 def test_feature_checker_reports_enabled_and_disabled() -> None:
     """``make_feature_checker`` returns True only for enabled feature names."""
-    feature = make_feature_checker(["search", "navigation.top"])
+    feature = make_feature_checker(["search", "nav.back-to-top"])
     assert feature("search") is True
-    assert feature("navigation.top") is True
+    assert feature("nav.back-to-top") is True
     assert feature("content.code.copy") is False
 
 
@@ -498,8 +502,79 @@ def test_create_jinja_env_registers_feature_global(tmp_path: Path) -> None:
     config.theme.features = ["search"]
     env = create_jinja_env(config, tmp_path)
     checker = env.globals["feature"]
+    assert callable(checker)
     assert checker("search") is True
     assert checker("content.code.copy") is False
 
 
 pytest.importorskip("jinja2")
+
+
+_FIXTURE_THEMES = Path(__file__).parent / "fixtures" / "themes"
+
+
+def _chain_theme(tmp_path: Path) -> ResolvedTheme:
+    """A two-layer theme: ``child`` extends ``parent``, built in ``tmp_path``."""
+    for name, extends in (("parent", None), ("child", "parent")):
+        manifest = f"name: {name}\n" + (f"extends: {extends}\n" if extends else "")
+        (tmp_path / "themes" / name / "templates").mkdir(parents=True)
+        (tmp_path / "themes" / name / "theme.yml").write_text(manifest, encoding="utf-8")
+    return resolve_theme(project_dir=tmp_path, path="themes/child")
+
+
+def test_template_search_bases_lists_project_dirs_then_chain_leaf_first(tmp_path: Path) -> None:
+    """Project dirs come first, then each theme layer's templates dir, child before parent."""
+    theme = resolve_theme(project_dir=tmp_path, path=str(_FIXTURE_THEMES / "child"))
+
+    bases = template_search_bases(tmp_path, theme)
+
+    assert bases == [
+        tmp_path / "overrides",
+        tmp_path / "templates",
+        tmp_path,
+        _FIXTURE_THEMES / "child" / "templates",
+        _FIXTURE_THEMES / "parent" / "templates",
+    ]
+
+
+def test_resolve_template_name_falls_back_to_parent_layer(tmp_path: Path) -> None:
+    """A template only the parent provides is found when the child does not override it."""
+    theme = _chain_theme(tmp_path)
+    parent_templates = tmp_path / "themes" / "parent" / "templates"
+    (parent_templates / "defaults").mkdir()
+    (parent_templates / "defaults" / "page.html").write_text("parent page", encoding="utf-8")
+
+    name = resolve_template_name(_page(content_type_name=None), "page", tmp_path, theme)
+    env = create_jinja_env(_empty_config(), tmp_path, theme)
+
+    assert name == "defaults/page.html"
+    assert env.get_template(name).render() == "parent page"
+
+
+def test_child_layer_template_beats_parent(tmp_path: Path) -> None:
+    """When both layers provide a template, the child's copy renders."""
+    theme = _chain_theme(tmp_path)
+    for layer in ("parent", "child"):
+        templates = tmp_path / "themes" / layer / "templates"
+        (templates / "defaults").mkdir()
+        (templates / "defaults" / "page.html").write_text(f"{layer} page", encoding="utf-8")
+
+    name = resolve_template_name(_page(content_type_name=None), "page", tmp_path, theme)
+    env = create_jinja_env(_empty_config(), tmp_path, theme)
+
+    assert env.get_template(name).render() == "child page"
+
+
+def test_project_overrides_beat_every_theme_layer(tmp_path: Path) -> None:
+    """A file under ``overrides/`` wins over both theme layers."""
+    theme = _chain_theme(tmp_path)
+    for layer in ("parent", "child"):
+        (tmp_path / "themes" / layer / "templates" / "page.html").write_text(
+            layer, encoding="utf-8"
+        )
+    (tmp_path / "overrides").mkdir()
+    (tmp_path / "overrides" / "page.html").write_text("override", encoding="utf-8")
+
+    env = create_jinja_env(_empty_config(), tmp_path, theme)
+
+    assert env.get_template("page.html").render() == "override"

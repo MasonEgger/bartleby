@@ -1,151 +1,188 @@
-# Bartleby v1 Remediation: Progress
+# Bartleby Goal 8 TODO: First-Run Experience and Docs Layout
 
-Read `handoff.md` first, then `plan.md` for the full TDD prompts and `spec.md` (R1-R17) for required behavior and acceptance criteria. 0 of 19 steps done.
-Each phase ends at an optional Fable checkpoint (safe commit and review boundary); the markers live in `plan.md`.
+Mirrors plan.md. Check sub-steps as execute-plan completes them; a step is done when all its sub-steps are checked.
 
-## Phase 1: Unblock the Suite
+## Section 1: The config schema and the annotated writer
 
-- [x] **Step 1: Fix the linting.py SyntaxError and add an import health gate** (R1)
-  - [x] 1.1: RED: tests/test_import_health.py: all bartleby modules import; check_external_url returns False on URLError/ValueError/OSError
-  - [x] 1.2: GREEN: parenthesize the except tuple at linting.py:205 — investigated, not applied; see session notes, no source change was needed under Python 3.14
-  - [x] 1.3: Investigate the smoke-test gap; make smoke invoke cli.main() if it bypasses the entry point — already does; no gap found
-  - [x] 1.4: Run `just check` (first full-suite run); record unexpected failures — do-markdown/markwright rename fixed by prerequisite migration (commit 24fdace); `just check` now green, 511 passed
+### Step 1: The config schema object and its drift test (feature)
+- [x] 1. RED: config_schema tests (flat ordered fields with path/type/default/choices/repeatable/description; every top-level key covered; closed sets carry real allowed values; defaults equal config.py dataclass defaults; schema_field lookup + KeyError)
+- [x] 2. Document: config_schema.py module docstring (single source for full-config, config schema, reference docs)
+- [x] 3. GREEN: config_schema.py with ConfigField + CONFIG_SCHEMA + schema_field, referencing config.py defaults and THEME_FEATURES
+- [x] 4. RED: drift-direction test (new accepted top-level key with no schema entry fails; mutation-check it)
+- [x] 5. GREEN: close gaps
+- [x] 6. REFACTOR: per-section field helpers mirroring config.py grouping
+- [x] 7. Document: none beyond docstring
+- [x] 8. Verify: coverage of schema + both drift directions + `just check`
 
-- [x] **Step 2: Populate the Tailwind release checksum map** (R2)
-  - [x] 2.1: RED: map key set equals the six asset names; values match ^[0-9a-f]{64}$; map path installs via _download_binary
-  - [x] 2.2: GREEN: populate _RELEASE_SHA256 with official digests for PINNED_TAILWIND_VERSION
-  - [x] 2.3: RED: checksum-mismatch abort regression guard still passes
-  - [x] 2.4: Run `just check`
+### Step 2: The comment-preserving YAML writer and the full-config renderer (feature)
+- [x] 1. RED: config_edit tests (set_key keeps comment; creates intermediate maps; siblings untouched; render_full_config emits every field at default with description comment and re-parses; scalar types correct)
+- [x] 2. Document: config_edit.py docstring (two entry points, ruamel round-trip, one shared writer)
+- [x] 3. GREEN: add ruamel.yaml dep + uv lock; config_edit.py set_key + render_full_config on one YAML(rt) instance
+- [x] 4. RED: integration round-trip from scaffold bartleby.yml
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: shared dotted-path walk
+- [x] 7. Document: CHANGELOG ruamel.yaml dependency
+- [x] 8. Verify: comment preservation + full-config round-trip + `just check`
 
-- [x] **Fable checkpoint (optional): Phase 1 done (R1, R2, critical); suite runs, `just check` green**
+## Section 2: CLI configuration surface
 
-## Phase 2: Error Contract
+### Step 3: The `--set key.path=value` override layer (feature)
+- [x] 1. RED: apply_overrides tests (string + int YAML-typed; missing `=` error names --set; validator failure labeled --set source; dotted path creates maps, last wins; load_config overrides apply then validate)
+- [x] 2. Document: apply_overrides + load_config overrides param docstring
+- [x] 3. GREEN: config.py apply_overrides + overrides param threaded through load_config
+- [x] 4. RED: CLI integration (--set append on build/serve/validate; overridden build; bad --set non-zero)
+- [x] 5. GREEN: wire --set into three subparsers
+- [x] 6. REFACTOR: share dotted-path walk with config_edit.py
+- [x] 7. Document: none here
+- [x] 8. Verify: value typing + error labeling coverage + `just check`
 
-- [x] **Step 3: Route ContentError and build validation failures through the error contract** (R3)
-  - [x] 3.1: RED: strict-crossref test expects BuildError (update test_build.py:306); metadata failure raises BuildError with PageErrors
-  - [x] 3.2: RED: ContentError via lint: exit 1, no traceback; json ErrorOutput with content_error + source path; BARTLEBY_DEBUG re-raises
-  - [x] 3.3: GREEN: build.py raises BuildError at both sites; docstrings updated
-  - [x] 3.4: GREEN: cli.py catches ContentError; _ERROR_CODES gets content_error
-  - [x] 3.5: REFACTOR: one catch site covers all content-discovering commands
-  - [x] 3.6: Run `just check`
+### Step 4: `--base-url` and resolved-config provenance (feature)
+- [x] 1. RED: resolve_with_sources tests (default/file/set per key; --base-url maps to site.url override, provenance set); CLI --base-url renders canonical URLs, accepted on build/serve/validate
+- [x] 2. Document: resolve_with_sources docstring (three sources, --set/--base-url mapping)
+- [x] 3. GREEN: config.py resolve_with_sources; cli.py --base-url -> site.url override
+- [x] 4. RED: integration (resolve_with_sources agrees with load_config on final values)
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: provenance tagging beside apply_overrides
+- [x] 7. Document: none here
+- [x] 8. Verify: all three sources + --base-url mapping coverage + `just check`
 
-- [x] **Step 4: Guarantee temp build directory cleanup on every failure path** (R16)
-  - [x] 4.1: RED: no .bartleby-build-* remains after strict failure or _emit_outputs exception; success guard still passes
-  - [x] 4.2: GREEN: try/finally (or context manager) owns the temp dir lifetime
-  - [x] 4.3: REFACTOR: single removal site; docstring contracts stay accurate
-  - [x] 4.4: Run `just check`
+### Step 5: The `config` command group (feature)
+- [x] 1. RED: command tests (show lists values + sources, json stable; get prints value, unknown key non-zero; set writes keeping comments, idempotent; set rejects invalid without writing; schema json one object per field)
+- [x] 2. Document: show/get/set/schema handler docstrings + argparse help
+- [x] 3. GREEN: cli.py config parser + handlers (set validates in memory before writing via config_edit.set_key); output.py result dataclasses
+- [x] 4. RED: integration (set then get returns written value; show marks it file)
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: reuse Step 4 provenance + Step 1 schema
+- [x] 7. Document: none here
+- [x] 8. Verify: each action + config set write-safety coverage + `just check`
 
-- [x] **Fable checkpoint (optional): Phase 2 done (R3, R16); error contract catches every failure, no temp-dir leaks**
+### Step 6: `bartleby new site --full-config` (feature)
+- [x] 1. RED: full-config tests (generated file covers every CONFIG_SCHEMA path; parses with no error/warning; each option carries description comment; minimal config is a subset)
+- [x] 2. Document: new site --full-config argparse help
+- [x] 3. GREEN: cli.py _cmd_new_site writes render_full_config(CONFIG_SCHEMA) when --full-config
+- [x] 4. RED: integration (scaffold --full-config then build succeeds)
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: none expected
+- [x] 7. Document: none here
+- [x] 8. Verify: every-key test mutation-checked + `just check`
 
-## Phase 3: Build Pipeline Correctness
+## Section 3: Content types on demand
 
-- [x] **Step 5: Enforce draft exclusion for co-located assets and the taxonomy schema** (R7)
-  - [x] 5.1: RED: draft page + asset both absent from production build; include_drafts writes both; published asset regression guard
-  - [x] 5.2: RED: derive_taxonomies_schema omits draft-only terms; CLI schema taxonomies omits them
-  - [x] 5.3: GREEN: filter state.assets against surviving pages before copy
-  - [x] 5.4: GREEN: select_published inside derive_taxonomies_schema; agent_surface output unchanged
-  - [x] 5.5: REFACTOR: one shared published-page helper
-  - [x] 5.6: Run `just check`
+### Step 7: `enable` and `disable` content types (feature)
+- [x] 1. RED: enabled parse (false/absent->True); build skips disabled (no listing/pages/feeds); enable adds blog-shaped type with feeds [rss,atom], idempotent; disable sets enabled false keeping block; enable preserves comments
+- [x] 2. Document: ContentTypeConfig.enabled + enable/disable handler docstrings + help
+- [x] 3. GREEN: config.py enabled field + parse; build.py skip disabled; cli.py enable/disable via config_edit.set_key
+- [x] 4. RED: integration (enable + post + build -> listing + feeds exist; disable -> rebuild drops them)
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: one blog-shaped block reused by enable and scaffold --blog
+- [x] 7. Document: none here
+- [x] 8. Verify: skip path + idempotency coverage + `just check`
 
-- [x] **Step 6: Detect co-located asset collisions in shared directories** (R8)
-  - [x] 6.1: RED: two pages + asset in one dir raises error naming dir and pages; no-asset case builds; single-bundle regression guards
-  - [x] 6.2: GREEN: dict[str, list[Page]] index; collision raises through BuildError
-  - [x] 6.3: REFACTOR: check fires only when an asset hits a multi-page dir
-  - [x] 6.4: Run `just check`
+### Step 8: An enabled type's feeds carry entries, plus the combined feed (feature)
+- [x] 1. RED: per-type RSS + Atom carry exactly the published items; combined feed merges enabled-with-feeds types, excludes opt-out and disabled; site.feed.enabled false suppresses combined only
+- [x] 2. Document: per-type-plus-combined guarantee in feeds.py docstring
+- [x] 3. GREEN: feeds.py/build.py fix gaps (disabled exclusion, empty-feed suppression)
+- [x] 4. RED: integration (two enabled types + one disabled; per-type feeds carry entries; combined merges enabled only)
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: reuse shared published-page selection
+- [x] 7. Document: none here
+- [x] 8. Verify: feeds carry real entries (item count + titles) + `just check`
 
-- [x] **Step 7: Merge icon pack defaults instead of replacing them** (R10)
-  - [x] 7.1: RED: {simple: false} leaves other three enabled; empty config = all four; two-false case exact
-  - [x] 7.2: GREEN: overlay config entries on the all-True default dict
-  - [x] 7.3: REFACTOR: one canonical pack-list constant
-  - [x] 7.4: Run `just check`
+## Section 4: markwright integration
 
-- [x] **Step 8: Count only copied files in static_file_count** (R17)
-  - [x] 8.1: RED: count equals N static + M assets despite generated artifacts present; ai.llms_txt toggle does not change count
-  - [x] 8.2: GREEN: sum copy counts from copy_static_files/copy_colocated_assets, no re-glob
-  - [x] 8.3: REFACTOR: BuildResult docstring accurate
-  - [x] 8.4: Run `just check`
+### Step 9: The `markwright:` config section through markwright's public API (feature)
+- [x] 1. RED: markwright section parses to raw mapping; no section -> default selected extensions; disable drops one; invalid option -> Bartleby ConfigError sourced to bartleby.yml markwright key; config_from_mapping + extension_configs used; stray markwright.toml/[tool.markwright] warns once
+- [x] 2. Document: markdown_pipeline.py docstring (configs via markwright public API, never reimplement schema)
+- [x] 3. GREEN: config.py carry markwright mapping; markdown_pipeline.py config_from_mapping + selected_extensions + extension_configs + exception translation; build.py ignored-file warning
+- [x] 4. RED: integration (disable twitter -> raw fence; stray markwright.toml warning)
+- [x] 5. GREEN: wire into build.py
+- [x] 6. REFACTOR: markwright-config construction in one helper
+- [x] 7. Document: none here
+- [x] 8. Verify: enable/disable + option validation + ignored-file warning coverage + `just check`
 
-- [x] **Fable checkpoint (optional): Phase 3 done (R7, R8, R10, R17); draft exclusion, loud asset-collision error, icon-pack merge, honest static count**
+### Step 10: Click-to-load host script and styles in both themes (task)
+- [x] 1. Scope: base click-to-load swap script + conditional include; preview styles in base + material/scrivener skins
+- [x] 2. Tooling: frontend-design; markwright Click-to-Load docs; build scratch site with a click embed
+- [x] 3. Do: write base swap script to markwright's contract; include only when a click preview is present; style preview
+- [x] 4. Verify: eager page has live embed + no swap script; click page has <template> preview + swap script; exit 0, no UndefinedError
+- [x] 5. Document: none here
 
-## Phase 4: Rendering Correctness
+### Step 11: Both themes style every markwright class hook (task)
+- [x] 1. Scope: material + scrivener tailwind.css + safelist.txt component classes for every markwright hook; regenerated main.css
+- [x] 2. Tooling: frontend-design; enumerated markwright class hooks; just theme-css; build + browser
+- [x] 3. Do: enumerate hooks from rendered output; add classes to both themes; recompile
+- [x] 4. Verify: all eight extensions styled in both themes, both modes, desktop + mobile; screenshots taken in the session scratchpad and described in prose in the evidence file
+- [x] 5. Document: CHANGELOG (markwright hooks styled in both themes)
 
-- [x] **Step 9: Render listing intro content as HTML** (R11)
-  - [x] 9.1: RED: strengthen test_listings.py:120 to assert <h2>/<strong>, not literal markdown
-  - [x] 9.2: GREEN: render index.md body through the markdown pipeline before storing intro_content
-  - [x] 9.3: REFACTOR: accept the build's renderer instance; one renderer per build
-  - [x] 9.4: Run `just check`
+## Section 5: The async dev server
 
-- [x] **Step 10: Emit valid JSON-LD from one generator** (R9)
-  - [x] 10.1: RED: quoted/backslash/< title renders an ld+json block that json.loads and round-trips; equals generate_jsonld output
-  - [x] 10.2: GREEN: context carries generate_jsonld output; partial emits it; hand-built lines deleted
-  - [x] 10.3: REFACTOR: generator covers all fields the partial emitted; special-char tests on the generator too
-  - [x] 10.4: Run `just check`
+### Step 12: Rewrite the dev server on Starlette and uvicorn with same-port reload (feature)
+- [x] 1. RED: reload_snippet points at location.host + RELOAD_WS_PATH on serving port; Starlette app serves a built file + mounts reload WS on same app; the idle-socket property (an idle socket held open does not block a parallel request) on new server; existing is_watched/classify_change tests kept
+- [x] 2. Document: server.py docstring + CLAUDE.md dev-server bullet (Starlette + uvicorn, one port, event filter unchanged)
+- [x] 3. GREEN: add starlette + uvicorn deps + uv lock; rewrite server.py (static route + WS route on one app via uvicorn; watchdog -> classifier -> broadcast; reload_snippet same port); remove old ThreadingHTTPServer + separate-port hub
+- [x] 4. RED: integration (serve on ephemeral port; fetch page + open WS same port; edit file -> reload message arrives)
+- [x] 5. GREEN: wire into _cmd_serve preserving --host/--port/--events/--set/--base-url
+- [x] 6. REFACTOR: keep change classifier exactly; only transport changes
+- [x] 7. Document: CHANGELOG (dev server -> Starlette + uvicorn, same-port reload)
+- [x] 8. Verify: idle-socket property + reload round-trip + `just check`
 
-- [x] **Step 11: Protect multi-backtick inline code from shortcode expansion** (R12)
-  - [x] 11.1: RED: shortcode literal inside double-backtick span; inside span containing a single backtick; single-backtick regression guard
-  - [x] 11.2: GREEN: CommonMark N-backtick span matching replaces _INLINE_CODE_RE
-  - [x] 11.3: REFACTOR: docstring accurate
-  - [x] 11.4: Run `just check`
+## Section 6: Three-column docs layout
 
-- [x] **Fable checkpoint (optional): Phase 4 done (R11, R9, R12); listing intros render, valid JSON-LD, multi-backtick code protected**
+### Step 13: Three-column layout with fold-TOC and tabs feature flags (task)
+- [x] 1. Scope: theme_loader.py one new feature name (`nav.toc-fold`; `nav.tabs` already existed) + test; base + material/scrivener doc_layout + nav/toc partials for three columns and both flags; both themes tailwind + safelist; regenerated main.css
+- [x] 2. Tooling: frontend-design (layout + responsive), python (THEME_FEATURES); mkdocs-material/Zensical for shape only; just theme-css; build docs + browser
+- [x] 3. Do: add the `nav.toc-fold` feature + test; implement three-column shell + fold + tabs in both themes; recompile
+- [x] 4. Verify: default three columns, fold on, tabs on, both themes, both modes, desktop + mobile; no feature warnings; no UndefinedError; screenshots taken in the session scratchpad and described in prose in the evidence file
+- [x] 5. Document: CHANGELOG (three-column layout + fold/tabs flags)
 
-## Phase 5: Dev Server
+## Section 7: Scaffold and first-run output
 
-- [x] **Step 12: Serve the configured output directory** (R4)
-  - [x] 12.1: RED: output_dir: public served correctly; default site/ regression guard
-  - [x] 12.2: GREEN: resolve serve dir from loaded config; share config between build and handler
-  - [x] 12.3: REFACTOR: no other hardcoded "site" in server.py
-  - [x] 12.4: Run `just check`
+### Step 14: The docs-shaped scaffold and the feature tour (task)
+- [x] 1. Scope: scaffold bartleby.yml (minimal, docs-shaped, no blog, no markwright section); index.md (what to do next); feature tour page (each markwright + pymdownx feature, source beside result); README quickstart with click-to-load opt-in; cli.py --blog
+- [x] 2. Tooling: frontend-design, tutorial-writing, style-linting, python (--blog); new site/build/serve
+- [x] 3. Do: rewrite scaffold for docs shape; author feature tour; add --blog reusing Step 7 block; README quickstart
+- [x] 4. Verify: new site + build exits 0 no warnings, home + tour render, tour shows every feature; --blog adds blog type + builds; lint clean
+- [x] 5. Document: scaffold README quickstart; add scaffold pages to nav
 
-- [x] **Step 13: Wire the file watcher into DevServer.run()** (R5, part 1)
-  - [x] 13.1: RED: watched change rebuilds (visible over HTTP, bounded wait); unwatched change does not
-  - [x] 13.2: GREEN: watchdog Observer in run() routing through existing primitives; clean shutdown; dependency confirmed in pyproject.toml
-  - [x] 13.3: GREEN: last-good-build retention holds via a real watcher-triggered failure
-  - [x] 13.4: REFACTOR: compose primitives, no duplicated decision logic; module docstring accurate
-  - [x] 13.5: Run `just check`
+### Step 15: Hugo-style first-run output for `new site` and `serve` (feature)
+- [x] 1. RED: new site result lists created entries + next command (cd <dir> && bartleby serve), json carries same; serve startup summary has page count + bound URL + stop hint (formatter unit-tested)
+- [x] 2. Document: new/updated output dataclass docstrings
+- [x] 3. GREEN: output.py extend NewSiteOutput + serve-startup result (to_text/to_dict); cli.py populate both
+- [x] 4. RED: integration (new site prints created entries + exact next command)
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: reuse resolved host/port from Step 4
+- [x] 7. Document: none here
+- [x] 8. Verify: summaries carry real values (page count + URL from build) + `just check`
 
-- [x] **Step 14: Serve the reload snippet and WebSocket channel** (R5, part 2)
-  - [x] 14.1: RED: served HTML contains RELOAD_SNIPPET; WS client at /__bartleby_reload gets signal after rebuild; build output snippet-free
-  - [x] 14.2: GREEN: serve-path snippet injection + websockets endpoint broadcasting on successful rebuild; dependency confirmed
-  - [x] 14.3: REFACTOR: reload code lives only on the serve path; route/URL defined once (RELOAD_WS_PATH constant)
-  - [x] 14.4: Run `just check`
+## Section 8: Docs, acknowledgments, correctness, and the final gate
 
-- [x] **Fable checkpoint (optional): Phase 5 done (R4, R5); serves configured output dir, rebuilds on change, live-reloads**
+### Step 16: Document the config, enable, markwright, and layout surface from the schema (task)
+- [x] 1. Scope: docs configuration.md (from schema), enable how-to, markwright + click-to-load how-to, CLI reference updates (--set/--base-url/config/enable/disable), three-column layout in theme docs; docs nav; schema-to-docs drift test
+- [x] 2. Tooling: diataxis, tutorial-writing, style-linting, python (drift test); config schema --output json; build/lint docs
+- [x] 3. Do: generate/write config reference from schema + drift test; write how-tos; update CLI reference; writing hard rules
+- [x] 4. Verify: build/lint clean; drift test passes; both-way flag/command/section cross-check
+- [x] 5. Document: add new pages to docs nav
 
-## Phase 6: CLI and Agent Surface
+### Step 17: Acknowledgments and the license compatibility check (task)
+- [x] 1. Scope: ACKNOWLEDGMENTS.md (each borrowed source, what was taken, license, MIT-compatibility note); linked from README + docs
+- [x] 2. Tooling: style-linting; upstream license files + web check for Zensical license + sun icon license
+- [x] 3. Do: enumerate borrowings incl. theme-system visual inspirations; record license + verdict; resolve sun icon (credit or replace)
+- [x] 4. Verify: every entry names source + license + verdict; no unconfirmed/incompatible asset remains (grep themes for the icon)
+- [x] 5. Document: ACKNOWLEDGMENTS.md; link from README + docs
 
-- [x] **Step 15: Resolve crossrefs before the lint orphan pass** (R6)
-  - [x] 15.1: RED: .md-linked page not orphaned via CLI lint; nav page never orphaned; existing lint JSON test asserts no spurious orphans
-  - [x] 15.2: GREEN: _cmd_lint calls resolve_all_crossrefs before lint_site
-  - [x] 15.3: REFACTOR: _lint_crossrefs's re-resolution stays; it is the sole source of broken-crossref findings, not dead weight
-  - [x] 15.4: Run `just check`
+### Step 18: Correctness sweep for first-run claims (feature)
+- [x] 1. RED: new site --blog feed carries sample post (RSS + Atom); feature tour HTML has output class for every claimed feature; highlighted code references highlight CSS (HTML + compiled theme CSS); docs feeds carry entries per enabled type
+- [x] 2. Document: none beyond tests
+- [x] 3. GREEN: fix any false claim (missing feed entry, unstyled highlight, non-rendering tour feature)
+- [x] 4. RED: integration (scaffold + build: home links resolve, tour renders every feature, feeds carry entries)
+- [x] 5. GREEN: wire minimally
+- [x] 6. REFACTOR: reuse Step 8 feed-content assertions
+- [x] 7. Document: none
+- [x] 8. Verify: every first-run claim has a failing-if-broken test + `just check`
 
-- [x] **Step 16: Discover shortcodes across all three lookup locations** (R13)
-  - [x] 16.1: RED: project-root, templates/, and theme shortcodes all discovered; de-duplicated; generate-skill includes project-root shortcode
-  - [x] 16.2: GREEN: _discover_shortcode_names scans the loader's cascade
-  - [x] 16.3: REFACTOR: one shared source for the search roots where feasible
-  - [x] 16.4: Run `just check`
-
-- [x] **Step 17: Advertise the aggregate feed in schema.json** (R14)
-  - [x] 17.1: RED: aggregate feed.xml/atom.xml present per formats; absent when site.feed disabled
-  - [x] 17.2: GREEN: _resource_locations reads config.site.feed and appends aggregate URLs
-  - [x] 17.3: REFACTOR: shared feed-URL helper so advertised and written URLs cannot drift
-  - [x] 17.4: Run `just check`
-
-- [x] **Step 18: Scope the hooks sys.path insertion** (R15)
-  - [x] 18.1: RED: sys.path restored after discover_hooks; double call does not grow it; sibling-import regression guard
-  - [x] 18.2: GREEN: try/finally scopes the insertion to the load loop
-  - [x] 18.3: REFACTOR: docstring notes discovery-time-only sibling resolution
-  - [x] 18.4: Run `just check`
-
-- [x] **Fable checkpoint (optional): Phase 6 done (R6, R13, R14, R15); lint orphans fixed, shortcode discovery, aggregate feed, scoped sys.path**
-
-## Phase 7: Cycle Verification
-
-- [x] **Step 19: Extend the e2e smoke test and close the cycle**
-  - [x] 19.1: RED: smoke covers custom output_dir + quoted title + draft-with-asset + .md crossref, through build and serve
-  - [x] 19.2: GREEN: fix composition defects only if surfaced; otherwise no production change
-  - [x] 19.3: Final gate: `just check`; all todo steps checked; R1-R17 closed
-  - [x] 19.4: CHANGELOG.md remediation entry
-
-- [x] **Fable checkpoint (optional): Phase 7 done; cycle verified, R1-R17 closed, `just check` green, ready to ship**
+### Step 19: Final gate for Goal 8 (task)
+- [x] 1. Scope: CHANGELOG (finalize Unreleased), README (first-run if drifted); no version bump
+- [x] 2. Tooling: python; just check; clean-venv wheel install; browser
+- [x] 3. Do: just check green; clean install; new site + serve -> three-column + tour from small config; --full-config lists every option; enable blog feeds carry entries; wheel bundles scaffold + both themes; walk Goal 8 success criteria
+- [x] 4. Verify: just check green AND clean-env reproduces three-column site + tour + --full-config + working enable feeds; success-criteria checklist with evidence for Mason
+- [x] 5. Document: finalize CHANGELOG + README

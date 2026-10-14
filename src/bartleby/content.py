@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
+from bartleby.errors import format_error
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -25,6 +27,9 @@ PageMetadataValue = str | int | bool | list[str] | datetime.date | object
 class ContentError(Exception):
     """Raised when a content file's front matter is malformed.
 
+    Message contract: ``<problem> (fix: <hint>)``. The file travels in
+    :attr:`source_path`, and the CLI prints it ahead of the message.
+
     :ivar source_path: The offending file path, when known.
     """
 
@@ -34,11 +39,19 @@ class ContentError(Exception):
 
 
 @dataclass(slots=True)
+class TermLink:
+    """One taxonomy value on a page, with the URL of its term page when one exists."""
+
+    term: str
+    url: str | None
+
+
+@dataclass(slots=True)
 class Page:
     """A single content page discovered under ``content/``.
 
     Fields set during discovery describe the source; fields set later in the
-    pipeline (``output_url``, ``rendered_content``, ``excerpt``, ``readtime``)
+    pipeline (``output_url``, ``rendered_content``, ``excerpt``, ``excerpt_html``, ``readtime``)
     default to empty values and are populated by subsequent build steps.
     """
 
@@ -59,7 +72,10 @@ class Page:
     content_type_name: str | None = None
     output_url: str = ""
     rendered_content: str = ""
+    #: The excerpt as plain text, for feeds, ``llms.txt``, and other machine readers.
     excerpt: str = ""
+    #: The excerpt rendered to HTML, for listing pages.
+    excerpt_html: str = ""
     readtime: int | None = None
     previous: Page | None = None
     next: Page | None = None
@@ -68,6 +84,8 @@ class Page:
     # contents extracted during markdown rendering.
     authors: list[Author | str] = field(default_factory=list)
     toc: list[Any] = field(default_factory=list)
+    #: Taxonomy name to the page's terms as links, filled at template-context build time.
+    taxonomy_links: dict[str, list[TermLink]] = field(default_factory=dict)
 
     @property
     def content(self) -> str:
@@ -78,6 +96,11 @@ class Page:
     def url(self) -> str:
         """Template-facing alias for :attr:`output_url`."""
         return self.output_url
+
+    @property
+    def generated(self) -> bool:
+        """Whether the build synthesized this page (listing or taxonomy) rather than read it."""
+        return self.source_path.parts[:1] == ("__generated__",)
 
     @property
     def taxonomies(self) -> dict[str, list[str]]:
@@ -94,22 +117,21 @@ class ColocatedAsset:
     associated_page_source: Path | None = None
 
 
-# Front matter fields handled by their own dataclass attributes — anything else
-# in the YAML block is treated as a taxonomy value (if it matches a configured
+# Front matter fields handled by their own dataclass attributes, each with a
+# one-line meaning (the generated write skill renders these). Anything else in
+# the YAML block is treated as a taxonomy value (if it matches a configured
 # taxonomy name) or custom metadata.
-_STANDARD_FRONT_MATTER_FIELDS = frozenset(
-    {
-        "title",
-        "description",
-        "date",
-        "draft",
-        "template",
-        "url",
-        "url_base",
-        "authors",
-        "slug",
-    }
-)
+STANDARD_FRONT_MATTER_FIELDS: dict[str, str] = {
+    "title": "page title; defaults to the filename without its extension",
+    "description": "meta description, Open Graph description, and Twitter card text",
+    "date": "publication date; drives feeds, taxonomy sort order, and JSON-LD datePublished",
+    "draft": "when true, builds skip the page unless --include-drafts is passed",
+    "template": "template to render this page with",
+    "url": "replaces the generated URL with a custom path",
+    "url_base": "replaces only the URL base prefix; url_format still applies",
+    "authors": "author ids from the authors list",
+    "slug": "overrides the slug that {slug} placeholders in url_format use",
+}
 
 
 def parse_front_matter(text: str) -> tuple[dict[str, Any], str]:
@@ -133,7 +155,7 @@ def parse_front_matter(text: str) -> tuple[dict[str, Any], str]:
     closing_marker = f"\n{FRONT_MATTER_DELIMITER}"
     closing = after_opening.find(closing_marker)
     if closing == -1:
-        # First line was `---` but no closing delimiter — treat as no front matter.
+        # First line was `---` but no closing delimiter; treat as no front matter.
         return {}, text
 
     front_matter_block = after_opening[:closing]
@@ -144,11 +166,26 @@ def parse_front_matter(text: str) -> tuple[dict[str, Any], str]:
     if not front_matter_block.strip():
         return {}, body
 
-    parsed: Any = yaml.safe_load(front_matter_block)
+    try:
+        parsed: Any = yaml.safe_load(front_matter_block)
+    except yaml.YAMLError as exc:
+        mark = getattr(exc, "problem_mark", None)
+        where = f" at front matter line {mark.line + 1}" if mark is not None else ""
+        raise ContentError(
+            format_error(
+                f"invalid YAML{where}",
+                hint="fix the syntax (check indentation, quotes, and brackets)",
+            )
+        ) from exc
     if parsed is None:
         return {}, body
     if not isinstance(parsed, dict):
-        raise ContentError(f"front matter must be a YAML mapping, got {type(parsed).__name__}")
+        raise ContentError(
+            format_error(
+                f"front matter must be a YAML mapping, got {type(parsed).__name__}",
+                hint="write `key: value` lines between the two `---` markers",
+            )
+        )
     return parsed, body
 
 
@@ -181,19 +218,29 @@ def discover_content(
     :param config: Parsed Bartleby config (used for content type paths,
         taxonomies, and exclude patterns).
     :param content_dir: The site's ``content/`` directory.
-    :returns: ``(pages, assets)`` — every discovered markdown file becomes a
+    :returns: ``(pages, assets)``: every discovered markdown file becomes a
         :class:`Page`; every other file becomes a :class:`ColocatedAsset`.
     """
     pages: list[Page] = []
     assets: list[ColocatedAsset] = []
     taxonomy_names = set(config.taxonomies.keys())
 
+    # A disabled content type contributes no pages or assets: its whole path is excluded.
+    excluded = [
+        *config.exclude_patterns,
+        *(
+            f"{content_type.path.rstrip('/')}/**"
+            for content_type in config.content_types.values()
+            if not content_type.enabled
+        ),
+    ]
+
     for abs_path in sorted(content_dir.rglob("*")):
         if not abs_path.is_file():
             continue
         relative = abs_path.relative_to(content_dir)
         rel_posix = relative.as_posix()
-        if should_exclude(rel_posix, config.exclude_patterns):
+        if should_exclude(rel_posix, excluded):
             continue
 
         if abs_path.suffix == ".md":
@@ -270,7 +317,7 @@ def _split_metadata(
     taxonomy_values: dict[str, list[str]] = {}
     custom: dict[str, PageMetadataValue] = {}
     for key, value in metadata.items():
-        if key in _STANDARD_FRONT_MATTER_FIELDS:
+        if key in STANDARD_FRONT_MATTER_FIELDS:
             continue
         if key in taxonomy_names:
             taxonomy_values[key] = _coerce_str_list(value)

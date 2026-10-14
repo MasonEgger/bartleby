@@ -21,7 +21,7 @@ from bartleby.config import (
 )
 from bartleby.content import Page
 from bartleby.listings import generate_listing_pages
-from bartleby.theme import get_theme_templates_dir
+from tests.theme_helpers import material_theme
 
 
 def _render(page: Page, template_name: str) -> str:
@@ -31,21 +31,21 @@ def _render(page: Page, template_name: str) -> str:
     returns the HTML so tests can grep the actual output rather than only checking
     the virtual :class:`Page` dataclass shape.
     """
-    from bartleby.config import KNOWN_FEATURES
     from bartleby.templates import make_feature_checker
+    from bartleby.theme_loader import THEME_FEATURES
 
     env = jinja2.Environment(
-        loader=jinja2.FileSystemLoader([str(get_theme_templates_dir())]),
+        loader=jinja2.FileSystemLoader([str(path) for path in material_theme().templates_dirs()]),
         autoescape=True,
     )
-    env.globals["feature"] = make_feature_checker(list(KNOWN_FEATURES))
+    env.globals["feature"] = make_feature_checker(list(THEME_FEATURES))
     context: dict[str, object] = {
         "site": {"title": "Site", "url": "https://example.com", "description": "Desc"},
         "page": page,
         "nav": [],
         "pages": [],
         "build": {"date": "2026-05-23", "bartleby_version": "0.1.0"},
-        "config": {"theme": {"color_mode": {"toggle": True}}},
+        "config": {"theme": {"color_mode": {}}},
         "extra_css": [],
         "extra_js": [],
         "seo": None,
@@ -188,7 +188,9 @@ def test_listing_excludes_drafts(content_dir: Path) -> None:
     ]
     listings = generate_listing_pages(posts, _config(), content_dir)
     listing = next(page for page in listings if page.output_url == "/blog/")
-    titles = {post.title for post in listing.custom_metadata["posts"] if isinstance(post, Page)}
+    posts_value = listing.custom_metadata["posts"]
+    assert isinstance(posts_value, list)
+    titles = {post.title for post in posts_value if isinstance(post, Page)}
     assert "Published" in titles
     assert "Draft" not in titles
 

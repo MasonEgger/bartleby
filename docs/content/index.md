@@ -3,35 +3,44 @@ title: "Bartleby"
 description: "A batteries-included Python static site generator built for humans and agents."
 ---
 
-Bartleby is a Python static site generator that takes Markdown content and turns it into a fast, search-indexed, agent-readable website — with no plugin ecosystem to chase and no JavaScript build chain to maintain. Every feature most documentation sites want — feeds, sitemap, search, taxonomies, syntax highlighting, admonitions, JSON-LD, Open Graph tags, llms.txt — ships in the core.
+Bartleby is a Python static site generator.
+It turns Markdown content into a fast, search-indexed, agent-readable website.
+Bartleby has no plugin ecosystem to chase and no JavaScript build chain to maintain.
+Feeds, sitemap, search, taxonomies, admonitions, JSON-LD, Open Graph tags, and `llms.txt` all ship in the core.
 
 ## Why Bartleby
 
-Most static site generators treat AI agents as an afterthought. Bartleby treats them as a first-class audience alongside human readers. Every page is published as HTML for browsers, Markdown for LLM crawlers, and JSON-LD for structured-data consumers. The site root carries `llms.txt` and `llms-full.txt` so agents can navigate the corpus without crawling page-by-page.
+Bartleby publishes every page as HTML for browsers, Markdown for LLM crawlers, and JSON-LD for structured-data consumers.
+The site root carries `llms.txt`, `llms-full.txt`, `schema.json`, and `content-index.json`, so an agent can learn the shape of the site without crawling it page by page.
+A set of CLI commands gives coding agents the same view from the terminal, and `generate-skill` writes agent skills from your site's real schema.
 
-For human authors, the surface area is small: write Markdown with YAML front matter, configure `bartleby.yml`, and run `bartleby build`. Everything else — the markdown extensions, the theme, the feeds, the search index — is wired up by default.
+For human authors, the surface area is small.
+Write Markdown with YAML front matter, configure `bartleby.yml`, and run `bartleby build`.
+Bartleby wires up the Markdown extensions, the theme, the feeds, and the search index by default.
 
-## What's in the box
+## What's in the Box
 
-- **Markdown rendering** with markwright, pymdownx, and the standard Python-Markdown extensions
-- **Built-in Material-style theme** with Tailwind-friendly CSS, Alpine.js interactivity, and dark mode
-- **Search** via a JSON index lunr.js consumes client-side
-- **Feeds** — RSS 2.0 and Atom 1.0 per content type
-- **Sitemap** + gzipped sitemap + robots.txt with AI crawler directives
-- **SEO meta tags** — Open Graph, Twitter Card, canonical URLs
-- **LLM output** — llms.txt, llms-full.txt, Markdown variants alongside every HTML page
-- **Taxonomies** — global and per-content-type listings
-- **Pagination** for listing pages
-- **Cross-references** — relative `.md` links rewritten to output URLs
-- **Shortcodes** — `[% ... %]` syntax for reusable Jinja2 fragments
-- **Plugin hooks** via `hooks/*.py` — no entry points, no subclassing
-- **CLI** with `new site`, `new post`, `build`, `validate`, `serve`
-- **Dev server** with change-driven rebuilds
+Markdown is rendered with markwright, pymdownx, and the standard Python-Markdown extensions.
+Three themes ship in the package: `scrivener` (the default), `material`, and the shared `base` they both extend.
+A theme is selected by name, path, or package, carries its design tokens, and can be composed with `extends` or copied whole with `bartleby theme eject`.
 
-## Where to go next
+Search runs client-side from a JSON index that lunr.js reads.
+Feeds come in RSS 2.0 and Atom 1.0, per content type and site-wide.
+The build also writes a plain and a gzipped sitemap, a `robots.txt` with AI crawler directives, and Open Graph, Twitter Card, and canonical meta tags on every page.
 
-- [Installation](installation.md) — install Bartleby with `uv` or `pip`
-- [Quickstart](quickstart.md) — build your first site in five minutes
-- [Concepts](concepts/index.md) — how Bartleby thinks about content, URLs, templates, and plugins
-- [Guides](guides/index.md) — task-oriented walkthroughs for common customizations
-- [Reference](reference/index.md) — exhaustive coverage of config, CLI, and hook APIs
+The agent surface is a Markdown variant of every page, `llms.txt`, `llms-full.txt`, JSON-LD, `schema.json`, and `content-index.json`.
+
+Taxonomies get global and per-content-type listings, and listing pages paginate.
+Relative `.md` links are rewritten to their output URLs.
+Shortcodes use `[% ... %]` syntax for reusable Jinja2 fragments, and plugin hooks load from `hooks/*.py` or from installed packages.
+
+The CLI covers `new`, `build`, `validate`, `lint`, `serve`, `render`, `schema`, `content`, `export`, `generate-skill`, and `theme`.
+The dev server rebuilds when a file changes.
+
+## Where to Go Next
+
+- Install Bartleby with `uv` or `pip` in [Installation](installation.md).
+- Build your first site in five minutes with the [Quickstart](quickstart.md).
+- Read [Concepts](concepts/index.md) for how Bartleby thinks about content, URLs, templates, and plugins.
+- Follow the [Guides](guides/index.md) for task-oriented walkthroughs of common customizations.
+- Look things up in the [Reference](reference/index.md) pages for config, CLI, and hook APIs.

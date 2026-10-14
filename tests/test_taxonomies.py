@@ -25,8 +25,10 @@ from bartleby.taxonomies import (
     TaxonomyTerm,
     build_taxonomies,
     generate_taxonomy_pages,
+    taxonomy_links_for,
+    term_url,
 )
-from bartleby.theme import get_theme_templates_dir
+from tests.theme_helpers import material_theme
 
 
 def _render(page: Page, template_name: str) -> str:
@@ -35,21 +37,21 @@ def _render(page: Page, template_name: str) -> str:
     Returns the HTML so tests can grep the actual output rather than only checking
     the virtual :class:`Page` dataclass shape.
     """
-    from bartleby.config import KNOWN_FEATURES
     from bartleby.templates import make_feature_checker
+    from bartleby.theme_loader import THEME_FEATURES
 
     env = jinja2.Environment(
-        loader=jinja2.FileSystemLoader([str(get_theme_templates_dir())]),
+        loader=jinja2.FileSystemLoader([str(path) for path in material_theme().templates_dirs()]),
         autoescape=True,
     )
-    env.globals["feature"] = make_feature_checker(list(KNOWN_FEATURES))
+    env.globals["feature"] = make_feature_checker(list(THEME_FEATURES))
     context: dict[str, object] = {
         "site": {"title": "Site", "url": "https://example.com", "description": "Desc"},
         "page": page,
         "nav": [],
         "pages": [],
         "build": {"date": "2026-05-23", "bartleby_version": "0.1.0"},
-        "config": {"theme": {"color_mode": {"toggle": True}}},
+        "config": {"theme": {"color_mode": {}}},
         "extra_css": [],
         "extra_js": [],
         "seo": None,
@@ -257,3 +259,100 @@ def test_rendered_taxonomy_index_html_shows_taxonomy_title() -> None:
 
     html = _render(index_page, "taxonomy_index.html")
     assert "Tags" in html
+
+
+def test_scoped_taxonomy_pages_are_titled_by_their_content_type() -> None:
+    """Global and per-content-type pages at the same taxonomy get distinct titles.
+
+    The scoped pages are intended (one opt-in yields both scopes), so they must
+    not read as duplicates of the global ones in search results, tabs, or feeds.
+    """
+    page = _page(source="blog/posts/a.md", title="A", tags=["python"])
+    config = _config(blog_taxonomies=["tags"])
+    generated = generate_taxonomy_pages(build_taxonomies([page], config), config)
+    titles = {generated_page.output_url: generated_page.title for generated_page in generated}
+    assert titles["/tags/"] == "Tags"
+    assert titles["/blog/tags/"] == "Tags in Blog"
+    assert titles["/tags/python/"] == "Tags: python"
+    assert titles["/blog/tags/python/"] == "Tags in Blog: python"
+    assert len(set(titles.values())) == len(titles)
+
+
+def test_rendered_scoped_term_page_crumb_names_its_scope() -> None:
+    """The back link on a scoped term page says which scope it returns to."""
+    page = _page(source="blog/posts/a.md", title="A", tags=["python"])
+    page.output_url = "/blog/posts/a/"
+    config = _config(blog_taxonomies=["tags"])
+    generated = generate_taxonomy_pages(build_taxonomies([page], config), config)
+    scoped = next(item for item in generated if item.output_url == "/blog/tags/python/")
+    html = _render(scoped, "taxonomy.html")
+    assert "All tags in blog" in html
+
+
+def _config_with_slug_format(slug_format: str) -> BartlebyConfig:
+    config = _config(blog_taxonomies=["tags"])
+    config.taxonomies["tags"] = TaxonomyConfig(name="tags", slug_format=slug_format)
+    return config
+
+
+def test_term_url_matches_generated_page_urls_for_both_scopes() -> None:
+    """``term_url`` and the page generator share one URL scheme, so links cannot drift."""
+    page = _page(source="blog/posts/a.md", title="A", tags=["Hello World"])
+    config = _config_with_slug_format("t-{slug}")
+    result = build_taxonomies([page], config)
+    urls = {generated.output_url for generated in generate_taxonomy_pages(result, config)}
+    assert term_url("tags", "t-hello-world") in urls
+    assert term_url("tags", "t-hello-world", "blog") in urls
+    assert term_url("tags", "t-hello-world", "blog") == "/blog/tags/t-hello-world/"
+
+
+def test_taxonomy_links_point_at_the_pages_content_type_scope() -> None:
+    """A post links to its own content type's term page, where its siblings are listed."""
+    page = _page(source="blog/posts/a.md", title="A", tags=["Hello World", "python"])
+    config = _config_with_slug_format("t-{slug}")
+    result = build_taxonomies([page], config)
+    links = taxonomy_links_for(page, result.global_taxonomies, result.content_type_taxonomies)
+    assert [(link.term, link.url) for link in links["tags"]] == [
+        ("Hello World", "/blog/tags/t-hello-world/"),
+        ("python", "/blog/tags/t-python/"),
+    ]
+    urls = {generated.output_url for generated in generate_taxonomy_pages(result, config)}
+    assert all(link.url in urls for link in links["tags"])
+
+
+def test_taxonomy_links_fall_back_to_global_without_a_content_type() -> None:
+    """A page outside any content type links to the global term page when the term exists."""
+    tagged = _page(source="blog/posts/a.md", title="A", tags=["python"])
+    config = _config_with_slug_format("{slug}")
+    result = build_taxonomies([tagged], config)
+    loose = _page(source="about.md", title="About", tags=["python"])
+    loose.content_type_name = None
+    links = taxonomy_links_for(loose, result.global_taxonomies, result.content_type_taxonomies)
+    assert [link.url for link in links["tags"]] == ["/tags/python/"]
+
+
+def test_taxonomy_links_have_no_url_for_unlisted_terms() -> None:
+    """A value in a taxonomy the page's type did not opt into stays as plain text."""
+    page = _page(source="blog/posts/a.md", title="A", tags=["python"], categories=["news"])
+    config = _config(blog_taxonomies=["tags"])
+    result = build_taxonomies([page], config)
+    links = taxonomy_links_for(page, result.global_taxonomies, result.content_type_taxonomies)
+    assert [(link.term, link.url) for link in links["categories"]] == [("news", None)]
+
+
+def test_taxonomy_opted_in_only_by_a_disabled_type_is_not_collected() -> None:
+    """A disabled type's opt-in creates no taxonomy data, hence no generated pages."""
+    config = _config(blog_taxonomies=["tags"])
+    config.content_types["tutorials"] = ContentTypeConfig(
+        name="tutorials",
+        path="tutorials/posts",
+        pagination=PaginationConfig(),
+        taxonomies=["categories"],
+        enabled=False,
+    )
+
+    result = build_taxonomies([], config)
+
+    assert set(result.global_taxonomies) == {"tags"}
+    urls = {page.output_url for page in generate_taxonomy_pages(result, config)}
+    assert not any(url.startswith("/categories/") for url in urls)

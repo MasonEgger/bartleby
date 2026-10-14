@@ -1,4 +1,4 @@
-# ABOUTME: Tests for content query — `bartleby content list` and `content get`.
+# ABOUTME: Tests for content query: `bartleby content list` and `content get`.
 # Covers curated-field listing, type filtering, date sorting, draft exclusion, and single-page get.
 
 from __future__ import annotations
@@ -171,7 +171,13 @@ def test_list_content_filter_by_type() -> None:
 
 def test_list_content_sorted_by_date_descending() -> None:
     result = list_content(_pages(), _config(), sort="date")
-    dates = [entry["date"] for entry in result.content if entry["date"] is not None]
+    dates: list[str] = []
+    for entry in result.content:
+        date_value = entry["date"]
+        if date_value is None:
+            continue
+        assert isinstance(date_value, str)
+        dates.append(date_value)
     assert dates == sorted(dates, reverse=True)
     assert result.content[0]["title"] == "New Post"
 

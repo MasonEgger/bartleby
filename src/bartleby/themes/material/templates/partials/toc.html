@@ -1,0 +1,11 @@
+{# Table of contents from page.toc (Markdown heading tokens: id, name, nested children). #}
+{# Plain anchor links work with JS off; Alpine marks the heading currently in view. #}
+{% from "partials/toc_macros.html" import entries, tracker %}
+{% if page.toc %}
+<aside class="toc-sidebar"
+       {{ tracker() }}>
+  <nav class="toc-nav" aria-label="Table of contents">
+    {{ entries(page.toc) }}
+  </nav>
+</aside>
+{% endif %}

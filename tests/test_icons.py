@@ -3,12 +3,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 from bartleby.icons import get_icon_path, tree_shake_icons
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def test_resolve_material_icon() -> None:
@@ -99,3 +96,15 @@ def test_all_packs_enabled_by_default_can_be_listed() -> None:
     assert get_icon_path("fontawesome-brands-github", enabled) is not None
     assert get_icon_path("octicons-heart-fill-24", enabled) is not None
     assert get_icon_path("simple-python", enabled) is not None
+
+
+def test_icon_lookup_searches_chain_leaf_first() -> None:
+    """The child's icon wins on collision; parent-only icons still resolve."""
+    themes = Path(__file__).parent / "fixtures" / "themes"
+    icons_dirs = [themes / "child" / "icons", themes / "parent" / "icons"]
+
+    shared = get_icon_path("material-shared-icon", {"material": True}, icons_dirs)
+    parent_only = get_icon_path("material-parent-icon", {"material": True}, icons_dirs)
+
+    assert shared == themes / "child" / "icons" / "material" / "shared-icon.svg"
+    assert parent_only == themes / "parent" / "icons" / "material" / "parent-icon.svg"

@@ -1,0 +1,14 @@
+{# Scrivener back-to-top: a real link to "#", so it works with JS off. Alpine adds the scroll-threshold reveal and smooth scroll. #}
+{# No x-cloak here: the global x-cloak rule would hide the link when JS is off. #}
+<a
+  href="#"
+  class="back-to-top"
+  aria-label="Back to top"
+  x-data="{ show: false }"
+  x-init="show = window.scrollY > 400"
+  x-on:scroll.window.passive="show = window.scrollY > 400"
+  x-show="show"
+  x-transition.opacity
+  x-on:click.prevent="window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })">
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" focusable="false"><path d="M8 14V3M3.5 7.5 8 3l4.5 4.5"/></svg>
+</a>

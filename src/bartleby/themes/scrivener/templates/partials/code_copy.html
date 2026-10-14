@@ -1,0 +1,43 @@
+{# Scrivener code copy: adds a Copy button to each code block. CSS keeps it visible on touch screens (hover: none). #}
+<script data-code-copy>
+  document.addEventListener("DOMContentLoaded", function () {
+    // Without the async clipboard API (plain http, old browsers) a button would do nothing, so add none.
+    if (!navigator.clipboard) {
+      return;
+    }
+    document.querySelectorAll("pre > code").forEach(function (codeBlock) {
+      var block = codeBlock.parentElement;
+      if (block.querySelector(".code-copy-button")) {
+        return;
+      }
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "code-copy-button";
+      button.setAttribute("aria-label", "Copy code");
+      button.textContent = "Copy";
+      var announcer = document.createElement("span");
+      announcer.className = "sr-only";
+      announcer.setAttribute("role", "status");
+      var resetTimer = null;
+      function settle(label, message, copied) {
+        button.textContent = label;
+        button.classList.toggle("is-copied", copied);
+        announcer.textContent = message;
+        clearTimeout(resetTimer);
+        resetTimer = setTimeout(function () {
+          button.textContent = "Copy";
+          button.classList.remove("is-copied");
+          announcer.textContent = "";
+        }, 2000);
+      }
+      button.addEventListener("click", function () {
+        navigator.clipboard.writeText(codeBlock.textContent || "").then(
+          function () { settle("Copied", "Code copied to clipboard", true); },
+          function () { settle("Copy failed", "Could not copy the code", false); }
+        );
+      });
+      block.appendChild(button);
+      block.appendChild(announcer);
+    });
+  });
+</script>

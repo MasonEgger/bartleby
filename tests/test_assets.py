@@ -7,7 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from bartleby.assets import AssetCollisionError, copy_colocated_assets, copy_static_files
+from bartleby.assets import (
+    AssetCollisionError,
+    copy_colocated_assets,
+    copy_static_files,
+    copy_theme_static,
+)
 from bartleby.content import ColocatedAsset, Page
 
 
@@ -97,7 +102,8 @@ def test_empty_static_dir_ok(tmp_path: Path) -> None:
     """A missing ``static/`` directory is not an error."""
     output = tmp_path / "site"
     output.mkdir()
-    copy_static_files(tmp_path / "missing", output)  # No exception expected.
+    copy_static_files(tmp_path / "missing", output)
+    assert list(output.iterdir()) == []
 
 
 def test_two_pages_sharing_directory_with_asset_raises(tmp_path: Path) -> None:
@@ -161,7 +167,8 @@ def test_two_pages_sharing_directory_without_asset_is_legal(tmp_path: Path) -> N
     output = tmp_path / "site"
     output.mkdir()
 
-    copy_colocated_assets([], [page_a, page_b], content_dir, output)  # No exception expected.
+    copy_colocated_assets([], [page_a, page_b], content_dir, output)
+    assert list(output.rglob("*")) == []
 
 
 def test_orphan_asset_lands_at_source_path(tmp_path: Path) -> None:
@@ -178,3 +185,17 @@ def test_orphan_asset_lands_at_source_path(tmp_path: Path) -> None:
     output.mkdir()
     copy_colocated_assets([asset], [], content_dir, output)
     assert (output / "loose" / "unused.png").exists()
+
+
+def test_copy_theme_static_child_wins_over_parent(tmp_path: Path) -> None:
+    """A leaf-first chain yields both layers' unique files and the child's shared file."""
+    themes = Path(__file__).parent / "fixtures" / "themes"
+    output = tmp_path / "site"
+    output.mkdir()
+
+    count = copy_theme_static([themes / "child" / "static", themes / "parent" / "static"], output)
+
+    assert (output / "parent.txt").read_text(encoding="utf-8") == "parent only\n"
+    assert (output / "child.txt").read_text(encoding="utf-8") == "child only\n"
+    assert (output / "shared.txt").read_text(encoding="utf-8") == "child version\n"
+    assert count == 3

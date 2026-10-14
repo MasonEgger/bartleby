@@ -74,3 +74,54 @@ def test_author_dataclass_key_field() -> None:
     authors = load_authors(FIXTURES / "valid.yml")
     assert isinstance(authors["mason"], Author)
     assert authors["mason"].key == "mason"
+
+
+# --- error-message contract: file + author id + fix hint -------------------
+
+
+def test_missing_name_names_file_author_id_and_a_fix(tmp_path: Path) -> None:
+    """An author without ``name`` names the authors file, the id, and what to add."""
+    authors_path = tmp_path / ".authors.yml"
+    authors_path.write_text("authors:\n  mason:\n    url: https://x.test\n", encoding="utf-8")
+    with pytest.raises(AuthorError) as exc:
+        load_authors(authors_path)
+    message = str(exc.value)
+    assert ".authors.yml" in message
+    assert "mason" in message
+    assert "name" in message
+    assert "fix:" in message
+
+
+def test_duplicate_author_id_names_file_and_id(tmp_path: Path) -> None:
+    """Two entries with one id are an error; YAML would silently keep the last."""
+    authors_path = tmp_path / ".authors.yml"
+    authors_path.write_text(
+        "authors:\n  mason:\n    name: A\n  mason:\n    name: B\n", encoding="utf-8"
+    )
+    with pytest.raises(AuthorError) as exc:
+        load_authors(authors_path)
+    message = str(exc.value)
+    assert ".authors.yml" in message
+    assert "mason" in message
+    assert "duplicate" in message
+
+
+def test_invalid_yaml_is_an_author_error_naming_the_file(tmp_path: Path) -> None:
+    """A YAML syntax error in the authors file surfaces as AuthorError, not a traceback."""
+    authors_path = tmp_path / ".authors.yml"
+    authors_path.write_text("authors: [unclosed\n", encoding="utf-8")
+    with pytest.raises(AuthorError) as exc:
+        load_authors(authors_path)
+    assert ".authors.yml" in str(exc.value)
+
+
+def test_resolve_unknown_key_names_file_and_lists_known_ids() -> None:
+    """An unknown id names the authors file, the id, the known ids, and a fix."""
+    authors = load_authors(FIXTURES / "valid.yml")
+    with pytest.raises(AuthorError) as exc:
+        resolve_authors(["nobody"], authors, source=Path(".authors.yml"))
+    message = str(exc.value)
+    assert ".authors.yml" in message
+    assert "nobody" in message
+    assert "mason" in message
+    assert "fix:" in message

@@ -8,7 +8,7 @@ lint:
     uv run ruff check src/ tests/ && uv run ruff format --check src/ tests/
 
 typecheck:
-    uv run mypy src/
+    uv run mypy src/ tests/
 
 test:
     uv run pytest
@@ -22,14 +22,12 @@ smoke:
 format:
     uv run ruff format src/ tests/
 
-# Package-build step: compile the shipped theme CSS from the bundled templates
-# plus the curated safelist using the real Tailwind standalone CLI. The wheel
-# ships the resulting static/css/main.css; end users never run this. Requires a
-# `tailwindcss` binary on PATH (the same pinned version bartleby downloads on
-# demand for `bartleby theme compile`).
-theme-css:
-    tailwindcss \
-      --content 'src/bartleby/theme/templates/**/*.html' \
-      --content 'src/bartleby/theme/safelist.txt' \
-      --output src/bartleby/theme/static/css/main.css \
-      --minify
+# Package-build step: compile each bundled theme's shipped CSS with the real
+# Tailwind standalone CLI. bartleby.theme_compile owns the content globs (the
+# same ones a user site compiles with), so templates never need a hand-kept
+# safelist; each src/bartleby/themes/<name>/ with a tailwind.css is compiled
+# into its own static/css/main.css. The wheel ships the resulting files; end
+# users never run this. Needs a `tailwindcss` binary on PATH or in the bartleby
+# cache (pass `--binary PATH` through `just theme-css --binary PATH`).
+theme-css *args:
+    uv run python -m bartleby.theme_compile {{args}}

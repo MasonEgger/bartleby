@@ -1,0 +1,16 @@
+site:
+  title: ${title}
+  url: "https://example.com"
+
+theme:
+  features:
+    - search
+    - search.highlight
+    - nav.sidebar
+    - nav.back-to-top
+    - content.code.copy
+    - color-mode.toggle
+
+nav:
+  - Home: index.md
+  - Feature Tour: tour/index.md

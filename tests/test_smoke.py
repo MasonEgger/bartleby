@@ -4,15 +4,14 @@
 from __future__ import annotations
 
 import json
-import threading
 import urllib.request
 from typing import TYPE_CHECKING
 
 from bartleby.cli import main
-from bartleby.server import RELOAD_SNIPPET, DevServer
+from bartleby.server import RELOAD_WS_PATH, DevServer
+from tests.server_helpers import start_running_server, stop_running_server
 
 if TYPE_CHECKING:
-    import socketserver
     from pathlib import Path
 
     import pytest
@@ -48,7 +47,7 @@ def test_scaffold_post_build_renders_title_byline_and_listing(
     post is linked from the blog listing page.
     """
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
 
     project = tmp_path / "mysite"
     monkeypatch.chdir(project)
@@ -77,7 +76,7 @@ def test_scaffold_build_drops_draft_posts_from_listing(
 ) -> None:
     """A scaffolded draft post (the default) is absent from the built listing."""
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
 
     project = tmp_path / "mysite"
     monkeypatch.chdir(project)
@@ -139,27 +138,6 @@ def _extract_jsonld(html: str) -> dict[str, object]:
     return payload
 
 
-def _start_running_server(
-    server: DevServer,
-) -> tuple[threading.Thread, int, socketserver.TCPServer]:
-    """Start ``server.run`` on a daemon thread and block until it is listening.
-
-    :returns: The worker thread, the bound ephemeral port, and the live server.
-    """
-    bound: dict[str, object] = {}
-    listening = threading.Event()
-
-    def on_ready(httpd: socketserver.TCPServer) -> None:
-        bound["port"] = httpd.server_address[1]
-        bound["httpd"] = httpd
-        listening.set()
-
-    worker = threading.Thread(target=lambda: server.run(ready=on_ready), daemon=True)
-    worker.start()
-    assert listening.wait(timeout=10), "server never started listening"
-    return worker, bound["port"], bound["httpd"]  # type: ignore[return-value]
-
-
 def test_scaffold_build_and_serve_compose_output_dir_draft_and_quoted_title(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -178,7 +156,7 @@ def test_scaffold_build_and_serve_compose_output_dir_draft_and_quoted_title(
     to the target's output URL in the rendered HTML.
     """
     monkeypatch.chdir(tmp_path)
-    main(["new", "site", "mysite"])
+    main(["new", "site", "mysite", "--blog"])
 
     project = tmp_path / "mysite"
     config_path = project / "bartleby.yml"
@@ -230,15 +208,13 @@ def test_scaffold_build_and_serve_compose_output_dir_draft_and_quoted_title(
 
     # R4 + R5 groundwork: DevServer.run() serves the configured output_dir
     # and carries the live-reload snippet (serve mode only).
-    server = DevServer(config_path, host="127.0.0.1", port=0, dirty=False)
-    worker, port, httpd = _start_running_server(server)
+    server = DevServer(config_path, host="127.0.0.1", port=0)
+    worker, port = start_running_server(server)
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=10) as response:
             served_index = response.read().decode("utf-8")
     finally:
-        httpd.shutdown()
-        worker.join(timeout=10)
-    assert not worker.is_alive()
+        stop_running_server(server, worker)
 
     assert (output_dir / "index.html").exists()
-    assert RELOAD_SNIPPET in served_index
+    assert RELOAD_WS_PATH in served_index

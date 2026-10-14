@@ -1,8 +1,8 @@
 ---
-title: "Override a single theme template"
-description: "Replace the bundled header partial without forking the whole theme."
+title: "Override a Single Theme Template"
+description: "Replace one template or partial from the active theme without forking the theme."
 date: 2026-06-02
-audience: existing-user
+audience: theme-author
 tags:
   - theme
   - templates
@@ -10,13 +10,32 @@ authors:
   - mason
 ---
 
-The built-in theme ships with a `partials/header.html` that renders the site title, primary navigation, and (when enabled) a dark-mode toggle. You can replace it with your own without touching anything else in the theme.
+You can replace any theme template, including the header, from your project without copying the rest of the theme.
+This guide replaces the `partials/header.html` partial that the default `scrivener` theme provides.
 
 <!-- more -->
 
-## Step 1: Create the override
+## Step 1: Find the Template to Replace
 
-Drop a file at `overrides/partials/header.html` in your project root:
+Run `bartleby theme inspect` and look for the file you want to change:
+
+```bash
+bartleby theme inspect
+```
+
+Each line names a theme file and the layer that provides it.
+For the header, the line is:
+
+```
+templates/partials/header.html  (scrivener)
+```
+
+The path after `templates/` is the name you override.
+Here it is `partials/header.html`.
+
+## Step 2: Create the Override
+
+Create the same path under `overrides/` in your project root:
 
 ```
 mysite/
@@ -27,9 +46,10 @@ mysite/
         └── header.html
 ```
 
-## Step 2: Write the replacement
+## Step 3: Write the Replacement
 
-Bartleby's template lookup checks `overrides/` before the bundled theme. Any template you put under `overrides/` with a matching path wins. Your replacement gets the same template context — `site`, `page`, `nav`, `config`, etc.
+Bartleby searches `overrides/` before the theme, so your file wins.
+It receives the same template context as the original: `site`, `page`, `nav`, `config`, and the rest.
 
 ```html
 <header class="my-custom-header">
@@ -44,17 +64,22 @@ Bartleby's template lookup checks `overrides/` before the bundled theme. Any tem
 </header>
 ```
 
-## Step 3: Build
+This header omits the search trigger and the color-mode toggle that the `scrivener` header renders.
+To keep them, include `partials/search_trigger.html` when `feature('search')` is on, and copy the toggle button from the original header.
+
+## Step 4: Build
 
 ```bash
 bartleby build
 ```
 
-Every page in the rendered output now uses your header. No other theme files changed.
+Every page now uses your header, and no other theme file changed.
+Run `bartleby theme inspect` again to confirm.
+The original line now ends with `[shadowed by overrides/partials/header.html]`.
 
-## When to use overrides vs. templates
+## Next Steps
 
-- **`overrides/`** is for replacing theme chrome (header, footer, base, SEO partials). It mirrors the bundled theme's file layout.
-- **`templates/`** is for content-type layouts (`templates/blog/post.html`) and site-wide defaults (`templates/defaults/page.html`).
-
-Both win over the bundled theme; the difference is intent. See [Templates and the lookup cascade](../../concepts/templates.md) for the full search order.
+- To change many files, run `bartleby theme eject` to copy the whole theme into your project and edit it there.
+  The [CLI reference](../../reference/pages/cli.md#bartleby-theme) describes the command.
+- To decide between `overrides/` and `templates/`, read [Customization seams](../../concepts/customization-seams.md).
+- For the full search order, read [Templates and the lookup cascade](../../concepts/templates.md).

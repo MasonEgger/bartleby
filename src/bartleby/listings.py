@@ -48,7 +48,7 @@ def generate_listing_pages(
         given (standalone calls, tests), one renderer is built here and
         reused across every content type, so a single call to this
         function never creates more than one renderer.
-    :returns: List of virtual listing pages — one per listing URL (multiple
+    :returns: List of virtual listing pages, one per listing URL (multiple
         when pagination is enabled).
     """
     active_renderer = renderer if renderer is not None else create_markdown_renderer(config)
@@ -61,7 +61,7 @@ def generate_listing_pages(
             continue
         pages_by_content_type.setdefault(page.content_type_name, []).append(page)
 
-    for content_type_name, content_type in config.content_types.items():
+    for content_type_name, content_type in config.enabled_content_types().items():
         ordered = _sort_posts_newest_first(pages_by_content_type.get(content_type_name, []))
         intro_content = _read_intro_content(content_dir, content_type_name, active_renderer)
         base_url = "/" + content_type_name + "/"

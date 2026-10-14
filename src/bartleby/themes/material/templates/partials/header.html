@@ -1,0 +1,14 @@
+{# Material header: primary-color bar with the title, top-level links, and the color-mode toggle. #}
+<header class="site-header" x-data="{ menuOpen: false }">
+  <div class="header-inner">
+    <a href="/" class="site-title">{% include "partials/logo.html" %}{{ site.title }}</a>
+    {% set tabs = feature is defined and feature('nav.tabs') %}
+    {% if not tabs %}{% include "partials/nav.html" %}{% endif %}
+    {# The trigger lives here; the modal comes from base.html. Dropping this include leaves the "/" and Ctrl/Cmd+K shortcuts working. #}
+    {% if feature is defined and feature('search') %}{% include "partials/search_trigger.html" %}{% endif %}
+    {% if feature is defined and feature('color-mode.toggle') %}
+    {% include "partials/color_mode_toggle.html" %}
+    {% endif %}
+  </div>
+</header>
+{% if tabs %}{% include "partials/nav.html" %}{% endif %}

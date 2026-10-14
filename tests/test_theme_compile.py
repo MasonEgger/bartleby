@@ -1,13 +1,16 @@
-# ABOUTME: Tests for the hybrid Tailwind pipeline — binary resolver and CSS preference.
+# ABOUTME: Tests for the hybrid Tailwind pipeline: binary resolver and CSS preference.
 # Covers PATH/cache/download resolution, checksum-abort, and compiled-CSS preference.
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import shutil
 import stat
-from typing import TYPE_CHECKING
+import subprocess
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
@@ -17,12 +20,23 @@ from bartleby.theme_compile import (
     ThemeCompileError,
     ThemeCompileResult,
     active_theme_css,
+    compile_package_css,
+    compile_theme_css,
+    css_import_line,
+    default_cache_dir,
+    main,
+    package_content_globs,
     resolve_tailwind_binary,
     tailwind_asset_name,
 )
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from bartleby.theme_loader import (
+    ResolvedTheme,
+    ThemeLayer,
+    flatten_chain,
+    load_manifest,
+    resolve_theme,
+)
+from bartleby.themes import BUNDLED_THEME_NAMES, bundled_theme_root
 
 
 def _make_executable(path: Path) -> None:
@@ -256,3 +270,348 @@ def test_result_json_shape() -> None:
         "classes_scanned": 1842,
     }
     assert result.exit_code == 0
+
+
+# --- compile_theme_css: chain-aware sources and token emission -----------------
+
+THEMES = Path(__file__).parent / "fixtures" / "themes"
+
+
+class _RecordedRun:
+    """Stand-in for ``subprocess.run`` that records the command and writes the output."""
+
+    def __init__(self) -> None:
+        self.command: list[str] = []
+        self.kwargs: dict[str, object] = {}
+
+    def __call__(self, command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        self.command = command
+        self.kwargs = kwargs
+        output = Path(command[command.index("--output") + 1])
+        output.write_text(".a{color:red}", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+
+def _compile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    theme: ResolvedTheme,
+    tokens: dict[str, str] | None = None,
+) -> tuple[Path, _RecordedRun]:
+    """Run ``compile_theme_css`` against a fake binary and a recording ``subprocess.run``."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _make_executable(bin_dir / "tailwindcss")
+    monkeypatch.setenv("PATH", str(bin_dir))
+    recorder = _RecordedRun()
+    monkeypatch.setattr(subprocess, "run", recorder)
+    project_dir = tmp_path / "project"
+    project_dir.mkdir(exist_ok=True)
+    compile_theme_css(project_dir, theme, tokens or {}, cache_dir=tmp_path / "cache")
+    return project_dir, recorder
+
+
+def _arg(command: list[str], flag: str) -> str:
+    return command[command.index(flag) + 1]
+
+
+def test_compile_falls_back_to_parent_sources_when_leaf_has_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A child without tailwind sources uses the parent's --config and --input."""
+    theme = resolve_theme(project_dir=tmp_path, path=str(THEMES / "child"))
+
+    project_dir, recorder = _compile(tmp_path, monkeypatch, theme)
+
+    assert _arg(recorder.command, "--config") == str(THEMES / "parent" / "tailwind.config.js")
+    wrapper = project_dir / ".bartleby" / "input.css"
+    assert _arg(recorder.command, "--input") == str(wrapper)
+    assert f'@import "{THEMES / "parent" / "tailwind.css"}";' in wrapper.read_text(
+        encoding="utf-8"
+    )
+    assert "input" not in recorder.kwargs
+
+
+def test_compile_prefers_leaf_sources(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The leaf layer's tailwind.css and config win over the parent's."""
+    leaf = tmp_path / "leaf"
+    leaf.mkdir()
+    (leaf / "theme.yml").write_text(
+        f"name: leaf\nextends: {THEMES / 'parent'}\n", encoding="utf-8"
+    )
+    (leaf / "tailwind.css").write_text("@tailwind utilities;", encoding="utf-8")
+    (leaf / "tailwind.config.js").write_text("module.exports = {};", encoding="utf-8")
+    layers = [
+        ThemeLayer(name="leaf", root=leaf, manifest=load_manifest(leaf)),
+        *resolve_theme(project_dir=tmp_path, path=str(THEMES / "parent")).chain,
+    ]
+
+    project_dir, recorder = _compile(tmp_path, monkeypatch, ResolvedTheme(chain=layers))
+
+    assert _arg(recorder.command, "--config") == str(leaf / "tailwind.config.js")
+    wrapper = project_dir / ".bartleby" / "input.css"
+    assert _arg(recorder.command, "--input") == str(wrapper)
+    assert f'@import "{leaf / "tailwind.css"}";' in wrapper.read_text(encoding="utf-8")
+    assert str(THEMES / "parent" / "tailwind.css") not in wrapper.read_text(encoding="utf-8")
+
+
+def test_compile_wrapper_imports_tokens_then_theme_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A theme shipping tailwind.css is wrapped so tokens.css is imported before it."""
+    theme = resolve_theme(project_dir=tmp_path, path=str(THEMES / "parent"))
+
+    project_dir, recorder = _compile(tmp_path, monkeypatch, theme, {"color.primary": "#123456"})
+
+    wrapper = project_dir / ".bartleby" / "input.css"
+    assert _arg(recorder.command, "--input") != str(THEMES / "parent" / "tailwind.css")
+    assert wrapper.read_text(encoding="utf-8") == (
+        f'@import "tokens.css";\n@import "{THEMES / "parent" / "tailwind.css"}";\n'
+    )
+    assert wrapper.parent == (project_dir / ".bartleby" / "tokens.css").parent
+
+
+def test_css_import_line_uses_forward_slashes_for_windows_paths() -> None:
+    """A Windows path becomes a forward-slash import so CSS never reads \\b as an escape."""
+    line = css_import_line(PureWindowsPath("C:\\Users\\me\\.bartleby\\theme\\tailwind.css"))
+
+    assert line == '@import "C:/Users/me/.bartleby/theme/tailwind.css";\n'
+    assert "\\" not in line
+
+
+def test_css_import_line_rejects_double_quote_in_path() -> None:
+    """A double quote would end the CSS string early, so the path is refused by name."""
+    with pytest.raises(ThemeCompileError, match='we"ird'):
+        css_import_line(Path('/themes/we"ird/tailwind.css'))
+
+
+def test_compile_content_covers_every_layer_and_project_dirs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--content lists each layer's templates glob plus the project override dirs."""
+    theme = resolve_theme(project_dir=tmp_path, path=str(THEMES / "child"))
+    project_dir = tmp_path / "project"
+    (project_dir / "overrides").mkdir(parents=True)
+
+    _, recorder = _compile(tmp_path, monkeypatch, theme)
+
+    globs = _arg(recorder.command, "--content").split(",")
+    assert str(THEMES / "child" / "templates" / "**" / "*.html") in globs
+    assert str(THEMES / "parent" / "templates" / "**" / "*.html") in globs
+    assert str(project_dir / "overrides" / "**" / "*.html") in globs
+
+
+def test_compile_writes_tokens_css_and_input_imports_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """theme.tokens become --bb-* properties in .bartleby/tokens.css."""
+    theme = ResolvedTheme(chain=[])
+
+    project_dir, recorder = _compile(
+        tmp_path, monkeypatch, theme, {"color.primary": "#123456", "font.body": "serif"}
+    )
+
+    tokens_css = (project_dir / ".bartleby" / "tokens.css").read_text(encoding="utf-8")
+    assert "--bb-color-primary: #123456;" in tokens_css
+    assert "--bb-font-body: serif;" in tokens_css
+    assert tokens_css.lstrip().startswith(":root")
+    generated = Path(_arg(recorder.command, "--input"))
+    assert generated.read_text(encoding="utf-8").startswith('@import "tokens.css";')
+    assert generated.parent == project_dir / ".bartleby"
+
+
+def test_compile_empty_tokens_still_writes_tokens_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An empty tokens map leaves an empty-but-present tokens.css."""
+    project_dir, _ = _compile(tmp_path, monkeypatch, ResolvedTheme(chain=[]))
+
+    tokens_path = project_dir / ".bartleby" / "tokens.css"
+    assert tokens_path.is_file()
+    assert tokens_path.read_text(encoding="utf-8") == ""
+
+
+def test_compile_fallback_input_has_directives_and_no_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With no tailwind.css in any layer, a generated input is used and --config is omitted."""
+    project_dir, recorder = _compile(
+        tmp_path, monkeypatch, resolve_theme(project_dir=tmp_path, name="base")
+    )
+
+    generated = project_dir / ".bartleby" / "input.css"
+    assert _arg(recorder.command, "--input") == str(generated)
+    assert "--config" not in recorder.command
+    assert generated.read_text(encoding="utf-8") == (
+        '@import "tokens.css";\n@tailwind base;\n@tailwind components;\n@tailwind utilities;\n'
+    )
+    assert recorder.kwargs.get("input") is None
+
+
+def test_active_theme_css_stale_when_project_local_theme_template_is_newer(
+    tmp_path: Path,
+) -> None:
+    """Editing a template in a project-local theme layer invalidates the compiled CSS."""
+    project_dir = tmp_path / "project"
+    theme_dir = project_dir / "mytheme"
+    (theme_dir / "templates").mkdir(parents=True)
+    (theme_dir / "theme.yml").write_text("name: mytheme\n", encoding="utf-8")
+    theme = resolve_theme(project_dir=project_dir, path="mytheme")
+    template = theme_dir / "templates" / "page.html"
+    template.write_text("<p></p>", encoding="utf-8")
+    compiled = project_dir / ".bartleby" / "theme.css"
+    compiled.parent.mkdir(parents=True)
+    compiled.write_text("/* compiled */", encoding="utf-8")
+    assert active_theme_css(project_dir, theme) == compiled
+
+    later = compiled.stat().st_mtime + 100
+    os.utime(template, (later, later))
+
+    assert active_theme_css(project_dir, theme) is None
+
+
+def test_active_theme_css_ignores_layers_outside_the_project(tmp_path: Path) -> None:
+    """A bundled or package layer outside the project does not trigger staleness."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir(exist_ok=True)
+    theme = resolve_theme(project_dir=project_dir, path=str(THEMES / "parent"))
+    compiled = project_dir / ".bartleby" / "theme.css"
+    compiled.parent.mkdir()
+    compiled.write_text("/* compiled */", encoding="utf-8")
+    old = compiled.stat().st_mtime - 1000
+    os.utime(compiled, (old, old))
+
+    assert active_theme_css(project_dir, theme) == compiled
+
+
+def test_compile_with_real_tailwind_binary(tmp_path: Path) -> None:
+    """Compile a fixture theme with a real Tailwind binary (skipped when none is available)."""
+    on_path = shutil.which("tailwindcss")
+    cached = default_cache_dir() / f"tailwindcss-{PINNED_TAILWIND_VERSION}"
+    if on_path is None and not cached.exists():
+        pytest.skip("no tailwindcss on PATH or in the bartleby cache")
+    project_dir = tmp_path / "project"
+    (project_dir / "templates").mkdir(parents=True)
+    (project_dir / "templates" / "page.html").write_text(
+        '<div class="p-4 text-red-500"></div>', encoding="utf-8"
+    )
+    theme = resolve_theme(project_dir=project_dir, path=str(THEMES / "parent"))
+
+    result = compile_theme_css(project_dir, theme, {"color.primary": "#123456"})
+
+    css = (project_dir / result.css_path).read_text(encoding="utf-8")
+    assert ".p-4" in css
+    # The theme's own tailwind.css uses var(--bb-color-primary); the wrapper must
+    # have resolved both the tokens import and the theme file import.
+    assert "--bb-color-primary" in css
+    assert "#123456" in css
+    assert "var(--bb-color-primary)" in css
+    assert (project_dir / ".bartleby" / "tokens.css").is_file()
+
+
+def _real_binary() -> Path:
+    """Return a real Tailwind binary or skip the test."""
+    on_path = shutil.which("tailwindcss")
+    if on_path is not None:
+        return Path(on_path)
+    cached = default_cache_dir() / f"tailwindcss-{PINNED_TAILWIND_VERSION}"
+    if not cached.exists():
+        pytest.skip("no tailwindcss on PATH or in the bartleby cache")
+    return cached
+
+
+def test_package_content_globs_cover_the_theme_and_its_base_only() -> None:
+    """Package builds scan every layer's templates and nothing from a project."""
+    theme = resolve_theme(name="material", project_dir=bundled_theme_root("material").parent)
+
+    globs = package_content_globs(theme)
+
+    assert str(bundled_theme_root("material") / "templates" / "**" / "*.html") in globs
+    assert str(bundled_theme_root("base") / "templates" / "**" / "*.html") in globs
+    assert len(globs) == 2
+
+
+def test_user_site_globs_extend_the_package_globs(tmp_path: Path) -> None:
+    """The user-site compile scans the same package globs plus the project directories."""
+    (tmp_path / "overrides").mkdir()
+    theme = resolve_theme(name="material", project_dir=tmp_path)
+
+    globs = theme_compile._content_globs(tmp_path, theme)
+
+    assert globs[:2] == package_content_globs(theme)
+    assert str(tmp_path / "overrides" / "**" / "*.html") in globs
+
+
+@pytest.mark.parametrize("theme_name", ["material", "scrivener"])
+def test_package_compile_bakes_in_no_tokens(theme_name: str, tmp_path: Path) -> None:
+    """Package CSS relies on the var() fallbacks; tokens.css is a user-site layer only."""
+    theme = resolve_theme(name=theme_name, project_dir=bundled_theme_root(theme_name).parent)
+    output = tmp_path / "main.css"
+
+    compile_package_css(theme, binary=_real_binary(), output=output)
+
+    assert "--bb-color-primary:" not in output.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("theme_name", "utility"), [("material", "text-3xl"), ("scrivener", "max-w-none")]
+)
+def test_package_compile_extracts_a_utility_that_is_not_in_the_safelist(
+    theme_name: str, utility: str, tmp_path: Path
+) -> None:
+    """A template-only utility reaches the CSS through the globs, not the safelist."""
+    root = bundled_theme_root(theme_name)
+    templates = "".join(path.read_text(encoding="utf-8") for path in root.rglob("*.html"))
+    assert utility in templates
+    assert utility not in (root / "safelist.txt").read_text(encoding="utf-8").split()
+    theme = resolve_theme(name=theme_name, project_dir=root.parent)
+    output = tmp_path / "main.css"
+
+    compile_package_css(theme, binary=_real_binary(), output=output)
+
+    assert f".{utility}" in output.read_text(encoding="utf-8")
+
+
+def test_package_main_compiles_each_bundled_theme_that_has_sources(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """With no names, main runs the binary once per bundled theme owning a tailwind.css."""
+    log = tmp_path / "calls.log"
+    fake = tmp_path / "tailwindcss"
+    fake.write_text(f'#!/bin/sh\necho "$@" >> {log}\nexit 0\n', encoding="utf-8")
+    fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
+
+    exit_code = main(["--binary", str(fake)])
+
+    assert exit_code == 0
+    calls = log.read_text(encoding="utf-8").splitlines()
+    sourced = [
+        name
+        for name in BUNDLED_THEME_NAMES
+        if (bundled_theme_root(name) / "tailwind.css").exists()
+    ]
+    assert len(calls) == len(sourced)
+    for name, call in zip(sourced, calls, strict=True):
+        root = bundled_theme_root(name)
+        assert f"--input {root / 'tailwind.css'}" in call
+        assert f"--output {root / 'static' / 'css' / 'main.css'}" in call
+        assert str(root / "templates" / "**" / "*.html") in call
+        assert str(bundled_theme_root("base") / "templates" / "**" / "*.html") in call
+        assert "--minify" in call
+        assert "tokens.css" not in call
+    assert "material" in capsys.readouterr().out
+
+
+def test_compile_succeeds_on_an_ejected_scrivener_theme(tmp_path: Path) -> None:
+    """Eject carries safelist.txt, so the ejected tailwind.config.js can read it."""
+    _real_binary()
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    bundled = resolve_theme(name="scrivener", project_dir=tmp_path)
+    ejected = project_dir / "themes" / "scrivener"
+    flatten_chain(bundled, ejected, project_dir=project_dir)
+    theme = resolve_theme(project_dir=project_dir, path=str(ejected))
+
+    result = compile_theme_css(project_dir, theme, {})
+
+    assert (project_dir / result.css_path).stat().st_size > 0

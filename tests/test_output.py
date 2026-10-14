@@ -13,6 +13,7 @@ from bartleby.output import (
     ErrorOutput,
     NewPostOutput,
     NewSiteOutput,
+    ServeStartOutput,
     ValidateOutput,
     ValidationError,
     Warning,
@@ -143,10 +144,82 @@ def test_error_output_text_carries_code_and_message() -> None:
 
 
 def test_new_site_output_json_shape() -> None:
-    """new site renders the documented path/config keys."""
-    result = NewSiteOutput(path="mysite/", config="mysite/bartleby.yml")
+    """new site renders path, config, created entries, next command, and the flags."""
+    result = NewSiteOutput(
+        path="mysite/",
+        config="mysite/bartleby.yml",
+        created=["bartleby.yml", "content/"],
+        next_command="cd mysite && bartleby serve",
+    )
     payload = json.loads(render(result, "json"))
-    assert payload == {"path": "mysite/", "config": "mysite/bartleby.yml"}
+    assert payload == {
+        "path": "mysite/",
+        "config": "mysite/bartleby.yml",
+        "created": ["bartleby.yml", "content/"],
+        "next_command": "cd mysite && bartleby serve",
+        "blog": False,
+        "full_config": False,
+    }
+
+
+def test_new_site_output_text_names_the_next_step() -> None:
+    """new site lists what it created, then tells a first-time user how to see the site."""
+    result = NewSiteOutput(
+        path="mysite/",
+        config="mysite/bartleby.yml",
+        created=["bartleby.yml", "content/"],
+        next_command="cd mysite && bartleby serve",
+    )
+    assert render(result, "text").splitlines() == [
+        "Created site at mysite/",
+        "  bartleby.yml",
+        "  content/",
+        "Next: cd mysite && bartleby serve",
+    ]
+
+
+def test_new_site_output_text_notes_the_flags() -> None:
+    """--blog and --full-config each annotate the entry they changed."""
+    result = NewSiteOutput(
+        path="mysite/",
+        config="mysite/bartleby.yml",
+        created=["bartleby.yml", "content/"],
+        next_command="cd mysite && bartleby serve",
+        blog=True,
+        full_config=True,
+    )
+    text = render(result, "text")
+    assert "  bartleby.yml (every option, from --full-config)" in text
+    assert "  content/ (with a blog in content/blog/)" in text
+
+
+def test_serve_start_output_text_has_summary_url_and_stop_hint() -> None:
+    """The serve startup block is the build summary, the URL, and the stop hint."""
+    result = ServeStartOutput(
+        url="http://127.0.0.1:8123/",
+        build=BuildOutput(pages=7, static_files=5, duration_ms=12, output_dir="site/"),
+    )
+    assert render(result, "text").splitlines() == [
+        "Built 7 pages (5 static files) into site/",
+        "Serving at http://127.0.0.1:8123/",
+        "Press Ctrl+C to stop",
+    ]
+
+
+def test_serve_start_output_json_is_a_ready_event() -> None:
+    """The same facts as one JSON object a machine reader can parse."""
+    result = ServeStartOutput(
+        url="http://127.0.0.1:8123/",
+        build=BuildOutput(pages=7, static_files=5, duration_ms=12, output_dir="site/"),
+    )
+    assert json.loads(render(result, "json")) == {
+        "type": "ready",
+        "url": "http://127.0.0.1:8123/",
+        "pages": 7,
+        "static_files": 5,
+        "output_dir": "site/",
+        "stop_hint": "Press Ctrl+C to stop",
+    }
 
 
 def test_new_post_output_json_shape() -> None:

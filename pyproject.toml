@@ -8,13 +8,13 @@ version = "0.1.0"
 description = "A batteries-included Python static site generator"
 readme = "README.md"
 license = "MIT"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "ACKNOWLEDGMENTS.md"]
 authors = [{ name = "Mason Egger", email = "mason@masonegger.com" }]
 requires-python = ">=3.14"
 dependencies = [
     "markdown>=3.4",
-    "pymdown-extensions>=10.0",
-    "markwright>=0.1.0",
+    "pymdown-extensions>=11.0.1",
+    "markwright>=0.3.0",
     "jinja2>=3.1",
     "pyyaml>=6.0",
     "pygments>=2.17",
@@ -22,6 +22,9 @@ dependencies = [
     "websockets>=12.0",
     "python-slugify>=8.0",
     "aiofiles>=23.0",
+    "ruamel-yaml>=0.19.1",
+    "starlette>=1.7.0",
+    "uvicorn>=0.54.0",
 ]
 
 [dependency-groups]

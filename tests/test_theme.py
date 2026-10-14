@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TypedDict
 
 import jinja2
 import pytest
@@ -12,8 +13,14 @@ from bartleby.assets import copy_theme_static
 from bartleby.themes import bundled_theme_root
 from tests.theme_helpers import material_theme
 
+
+class _VendoredBundle(TypedDict):
+    min_size: int
+    signature: str
+
+
 # Pinned vendored bundle versions. Keep these in sync with THIRD-PARTY-NOTICES.
-VENDORED_BUNDLES = {
+VENDORED_BUNDLES: dict[str, _VendoredBundle] = {
     "alpine.min.js": {"min_size": 20_000, "signature": "Alpine"},
     "htmx.min.js": {"min_size": 20_000, "signature": "htmx"},
     "lunr.min.js": {"min_size": 20_000, "signature": "lunr"},

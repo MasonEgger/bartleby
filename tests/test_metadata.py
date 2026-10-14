@@ -16,7 +16,7 @@ from bartleby.metadata import (
 )
 
 if TYPE_CHECKING:
-    import datetime
+    from bartleby.content import PageMetadataValue
 
 
 def _make_page(
@@ -24,7 +24,7 @@ def _make_page(
     source: str = "blog/posts/sample.md",
     title: str = "Sample",
     content_type_name: str | None = "blog",
-    custom: dict[str, str | int | bool | list[str] | datetime.date] | None = None,
+    custom: dict[str, PageMetadataValue] | None = None,
     author_keys: list[str] | None = None,
 ) -> Page:
     """Build a minimal Page with overrides; keeps each test focused on one field."""

@@ -1120,9 +1120,9 @@ def test_build_refuses_to_replace_an_output_dir_holding_the_project(
     import dataclasses
 
     import bartleby.build as build_module
-    from bartleby.config import BartlebyConfig
+    from bartleby.config import BartlebyConfig, load_config
 
-    real_load_config = build_module.load_config
+    real_load_config = load_config
 
     def load_with_project_output(
         config_path: Path, overrides: list[str] | None = None
@@ -1173,7 +1173,7 @@ def test_failed_swap_restores_the_previous_output(
     sentinel.write_text("previous good build", encoding="utf-8")
     real_move = shutil.move
 
-    def move_refusing_the_build_tree(src: Path, dst: Path) -> str:
+    def move_refusing_the_build_tree(src: Path, dst: Path) -> Path | str:
         if src.name.startswith(".bartleby-build-"):
             raise OSError("disk full")
         return real_move(src, dst)

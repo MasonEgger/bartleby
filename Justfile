@@ -8,7 +8,7 @@ lint:
     uv run ruff check src/ tests/ && uv run ruff format --check src/ tests/
 
 typecheck:
-    uv run mypy src/
+    uv run mypy src/ tests/
 
 test:
     uv run pytest

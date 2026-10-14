@@ -310,7 +310,9 @@ def test_events_stream_error_for_broken_config_has_one_relative_path_and_the_hin
 def _fetch(port: int, path: str = "/") -> str:
     """GET ``path`` from the local server on ``port`` and return the decoded body."""
     with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=10) as response:
-        return response.read().decode("utf-8")
+        body = response.read()
+    assert isinstance(body, bytes)
+    return body.decode("utf-8")
 
 
 def _run_and_fetch_root(project: Path) -> str:

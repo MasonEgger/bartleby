@@ -188,7 +188,9 @@ def test_listing_excludes_drafts(content_dir: Path) -> None:
     ]
     listings = generate_listing_pages(posts, _config(), content_dir)
     listing = next(page for page in listings if page.output_url == "/blog/")
-    titles = {post.title for post in listing.custom_metadata["posts"] if isinstance(post, Page)}
+    posts_value = listing.custom_metadata["posts"]
+    assert isinstance(posts_value, list)
+    titles = {post.title for post in posts_value if isinstance(post, Page)}
     assert "Published" in titles
     assert "Draft" not in titles
 

@@ -502,6 +502,7 @@ def test_create_jinja_env_registers_feature_global(tmp_path: Path) -> None:
     config.theme.features = ["search"]
     env = create_jinja_env(config, tmp_path)
     checker = env.globals["feature"]
+    assert callable(checker)
     assert checker("search") is True
     assert checker("content.code.copy") is False
 

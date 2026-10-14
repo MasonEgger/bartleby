@@ -304,7 +304,7 @@ def _compile(
     _make_executable(bin_dir / "tailwindcss")
     monkeypatch.setenv("PATH", str(bin_dir))
     recorder = _RecordedRun()
-    monkeypatch.setattr(theme_compile.subprocess, "run", recorder)
+    monkeypatch.setattr(subprocess, "run", recorder)
     project_dir = tmp_path / "project"
     project_dir.mkdir(exist_ok=True)
     compile_theme_css(project_dir, theme, tokens or {}, cache_dir=tmp_path / "cache")

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import jinja2
 import pytest
@@ -12,6 +13,9 @@ import pytest
 from bartleby.templates import make_feature_checker
 from bartleby.theme_loader import THEME_FEATURES
 from tests.theme_helpers import bundled_theme
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 THEMES = ["material", "scrivener"]
 
@@ -24,7 +28,7 @@ ENGINE_SOURCE = (
 def _render(
     theme_name: str,
     template: str,
-    nav: list[dict[str, str]] | None = None,
+    nav: Sequence[Mapping[str, object]] | None = None,
     override_dir: Path | None = None,
     page_url: str = "/404.html",
 ) -> str:

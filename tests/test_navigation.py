@@ -82,7 +82,7 @@ def test_explicit_nav_nested() -> None:
         _page("docs/intro.md", "Intro", "/docs/intro/"),
         _page("docs/guide.md", "Guide", "/docs/guide/"),
     ]
-    nav_config = [
+    nav_config: list[dict[str, object]] = [
         {"Docs": [{"Intro": "docs/intro.md"}, {"Guide": "docs/guide.md"}]},
     ]
     nav = build_navigation(_config(nav=nav_config), pages)
@@ -195,7 +195,7 @@ def test_section_index_url_points_at_the_sections_index_page() -> None:
         _page("concepts/index.md", "Overview", "/concepts/"),
         _page("concepts/urls.md", "URLs", "/concepts/urls/"),
     ]
-    nav_config = [
+    nav_config: list[dict[str, object]] = [
         {"Concepts": [{"Overview": "concepts/index.md"}, {"URLs": "concepts/urls.md"}]},
     ]
     nav = build_navigation(_config(nav=nav_config), pages)
@@ -208,7 +208,10 @@ def test_section_index_url_is_none_without_an_index_page() -> None:
         _page("docs/intro.md", "Intro", "/docs/intro/"),
         _page("about.md", "About", "/about/"),
     ]
-    nav_config = [{"Docs": [{"Intro": "docs/intro.md"}]}, {"About": "about.md"}]
+    nav_config: list[dict[str, object]] = [
+        {"Docs": [{"Intro": "docs/intro.md"}]},
+        {"About": "about.md"},
+    ]
     nav = build_navigation(_config(nav=nav_config), pages)
     assert [item.index_url for item in nav.items] == [None, None]
 

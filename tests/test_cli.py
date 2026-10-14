@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import shutil
 import socket
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -21,14 +21,14 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def _last_json(stdout: str) -> dict[str, object]:
+def _last_json(stdout: str) -> dict[str, Any]:
     """Parse the last non-empty stdout line as JSON.
 
     Scaffolding helpers print their own result line before the command under
     test runs, so the JSON we care about is the final line.
     """
     line = [ln for ln in stdout.splitlines() if ln.strip()][-1]
-    parsed: dict[str, object] = json.loads(line)
+    parsed: dict[str, Any] = json.loads(line)
     return parsed
 
 
@@ -580,6 +580,7 @@ def test_schema_taxonomies_json_omits_draft_only_terms(
     main(["schema", "taxonomies", "--output", "json"])
     payload = _last_json(capsys.readouterr().out)
     taxonomies = payload["taxonomies"]
+    assert isinstance(taxonomies, list)
     tags = next(tax for tax in taxonomies if tax["name"] == "tags")
     terms = {term["term"]: term["count"] for term in tags["terms"]}
     assert "draft-only" not in terms
@@ -622,7 +623,9 @@ def test_content_list_json(
     main(["content", "list", "--output", "json"])
     payload = _last_json(capsys.readouterr().out)
     assert payload["count"] >= 1
-    titles = {entry["title"] for entry in payload["content"]}
+    content = payload["content"]
+    assert isinstance(content, list)
+    titles = {entry["title"] for entry in content}
     assert "Hello World" in titles
 
 
@@ -637,7 +640,9 @@ def test_content_list_excludes_drafts_json(
 
     main(["content", "list", "--output", "json"])
     payload = _last_json(capsys.readouterr().out)
-    titles = {entry["title"] for entry in payload["content"]}
+    content = payload["content"]
+    assert isinstance(content, list)
+    titles = {entry["title"] for entry in content}
     assert "Secret Draft" not in titles
 
 
@@ -653,7 +658,9 @@ def test_content_get_json(
     main(["content", "get", "content/blog/posts/hello-world.md", "--output", "json"])
     payload = _last_json(capsys.readouterr().out)
     assert payload["content_type"] == "blog"
-    assert payload["metadata"]["title"] == "Hello World"
+    metadata = payload["metadata"]
+    assert isinstance(metadata, dict)
+    assert metadata["title"] == "Hello World"
     assert "word_count" in payload
 
 
@@ -686,7 +693,9 @@ def test_render_command_html_json(
     assert payload["path"] == "content/blog/posts/hello-world.md"
     assert payload["url"]
     assert "A short body" in str(payload["html"])
-    assert payload["metadata"]["title"] == "Hello World"
+    metadata = payload["metadata"]
+    assert isinstance(metadata, dict)
+    assert metadata["title"] == "Hello World"
     assert payload["word_count"] >= 1
     assert isinstance(payload["warnings"], list)
     assert "site" not in [p.name for p in (tmp_path / "mysite").iterdir()]
@@ -771,10 +780,14 @@ def test_lint_command_json_shape(
     payload = _last_json(capsys.readouterr().out)
     assert "issues" in payload
     assert "summary" in payload
-    assert payload["summary"]["errors"] >= 1
-    rules = {issue["rule"] for issue in payload["issues"]}
+    summary = payload["summary"]
+    assert isinstance(summary, dict)
+    assert summary["errors"] >= 1
+    issues = payload["issues"]
+    assert isinstance(issues, list)
+    rules = {issue["rule"] for issue in issues}
     assert "broken-crossref" in rules
-    orphans = {issue["file"] for issue in payload["issues"] if issue["rule"] == "orphaned-page"}
+    orphans = {issue["file"] for issue in issues if issue["rule"] == "orphaned-page"}
     assert "blog/posts/linked.md" not in orphans
 
 
@@ -804,7 +817,9 @@ def test_lint_relative_md_link_resolves_before_orphan_check(
 
     main(["lint", "--output", "json"])
     payload = _last_json(capsys.readouterr().out)
-    orphans = {issue["file"] for issue in payload["issues"] if issue["rule"] == "orphaned-page"}
+    issues = payload["issues"]
+    assert isinstance(issues, list)
+    orphans = {issue["file"] for issue in issues if issue["rule"] == "orphaned-page"}
     assert "blog/posts/linked.md" not in orphans
 
 
@@ -824,7 +839,9 @@ def test_lint_nav_page_never_reported_orphaned(
 
     main(["lint", "--output", "json"])
     payload = _last_json(capsys.readouterr().out)
-    orphans = {issue["file"] for issue in payload["issues"] if issue["rule"] == "orphaned-page"}
+    issues = payload["issues"]
+    assert isinstance(issues, list)
+    orphans = {issue["file"] for issue in issues if issue["rule"] == "orphaned-page"}
     assert "blog/posts/lonely.md" not in orphans
 
 
@@ -886,12 +903,16 @@ def test_lint_rules_and_skip_select_rules(
     _append_to_config("nav:\n  - Home: index.md\n  - Chart: chart.md\n")
 
     main(["lint", "--rules", "missing-description,orphaned-page", "--output", "json"])
-    rules = {issue["rule"] for issue in _last_json(capsys.readouterr().out)["issues"]}
+    issues = _last_json(capsys.readouterr().out)["issues"]
+    assert isinstance(issues, list)
+    rules = {issue["rule"] for issue in issues}
     assert rules == {"missing-description", "orphaned-page"}
 
     with pytest.raises(SystemExit):
         main(["lint", "--skip", "missing-description", "--output", "json"])
-    rules = {issue["rule"] for issue in _last_json(capsys.readouterr().out)["issues"]}
+    issues = _last_json(capsys.readouterr().out)["issues"]
+    assert isinstance(issues, list)
+    rules = {issue["rule"] for issue in issues}
     assert "image-missing-alt" in rules
     assert "missing-description" not in rules
 

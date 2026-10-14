@@ -4,12 +4,16 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 import jinja2
 import pytest
 
 from bartleby.themes import bundled_theme_root
 from tests.theme_helpers import bundled_theme, material_theme
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 def _render_markdown(source: str) -> str:
@@ -184,7 +188,7 @@ def test_rendered_md_button_html_uses_styled_class() -> None:
     assert _stylesheet_defines(".md-button")
 
 
-def _color_mode_ctx(color_mode: dict[str, object]) -> dict[str, object]:
+def _color_mode_ctx(color_mode: Mapping[str, object]) -> dict[str, object]:
     return _ctx(config={"theme": {"color_mode": color_mode}})
 
 

@@ -250,7 +250,9 @@ def test_content_index_lists_only_published_pages() -> None:
 def test_content_index_entry_has_url_and_md_variant() -> None:
     """Each entry carries the page URL and the .md variant URL."""
     index = build_content_index(_pages(), _config())
-    entry = index["content"][0]
+    entries = index["content"]
+    assert isinstance(entries, list)
+    entry = entries[0]
     assert entry["url"] == "https://example.com/blog/posts/first/"
     assert entry["md_url"] == "https://example.com/blog/posts/first/index.md"
 
@@ -258,7 +260,9 @@ def test_content_index_entry_has_url_and_md_variant() -> None:
 def test_content_index_includes_custom_schema_fields() -> None:
     """Custom metadata-schema fields (semantic) appear in the index entry."""
     index = build_content_index(_pages(), _config())
-    entry = index["content"][0]
+    entries = index["content"]
+    assert isinstance(entries, list)
+    entry = entries[0]
     assert entry["difficulty"] == "beginner"
 
 

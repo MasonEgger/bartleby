@@ -1,12 +1,20 @@
 <!DOCTYPE html>
 {% set color_mode = (config.theme.color_mode if config is defined and config and config.theme else None) %}
 {% set default_mode = (color_mode.default if color_mode and color_mode.default in ("light", "dark") else None) %}
-<html lang="en" data-theme="{{ default_mode or 'light' }}">
+<html lang="{{ site.language or 'en' }}" data-theme="{{ default_mode or 'light' }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ page.title }} - {{ site.title }}</title>
   <link rel="stylesheet" href="/css/main.css">
+  {# Theme-neutral rules the pipeline's markup depends on: hidden text for screen readers and the skip link. #}
+  {# They live here so a theme that extends base cannot drop them; the bundled themes restyle .skip-link:focus-visible. #}
+  <style>
+    .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); border: 0; white-space: nowrap; }
+    .skip-link { position: absolute; top: 0; left: 0; z-index: 100; padding: 0.5rem 1rem; transform: translateY(-150%); background: Canvas; color: CanvasText; }
+    .skip-link:focus-visible { transform: none; }
+    main:focus { outline: none; }
+  </style>
   {% set favicon = config.theme.favicon if config is defined and config and config.theme else None %}
   {% if favicon %}<link rel="icon" href="{{ favicon }}">{% endif %}
   {% include "partials/seo_meta.html" %}
@@ -68,13 +76,14 @@
   {% block head_extra %}{% endblock %}
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
   {% block header %}
   {% include "partials/header.html" %}
   {% if feature is defined and feature('search') %}{% include "partials/search.html" ignore missing %}{% endif %}
   {% endblock %}
   {% block nav %}{% endblock %}
   {% block sidebar %}{% endblock %}
-  <main>
+  <main id="main-content" tabindex="-1">
     {% block content %}{{ page.content | safe if page.content else "" }}{% endblock %}
   </main>
   {% block toc %}{% endblock %}

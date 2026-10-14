@@ -32,9 +32,14 @@ from markwright import ConfigWarning, extension_configs, selected_extensions
 from markwright._fences import find_fenced_blocks
 from markwright.fence import ENVIRONMENT_RE, LABEL_RE, SECONDARY_LABEL_RE, read_options
 
+from bartleby.accessibility import AccessibilityMarkup
 from bartleby.config import ConfigError, markwright_config
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
+    from markdown.extensions import Extension
+
     from bartleby.config import BartlebyConfig
 
 _LOGGER = logging.getLogger("bartleby")
@@ -99,7 +104,9 @@ class RenderedContent:
     toc_tokens: list[dict[str, object]] = field(default_factory=list)
 
 
-def create_markdown_renderer(config: BartlebyConfig) -> markdown.Markdown:
+def create_markdown_renderer(
+    config: BartlebyConfig, icons_dirs: list[Path] | None = None
+) -> markdown.Markdown:
     """Build a ``markdown.Markdown`` instance with Bartleby's default extensions.
 
     :param config: Parsed Bartleby config. ``config.markwright`` selects and configures the
@@ -109,6 +116,9 @@ def create_markdown_renderer(config: BartlebyConfig) -> markdown.Markdown:
         options for that extension (override keys win) and passed as
         ``extension_configs``. A string ``emoji_index`` or ``emoji_generator`` under
         ``pymdownx.emoji`` is a dotted path to the callable.
+    :param icons_dirs: The active theme chain's ``icons/`` directories, leaf-first, for
+        the admonition type icons (:mod:`bartleby.accessibility`). ``None`` uses the
+        default theme's.
     :returns: A configured :class:`markdown.Markdown` instance.
     :raises ConfigError: When markwright rejects a ``markwright:`` section built by hand,
         or an emoji dotted path names nothing.
@@ -122,7 +132,7 @@ def create_markdown_renderer(config: BartlebyConfig) -> markdown.Markdown:
         warnings.simplefilter("always", ConfigWarning)
         # markwright's extensions go first so markwright.fence precedes pymdownx.superfences
         markwright_names, markwright_configs = _markwright_extensions(config.markwright)
-        extensions: list[str] = [*markwright_names, *_BUNDLED_EXTENSIONS]
+        extensions: list[str | Extension] = [*markwright_names, *_BUNDLED_EXTENSIONS]
         configs: dict[str, dict[str, object]] = {
             **_BUNDLED_EXTENSION_CONFIGS,
             **markwright_configs,
@@ -134,6 +144,8 @@ def create_markdown_renderer(config: BartlebyConfig) -> markdown.Markdown:
                 configs[name] = {**configs.get(name, {}), **override_config}
         if "pymdownx.emoji" in configs:
             configs["pymdownx.emoji"] = _resolve_emoji_callables(configs["pymdownx.emoji"])
+        # The accessibility pass goes last: its tree pass follows every block extension above.
+        extensions.append(AccessibilityMarkup(icons_dirs))
 
         try:
             renderer = markdown.Markdown(

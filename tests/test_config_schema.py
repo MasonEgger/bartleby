@@ -26,6 +26,7 @@ DATACLASS_DEFAULTS: dict[str, tuple[type, str]] = {
     "site.author": (config.SiteConfig, "author"),
     "site.default_image": (config.SiteConfig, "default_image"),
     "site.twitter": (config.SiteConfig, "twitter"),
+    "site.language": (config.SiteConfig, "language"),
     "site.feed.enabled": (config.FeedConfig, "enabled"),
     "site.feed.formats": (config.FeedConfig, "formats"),
     "site.feed.include": (config.FeedConfig, "include"),

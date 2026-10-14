@@ -13,8 +13,8 @@
   {# A section without its own page links to the first page inside it. #}
   {% set linked = nav | list %}
   {% if linked %}
-  <nav aria-label="Sections">
-    <p class="not-found-label">Start from a section</p>
+  <nav aria-labelledby="not-found-sections">
+    <p class="not-found-label" id="not-found-sections">Start from a section</p>
     <ul class="tag-list">
       {% for item in linked %}{% set href = (item.index_url or first_url(item) | trim) %}{% if href %}<li><a href="{{ href }}">{{ item.title }}</a></li>{% endif %}{% endfor %}
     </ul>

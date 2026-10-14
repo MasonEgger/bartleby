@@ -120,6 +120,12 @@ def _site_fields() -> tuple[ConfigField, ...]:
             default=_default(site, "twitter"),
         ),
         _field(
+            "site.language",
+            "string",
+            "The BCP 47 language tag of the site's pages, written to the html lang attribute.",
+            default=_default(site, "language"),
+        ),
+        _field(
             "site.feed.enabled",
             "boolean",
             "Generate the site-wide aggregate feed.",

@@ -32,6 +32,8 @@ from bartleby.markdown_pipeline import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
+    from markdown.extensions import Extension
+
 
 def _config(
     *,
@@ -204,18 +206,21 @@ _MARKWRIGHT_EXTENSIONS = (
 
 
 class _RecordingMarkdown(markdown.Markdown):
-    """A Markdown that remembers the extension names it was built with."""
+    """A Markdown that remembers the extension names it was built with.
+
+    The block-markers extension is an instance, not a name, so it is left out.
+    """
 
     built_with: ClassVar[list[list[str]]] = []
 
     def __init__(
         self,
         *,
-        extensions: list[str],
+        extensions: list[str | Extension],
         extension_configs: dict[str, dict[str, object]],
         output_format: Literal["html"],
     ) -> None:
-        type(self).built_with.append(extensions)
+        type(self).built_with.append([name for name in extensions if isinstance(name, str)])
         super().__init__(
             extensions=extensions, extension_configs=extension_configs, output_format=output_format
         )
@@ -433,3 +438,118 @@ def test_pygments_long_classes_carry_the_short_class_the_palette_styles() -> Non
         css = (themes / theme / "static" / "css" / "main.css").read_text(encoding="utf-8")
         assert ".highlight .l" in css, theme
         assert ".highlight .p" in css, theme
+
+
+# Type markers: the pipeline gives every admonition, collapsible block, and environment
+# fence a cue that does not depend on color, so the type reaches a screen reader and a
+# reader who cannot tell the washes apart.
+
+
+def _render(source: str) -> str:
+    return render_markdown(source, create_markdown_renderer(_config())).html
+
+
+def test_custom_titled_admonition_carries_the_type_icon_and_hidden_type() -> None:
+    """A danger admonition with its own title gets the stop icon and a hidden "Danger: "."""
+    html = _render('!!! danger "Custom Title"\n\n    Body.\n')
+    title_start = html.index('<p class="admonition-title">')
+    title = html[title_start : html.index("</p>", title_start)]
+    assert '<svg aria-hidden="true" class="admonition-icon" focusable="false"' in title
+    assert 'viewBox="0 0 16 16"' in title
+    assert "M4.47.22A.749.749" in title, "the stop glyph's path is missing"
+    assert '<span class="visually-hidden">Danger: </span>Custom Title' in title
+    assert title.index("admonition-icon") < title.index("visually-hidden")
+
+
+def test_default_titled_admonition_gets_the_icon_only() -> None:
+    """A tip titled "Tip" by the extension gets the light bulb and no hidden text."""
+    html = _render("!!! tip\n\n    Body.\n")
+    assert 'class="admonition-icon"' in html
+    assert "M8 1.5c-2.363" in html, "the light-bulb glyph's path is missing"
+    assert "visually-hidden" not in html
+    assert "</svg>Tip</p>" in html
+
+
+def test_details_block_gets_the_same_marker() -> None:
+    """``???`` blocks (pymdownx.details) are marked in their summary like admonitions."""
+    html = _render('??? warning "Click to expand"\n\n    Hidden.\n')
+    summary_start = html.index("<summary>")
+    summary = html[summary_start : html.index("</summary>", summary_start)]
+    assert 'class="admonition-icon"' in summary
+    assert "M6.457 1.047c.659" in summary, "the alert glyph's path is missing"
+    assert '<span class="visually-hidden">Warning: </span>Click to expand' in summary
+
+
+def test_unknown_admonition_type_falls_back_to_info() -> None:
+    """A type outside the map gets the info glyph and its own word as the hidden type."""
+    html = _render('!!! weird "Odd one"\n\n    Body.\n')
+    assert "M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5" in html, "the info glyph is missing"
+    assert '<span class="visually-hidden">Weird: </span>Odd one' in html
+
+
+def test_admonition_icon_is_hidden_from_assistive_technology() -> None:
+    html = _render("!!! note\n\n    Body.\n")
+    assert 'aria-hidden="true"' in html
+    assert 'focusable="false"' in html
+    assert 'width="16"' not in html, "the icon sizes from the stylesheet, not the file"
+
+
+def test_environment_fence_announces_its_environment() -> None:
+    """A ``[environment NAME]`` fence names the environment in hidden text before the code."""
+    html = _render("```\n[environment local]\nssh user@local-server\n```\n")
+    assert (
+        '<pre class="environment-local"><span class="visually-hidden">Environment local. </span>'
+        in html
+    )
+    assert html.index("Environment local.") < html.index("<code>")
+
+
+def test_environment_fence_with_other_classes_is_still_announced() -> None:
+    source = "```\n[label server.sh]\n[environment third]\n[prefix command]\nssh user@prod\n```\n"
+    html = _render(source)
+    assert '<span class="visually-hidden">Environment third. </span>' in html
+    assert html.count("visually-hidden") == 1
+
+
+def test_plain_fence_gets_no_environment_text() -> None:
+    html = _render("```python\nprint('hi')\n```\n")
+    assert "visually-hidden" not in html
+
+
+def test_task_list_checkbox_is_named_after_its_item() -> None:
+    """A task-list checkbox takes the item text as its accessible name."""
+    html = _render("- [x] Run `bartleby serve`\n- [ ] Edit the home page\n")
+    assert 'aria-label="Run bartleby serve"' in html
+    assert 'aria-label="Edit the home page"' in html
+
+
+def test_task_list_label_stops_at_a_nested_list() -> None:
+    html = _render("- [ ] Parent task\n    - [ ] Child task\n")
+    assert 'aria-label="Parent task"' in html
+    assert 'aria-label="Child task"' in html
+
+
+def test_loose_task_list_item_is_labeled_too() -> None:
+    """With a blank line between items the checkbox sits in a paragraph; the label still lands."""
+    html = _render('- [ ] First "quoted" task\n\n- [x] Second task\n')
+    assert 'aria-label="First &quot;quoted&quot; task"' in html
+    assert 'aria-label="Second task"' in html
+
+
+def test_table_is_keyboard_focusable() -> None:
+    """A table carries tabindex=0 so it scrolls from the keyboard when the theme clips it."""
+    html = _render("| a | b |\n|---|---|\n| 1 | 2 |\n")
+    assert '<table tabindex="0">' in html
+
+
+def test_markwright_embeds_get_their_missing_attributes() -> None:
+    """The YouTube iframe, image-compare slider, and slideshow scroller are repaired."""
+    source = (
+        "[youtube jNQXAC9IVRw]\n\n"
+        "[compare before.svg after.svg]\n\n"
+        "[slideshow slide-1.svg slide-2.svg]\n"
+    )
+    html = _render(source)
+    assert '<iframe title="YouTube video" src="https://www.youtube.com/embed/jNQXAC9IVRw"' in html
+    assert '<input type="range" class="control" aria-label="Image comparison position"' in html
+    assert '<div class="slides" tabindex="0">' in html

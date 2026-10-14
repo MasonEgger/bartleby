@@ -17,7 +17,12 @@
 //            and on the #f5f5f5 surface are 7.10:1 and 6.52:1.
 //   accent   #2e7d32  a softer green for hover, focus rings, and the active TOC
 //            entry; 5.13:1 on white, 4.70:1 on the surface.
-//   light    white page, near-black text at roughly 87% opacity, muted text at 54%.
+//   links    always underlined (1px). The link green is 2.27:1 against the body
+//            text, under the 3:1 a color-only link needs (WCAG 1.4.1, G183), so
+//            the underline carries the distinction and hover changes the color.
+//   light    white page, near-black text at roughly 87% opacity; muted text is
+//            the text at 68% into the page (4.5:1 or better on every surface it
+//            sits on), faint text at 50% (3:1, for bullets and rules only).
 //   dark     "slate": #1e2129 page, #262a35 surfaces, text at 87% white. The
 //            primary color keeps the header; links go to #6fbf6f and the accent
 //            to #8fd48f, lighter forest greens that read on the dark page.
@@ -109,8 +114,13 @@ module.exports = {
             h1: { fontWeight: "300", letterSpacing: "-0.01em" },
             h2: { fontWeight: "300", letterSpacing: "-0.01em" },
             h3: { fontWeight: "500" },
-            a: { textDecoration: "none", fontWeight: "400" },
-            "a:hover": { color: "var(--bm-accent)", textDecoration: "underline" },
+            a: {
+              textDecoration: "underline",
+              textDecorationThickness: "1px",
+              textUnderlineOffset: "0.15em",
+              fontWeight: "400",
+            },
+            "a:hover": { color: "var(--bm-accent)" },
             "code::before": { content: '""' },
             "code::after": { content: '""' },
             code: {

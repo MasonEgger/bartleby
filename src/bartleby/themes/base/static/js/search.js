@@ -17,6 +17,8 @@
  *             first result, status() returns a message for a live region,
  *             mark(element, text) fills element with text, wrapping query terms
  *             in <mark class="search-hit"> when highlighting is on
+ *   focus:    while open, Tab and Shift+Tab cycle inside the component's root
+ *             element (the modal), so focus never leaves the dialog
  *   refs:     x-ref="trigger" (an opening button inside the modal's scope, optional)
  *             and x-ref="input" (the field)
  *   opening:  the component also opens on the `bartleby:search-open` window event
@@ -115,6 +117,7 @@
         init: function () {
           var component = this;
           window.addEventListener("bartleby:search-open", function () { component.show(); });
+          this.$root.addEventListener("keydown", function (event) { component.trap(event); });
           document.addEventListener("keydown", function (event) {
             if (component.open) { return; }
             var target = event.target;
@@ -133,6 +136,23 @@
           this.open = true;
           this.load();
           this.$nextTick(function () { this.$refs.input.focus(); }.bind(this));
+        },
+        trap: function (event) {
+          if (!this.open || event.key !== "Tab") { return; }
+          var focusable = Array.prototype.filter.call(
+            this.$root.querySelectorAll("a[href], button, input, [tabindex]:not([tabindex='-1'])"),
+            function (element) { return element.offsetParent !== null; }
+          );
+          if (!focusable.length) { return; }
+          var first = focusable[0];
+          var last = focusable[focusable.length - 1];
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+          }
         },
         close: function () {
           this.open = false;

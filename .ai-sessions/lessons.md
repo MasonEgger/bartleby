@@ -2,16 +2,16 @@
 
 ## Recent
 <!-- 10 most recent lessons, newest first -->
+- pymdownx.superfences and pymdownx.tasklist stash their HTML, so a `pre` or a checkbox is never in the ElementTree a treeprocessor walks. Patch a stashed string through `md.htmlStash.rawHtmlBlocks[int(HTML_PLACEHOLDER_RE.match(text).group(1))]` from the tree pass, or substitute on the opening tag in a postprocessor registered below markwright's `mw-fence-post` (25) (2026-10-14)
+- Fading white text to 80% opacity on a 5:1 colored bar drops it to 3.8:1; that one rule was 88 of material's 132 axe nodes. Mark nav state with a background or an inset underline, never by dimming the text (2026-10-14)
+- axe's "background color could not be determined" at phone width comes from elements clipped inside a horizontal scroll container (the nav row, a scrolling table), not from a failing pair; the same elements pass at 1280. Report it, do not chase it (2026-10-14)
+- Tailwind's minifier prints `::before` as `:before` in `main.css`; a test that greps the compiled CSS must match the short form. And `python3 -m http.server --directory` must serve a built site at its root, because the theme links `/css/main.css` root-absolute (2026-10-14)
+- An Alpine focus trap needs no template change: `this.$root.addEventListener("keydown", ...)` in the component's `init` sees the modal's own element, and a Playwright walk of Tab, Shift+Tab, and Escape proves it in both themes in one run (2026-10-14)
 - A pure green that passes 4.5:1 under white text or on white paper needs its green channel at or below about 137; CSS forestgreen (`#228b22`) is at 139 and lands at 4.39:1. So an accent cannot be a lighter green than the primary in light mode: pick a softer green at the same lightness (`#2e7d32`) and give dark mode its own literal lighter greens (2026-10-14)
 - `uv --directory <repo> run <cmd>` runs the command with the repo as cwd, so `bartleby new site name` with a relative name lands inside the repo. For scratch builds call the venv binary (`.venv/bin/bartleby`) with absolute paths (2026-10-14)
 - `git grep -c $'\xe2\x80\x94'` reported nothing on files that held em dashes. Count U+2014 and U+2013 with `grep -rnP '\x{2014}|\x{2013}'` or a Python walk over `git ls-files`, and keep a test regex free of the literal characters with `\u2013`-style escapes (2026-10-14)
 - A colored rule on the left edge plus a tinted box is the generic callout kit; when a syntax has an upstream reference (do-markdownit for markwright), read its `styles/` before inventing a treatment. DigitalOcean tints the whole code block per environment and gives callouts a wash with no edge rule, so scrivener now does the same (2026-10-13)
 - A subparser that re-attaches a parent parser's flags resets them to the parent's defaults, so a global flag given before the subcommand name is lost. Give the subparser copies `default=argparse.SUPPRESS` and keep the real defaults on the top-level parser (2026-10-13)
-- An assert-less test is found by an AST walk over `tests/` for functions with no `assert`, `pytest.raises`, `pytest.fail`, or `assert*`/`check*` call; nine sat in the suite. Prove an override reached a validator by writing a value the validator rejects into the file and passing the override that repairs it (2026-10-13)
-- A docs line that quotes a command's count (`Ejected theme 'scrivener' (56 files)`, `34 modules`) drifts with every added file; pin each one with a test that runs the command or lists the directory and compares to the quoted number (2026-10-13)
-- Reproduce a "this class has no CSS rule" claim by rendering the markup and reading the emitted `class` attribute: Pygments' `HtmlFormatter._get_css_classes` prefixes every long token class with its ancestor short classes (`l l-Scalar l-Scalar-Plain`), so the palette's short rules already apply and a generated long-class block would be dead CSS (2026-10-13)
-- Before relying on a dependency's config key, grep its installed source for where the key is consumed: markwright's `warn` is read only by its CLI, so a Bartleby default of `warn: true` reports nothing on its own and the disallowed-environment check had to be Bartleby's (2026-10-13)
-- A pymdownx option that takes a callable (`emoji_index`, `emoji_generator`) cannot be set from YAML; resolve a dotted-path string to the callable at the config boundary and route the bundled defaults through the same resolver, which also keeps the untyped `pymdownx` import out of mypy strict (2026-10-13)
 
 ## Architecture
 - ruamel writes YAML 1.2 and PyYAML reads 1.1, so a string ruamel leaves plain (`Yes`, `on`, `1e3`) comes back a boolean or number through the loader. Before dumping a string, ask PyYAML's implicit resolver for its tag and double-quote anything that is not `str` (2026-10-12)
@@ -101,6 +101,8 @@
 - Adding a second loop over the same collection inside one function and reusing the prior loop's variable name trips mypy: the first loop types the variable non-optional, so reassigning a `... | None` from `dict.get()` is an incompatible-assignment error. Pick a fresh variable name for the new loop (2026-06-23)
 
 ## Testing
+- An Alpine focus trap needs no template change: `this.$root.addEventListener("keydown", ...)` in the component's `init` sees the modal's own element, and a Playwright walk of Tab, Shift+Tab, and Escape proves it in both themes in one run (2026-10-14)
+- axe's "background color could not be determined" at phone width comes from elements clipped inside a horizontal scroll container (the nav row, a scrolling table), not from a failing pair; the same elements pass at 1280. Report it, do not chase it (2026-10-14)
 - Rejecting duplicate YAML keys surfaces every fixture that appends a second `theme:` or `nav:` block to a config and relied on last-key-wins; twelve tests did. Grep for `read_text(...) + "\ntheme:` before tightening the loader, and build fixtures with `set_key` through a shared helper (2026-10-12)
 - An assert-less test is found by an AST walk over `tests/` for functions with no `assert`, `pytest.raises`, `pytest.fail`, or `assert*`/`check*` call; nine sat in the suite. Prove an override reached a validator by writing a value the validator rejects into the file and passing the override that repairs it (2026-10-13)
 - A fix hint is itself a claim and must be true for its case. Two hints in Step 18 named fixes that could not work (an output_dir clause for a failure inside the project dir; shell quoting missing from a slug hint), so test that the hinted fix works (2026-10-12)
@@ -132,6 +134,7 @@
 - A value rendered into an inline `<script type="application/ld+json">` block via `| safe` needs its own escaping pass beyond "is this valid JSON": a title containing a literal `</script>` closes the tag early and breaks out into HTML/script context. Escape `<`, `>`, and `&` as `<`/`>`/`&` after `json.dumps`; these are valid JSON string escapes so `json.loads` round-trips them back unchanged, and only the raw HTML context sees the escaped form (2026-09-06)
 
 ## Tooling
+- Tailwind's minifier prints `::before` as `:before` in `main.css`; a test that greps the compiled CSS must match the short form. And `python3 -m http.server --directory` must serve a built site at its root, because the theme links `/css/main.css` root-absolute (2026-10-14)
 - `git grep -c $'\xe2\x80\x94'` reported nothing on files that held em dashes. Count U+2014 and U+2013 with `grep -rnP '\x{2014}|\x{2013}'` or a Python walk over `git ls-files`, and keep a test regex free of the literal characters with `\u2013`-style escapes (2026-10-14)
 - `uv --directory <repo> run <cmd>` runs the command with the repo as cwd, so `bartleby new site name` with a relative name lands inside the repo. For scratch builds call the venv binary (`.venv/bin/bartleby`) with absolute paths (2026-10-14)
 - A Python heredoc whose replacement strings are not raw turns `\ufeff` and `\n` into the literal characters in the edited file. Grep the touched files for `\x{FEFF}` and other non-keyboard characters after a scripted edit (2026-10-12)
@@ -150,6 +153,7 @@
 - A dev server that "doesn't load on my phone" is a concurrency bug until proven otherwise: iOS Safari opens an idle preconnect socket, and a single-threaded `http.server.HTTPServer` serves it first and stalls every real request. A test that holds an idle socket open and then fetches in parallel fails on `HTTPServer` and passes on `ThreadingHTTPServer`. Also filter watchdog events to created, modified, moved, and deleted, or the build's own file reads (opened and closed events) trigger another build forever (2026-10-11)
 
 ## Python
+- pymdownx.superfences and pymdownx.tasklist stash their HTML, so a `pre` or a checkbox is never in the ElementTree a treeprocessor walks. Patch a stashed string through `md.htmlStash.rawHtmlBlocks[int(HTML_PLACEHOLDER_RE.match(text).group(1))]` from the tree pass, or substitute on the opening tag in a postprocessor registered below markwright's `mw-fence-post` (25) (2026-10-14)
 - A subparser that re-attaches a parent parser's flags resets them to the parent's defaults, so a global flag given before the subcommand name is lost. Give the subparser copies `default=argparse.SUPPRESS` and keep the real defaults on the top-level parser (2026-10-13)
 
 ## Documentation
@@ -157,5 +161,6 @@
 - A docs line that quotes a command's count (`Ejected theme 'scrivener' (56 files)`, `34 modules`) drifts with every added file; pin each one with a test that runs the command or lists the directory and compares to the quoted number (2026-10-13)
 
 ## Design
+- Fading white text to 80% opacity on a 5:1 colored bar drops it to 3.8:1; that one rule was 88 of material's 132 axe nodes. Mark nav state with a background or an inset underline, never by dimming the text (2026-10-14)
 - A pure green that passes 4.5:1 under white text or on white paper needs its green channel at or below about 137; CSS forestgreen (`#228b22`) is at 139 and lands at 4.39:1. So an accent cannot be a lighter green than the primary in light mode: pick a softer green at the same lightness (`#2e7d32`) and give dark mode its own literal lighter greens (2026-10-14)
 - A colored rule on the left edge plus a tinted box is the generic callout kit; when a syntax has an upstream reference (do-markdownit for markwright), read its `styles/` before inventing a treatment. DigitalOcean tints the whole code block per environment and gives callouts a wash with no edge rule, so scrivener now does the same (2026-10-13)

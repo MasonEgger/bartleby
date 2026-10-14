@@ -20,6 +20,7 @@ The site config, as a dict.
 {{ site.description }}
 {{ site.author }}
 {{ site.default_image }}
+{{ site.language }}
 {{ site.twitter }}
 ```
 

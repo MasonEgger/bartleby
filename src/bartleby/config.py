@@ -246,6 +246,7 @@ class SiteConfig:
     author: str = ""
     default_image: str | None = None
     twitter: str | None = None
+    language: str = "en"
     feed: FeedConfig = field(default_factory=FeedConfig)
 
 
@@ -891,6 +892,7 @@ def _parse_site(raw: Any) -> SiteConfig:
         author=_string_field(raw, "author", ""),
         default_image=_optional_str(raw.get("default_image")),
         twitter=_optional_str(raw.get("twitter")),
+        language=_string_field(raw, "language", "en"),
         feed=_parse_feed(raw.get("feed")),
     )
 

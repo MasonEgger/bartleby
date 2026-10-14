@@ -485,7 +485,7 @@ def _filter_and_validate(state: _BuildState, *, include_drafts: bool) -> None:
     taxonomy_pages = generate_taxonomy_pages(state.taxonomy_data, config)
     # Built before listing generation so listing intro content (content/{type}/index.md)
     # renders through the same renderer instance the page render loop uses below.
-    state.md_renderer = create_markdown_renderer(config)
+    state.md_renderer = create_markdown_renderer(config, state.theme.icons_dirs())
     listing_pages = generate_listing_pages(pages, config, state.content_dir, state.md_renderer)
     state.all_pages = pages + taxonomy_pages + listing_pages
     state.published = select_published(pages)

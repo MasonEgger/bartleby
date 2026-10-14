@@ -37,12 +37,13 @@ The full notices that their licenses require are reproduced under Notices below.
   https://fontawesome.com/license/free.
   Compatible: CC BY 4.0 allows redistribution with attribution, which this entry gives.
   The paths are an earlier revision of the glyphs (512-unit grid, 496 wide), so they differ from the current pack.
-- **Octicons**, 5 SVGs in `themes/base/icons/octicons/`.
+- **Octicons**, 15 SVGs in `themes/base/icons/octicons/`.
   MIT, Copyright 2026 GitHub Inc.
   https://github.com/primer/octicons.
   Compatible: MIT into MIT.
   `star-16` matches the outline of the current glyph and omits its inner cutout, so it renders filled.
-  Others are close revisions.
+  `heart-fill-24`, `link-16`, `mark-github-16`, and `repo-16` are close revisions.
+  `alert-16`, `book-16`, `bug-16`, `check-circle-16`, `info-16`, `light-bulb-16`, `question-16`, `quote-16`, `stop-16`, and `x-circle-16` are the current glyphs, stripped to the viewBox and path; the Markdown pipeline inlines them as the admonition type icons.
 - **Simple Icons**, 4 SVGs in `themes/base/icons/simple/`.
   CC0 1.0 Universal.
   https://github.com/simple-icons/simple-icons.

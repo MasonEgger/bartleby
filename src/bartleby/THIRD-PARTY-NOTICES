@@ -48,6 +48,9 @@ Material Design Icons   Apache License 2.0   https://pictogrammers.com/library/m
   themes/material/templates/partials/back_to_top.html.
 FontAwesome (Free)      CC BY 4.0 (icons), MIT (code)   https://fontawesome.com/
 Octicons                MIT   https://primer.style/octicons/
+  Files: themes/base/icons/octicons/*.svg; alert, book, bug, check-circle, info,
+  light-bulb, question, quote, stop, and x-circle are inlined into admonition
+  titles by the Markdown pipeline (bartleby/accessibility.py).
 Simple Icons            CC0 1.0   https://simpleicons.org/
 
 

@@ -163,7 +163,7 @@ Installed entries can be folded into plan.md per-section Tools blocks; not-insta
 
 ## Component boundaries
 
-The implementation is 37 single-responsibility modules under `src/bartleby/`, grouped by build-pipeline phase.
+The implementation is 38 single-responsibility modules under `src/bartleby/`, grouped by build-pipeline phase.
 
 Config layer:
 - `config.py`: load and validate `bartleby.yml`.
@@ -180,6 +180,7 @@ Content layer:
 
 Rendering:
 - `markdown_pipeline.py`: the Markdown rendering pipeline with all default extensions.
+- `accessibility.py`: the pipeline's last pass; type icons and hidden type words on admonitions and details, hidden environment names on fences, labels on task-list checkboxes, keyboard focus on tables and embeds.
 - `shortcodes.py`: `[% %]` shortcode preprocessing rendered as Jinja2 fragments.
 - `templates.py`: the Jinja2 environment, template lookup cascade, and context building.
 - `crossrefs.py`: cross-reference resolution, rewriting `.md` links to output URLs.

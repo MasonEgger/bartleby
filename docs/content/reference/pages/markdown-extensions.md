@@ -84,3 +84,15 @@ markdown_extensions:
 | `admonition` | Admonition blocks |
 | `abbr` | Abbreviations |
 | `md_in_html` | Markdown inside HTML blocks |
+
+## Accessibility Pass
+
+After every extension has run, Bartleby's own pass (`bartleby.accessibility`) adds the cues that assistive technology and color-blind readers need, so every theme gets them.
+
+- Each admonition title and `???` summary starts with an icon for the type (an Octicon from the `base` theme, overridable by a theme that ships `icons/octicons/<name>-16.svg`) and, when the title is custom, hidden text that reads the type word first, as in "Danger: Custom Title".
+- Each `[environment NAME]` code block starts with hidden text that reads "Environment NAME." before the code; the two bundled themes also print the name as a tag in the block's corner.
+- Each task-list checkbox is named after its item text, and each table is keyboard focusable so a wide one can scroll.
+- The YouTube embed gets a title, the image-compare slider a label, and the slideshow keyboard focus.
+
+The icon per type: `note` and `info` use `info`; `abstract` and `example` use `book`; `tip` uses `light-bulb`; `success` uses `check-circle`; `question` uses `question`; `warning` uses `alert`; `failure` uses `x-circle`; `danger` uses `stop`; `bug` uses `bug`; `quote` uses `quote`.
+A type outside this list gets `info`.

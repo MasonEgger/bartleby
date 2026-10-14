@@ -50,6 +50,7 @@ Hello, world!
 
 Tint a block with `[environment NAME]` to tell server environments apart.
 The names are `local`, `second`, `third`, `fourth`, and `fifth`.
+The name also shows as a tag in the block's corner, and `[label NAME]` gives the block a title that says what it is.
 
 ````
 ```
@@ -341,6 +342,7 @@ Indent the tab's content by four spaces.
 
 `!!!` starts a callout.
 The word after it picks the style: `note`, `tip`, `warning`, `danger`, and more.
+The type is announced to screen readers and shown as an icon, so a custom title never hides it.
 
 ````
 !!! warning "Check Before You Deploy"

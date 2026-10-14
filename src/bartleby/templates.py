@@ -292,6 +292,7 @@ def _site_namespace(site_config: SiteConfig) -> dict[str, object]:
         "author": site_config.author,
         "default_image": site_config.default_image,
         "twitter": site_config.twitter,
+        "language": site_config.language,
     }
 
 

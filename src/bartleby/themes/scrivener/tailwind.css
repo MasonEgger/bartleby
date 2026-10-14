@@ -138,6 +138,14 @@
     border-bottom: 1px solid var(--sc-ruling);
     font-family: var(--sc-font-ui);
   }
+  /* The skip link (base.html) lands over the header when focused. */
+  .skip-link:focus-visible {
+    background: var(--sc-paper);
+    color: var(--sc-link);
+    font-family: var(--sc-font-ui);
+    outline: 2px solid var(--sc-margin);
+    outline-offset: -2px;
+  }
   .header-inner {
     display: flex;
     align-items: center;
@@ -921,6 +929,15 @@
   .prose details > :last-child {
     margin-bottom: 0;
   }
+  /* The type icon the pipeline puts before each title; it scales with the title text. */
+  .admonition-icon {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    margin-right: 0.4em;
+    vertical-align: -0.125em;
+    fill: currentColor;
+  }
 
   /* Content tabs (pymdownx.tabbed, alternate style). The chosen label is underlined in the accent. */
   .tabbed-set {
@@ -1313,7 +1330,29 @@
   pre.environment-third,
   pre.environment-fourth,
   pre.environment-fifth {
+    position: relative;
     background: color-mix(in srgb, var(--sc-env) 10%, var(--sc-paper));
+  }
+  /* The environment's name as a tag in the top-right corner, left of the Copy button when there is one. */
+  pre.environment-local::before { content: "local"; }
+  pre.environment-second::before { content: "second"; }
+  pre.environment-third::before { content: "third"; }
+  pre.environment-fourth::before { content: "fourth"; }
+  pre.environment-fifth::before { content: "fifth"; }
+  pre[class*="environment-"]::before {
+    position: absolute;
+    top: var(--sc-quarter);
+    right: var(--sc-quarter);
+    color: var(--sc-muted);
+    font-family: var(--sc-font-ui);
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+  pre[class*="environment-"]:has(> .code-copy-button)::before {
+    right: 4rem;
   }
 
   /* Line prefixes: each line is an <li data-prefix>; the prefix is drawn in a gutter. */

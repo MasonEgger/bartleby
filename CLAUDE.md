@@ -10,7 +10,7 @@ Bartleby is an agents-first, batteries-included Python static site generator. Th
 
 ## Architecture
 
-Bartleby is 37 single-responsibility modules under `src/bartleby/`, grouped by build-pipeline phase (see spec.md "Component boundaries"). The key architectural decisions:
+Bartleby is 38 single-responsibility modules under `src/bartleby/`, grouped by build-pipeline phase (see spec.md "Component boundaries"). The key architectural decisions:
 
 - **Frontend stack**: Tailwind CSS + Alpine.js + HTMX + lunr.js (reimplemented, NOT ported from mkdocs-material)
 - **Synchronous build**: `build()` in `build.py` runs the whole pipeline in-process. `async_build()` is only an `asyncio.to_thread` wrapper used by the CLI `build` command. Parallel and incremental builds are explicit non-goals (spec.md).

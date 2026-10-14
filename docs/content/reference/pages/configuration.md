@@ -31,6 +31,7 @@ site:
   author: "Mason Egger"
   default_image: "/img/og-default.png"
   twitter: "@masonegger"
+  language: "en"
   feed:
     enabled: true
     formats: [rss, atom]
@@ -352,6 +353,7 @@ A path segment in angle brackets, such as `<name>`, stands for a name that you c
 | `site.author` | string | `""` | any | no | The default author name. |
 | `site.default_image` | string | none | any | no | A fallback social image path or URL. |
 | `site.twitter` | string | none | any | no | The site Twitter handle for social cards. |
+| `site.language` | string | `en` | any | no | The BCP 47 language tag of the site's pages, written to the html lang attribute. |
 | `site.feed.enabled` | boolean | `true` | any | no | Generate the site-wide aggregate feed. |
 | `site.feed.formats` | list | `["rss", "atom"]` | `rss`, `atom` | no | Feed formats to emit at the site root. |
 | `site.feed.include` | list | `[]` | any | no | Content types to aggregate; empty means every type with feeds. |

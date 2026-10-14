@@ -59,6 +59,16 @@ Incremental rebuilds are a non-goal, and the flag always ran a full rebuild.
 
 ### Added
 
+The Markdown pipeline ends with an accessibility pass (`bartleby.accessibility`) that every theme inherits.
+Each admonition title and `???` summary starts with an icon for its type (ten Octicons added to the `base` theme, overridable per theme) and, when the title is custom, hidden text that reads the type word first.
+Each `[environment NAME]` code block starts with hidden text naming the environment, and both bundled themes print the name as a tag in the block's corner.
+Task-list checkboxes are named after their item, tables take keyboard focus so a wide one can scroll, and the YouTube, image-compare, and slideshow embeds get the title, label, and focus they lacked.
+
+`site.language` sets the `lang` attribute on `<html>` (default `en`), and every page starts with a "Skip to content" link to `<main id="main-content">`.
+The search dialog keeps Tab and Shift+Tab inside it while open.
+
+`tests/test_accessibility.py` builds the scaffold site with both themes and pins the landmarks, names, focus order, heading order, alt text, and the stylesheet cues behind them.
+
 `bartleby new site` prints what it created and the exact next command, with the path quoted when it holds a space.
 `bartleby serve` prints the build summary, the bound URL, and how to stop, after the socket binds, so `--port 0` shows the real port.
 `serve --events` opens with a matching `ready` object, and `--output json` carries the same data as text.
@@ -145,6 +155,11 @@ The themes reference documents the three-column layout, `nav.toc-fold`, and the 
 - `bartleby theme inspect` lists every theme file with the layer that provides it, so you can see which files a project, an ejected theme, or a bundled theme supplies.
 
 ### Changed
+
+Material prose links are underlined at all times, since the link green is 2.27:1 against the body text, under the 3:1 a color-only link needs.
+Material's muted text moved from a 62% to a 68% mix of text into page, and faint from 38% to 50%, so secondary copy clears 4.5:1 on every surface and the line-number gutter uses muted; header nav links are no longer faded to 80%.
+Material honors `prefers-reduced-motion` for every transition, as scrivener already did.
+The 404 page's section list is labeled by its own heading, so it no longer shares a landmark name with the tab strip.
 
 The dev server now runs on Starlette and uvicorn.
 Pages and the live-reload WebSocket share one port, so the reload script connects to the page's own host and port.

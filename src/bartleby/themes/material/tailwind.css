@@ -21,8 +21,8 @@
     --bm-surface: color-mix(in srgb, var(--bm-bg) 96%, black);
     --bm-text: var(--bb-color-text, #212121);
     --bm-heading: color-mix(in srgb, var(--bm-text) 92%, white);
-    --bm-text-muted: color-mix(in srgb, var(--bm-text) 62%, var(--bm-bg));
-    --bm-text-faint: color-mix(in srgb, var(--bm-text) 38%, var(--bm-bg));
+    --bm-text-muted: color-mix(in srgb, var(--bm-text) 68%, var(--bm-bg));
+    --bm-text-faint: color-mix(in srgb, var(--bm-text) 50%, var(--bm-bg));
     --bm-border: color-mix(in srgb, var(--bm-text) 14%, var(--bm-bg));
     --bm-link: var(--bm-primary-dark);
     --bm-code-bg: color-mix(in srgb, var(--bm-text) 5%, var(--bm-bg));
@@ -110,6 +110,13 @@
   pre {
     overflow-x: auto;
   }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
 @layer components {
@@ -152,6 +159,14 @@
   .site-header :focus-visible {
     outline-color: var(--bm-on-primary);
   }
+  /* The skip link (base.html) lands over the header bar when focused. */
+  .skip-link:focus-visible {
+    background: var(--bm-bg);
+    color: var(--bm-link);
+    border-radius: 0 0 var(--bm-radius) 0;
+    outline: 2px solid var(--bm-accent);
+    outline-offset: -2px;
+  }
 
   /* Top navigation: tabs under the title. */
   .site-nav ul,
@@ -169,15 +184,14 @@
     border-radius: var(--bm-radius);
     font-size: 0.85rem;
     text-decoration: none;
-    opacity: 0.8;
-    transition: opacity 125ms;
+    transition: background-color 125ms;
   }
   .site-nav a:hover,
-  .nav-tabs a:hover,
-  .site-nav a[aria-current],
-  .nav-tabs a[aria-current],
-  .nav-tabs a.active {
-    opacity: 1;
+  .nav-tabs a:hover {
+    background: color-mix(in srgb, var(--bm-on-primary) 14%, transparent);
+  }
+  .site-nav a[aria-current] {
+    font-weight: 500;
   }
   .nav-tabs a {
     color: inherit;
@@ -835,6 +849,15 @@
   .prose details > summary {
     cursor: pointer;
   }
+  /* The type icon the pipeline puts before each title; it scales with the title text. */
+  .admonition-icon {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    margin-right: 0.4em;
+    vertical-align: -0.125em;
+    fill: currentColor;
+  }
 
   /* Content tabs (pymdownx.tabbed, alternate style). */
   .tabbed-set {
@@ -1211,7 +1234,29 @@
   pre.environment-third,
   pre.environment-fourth,
   pre.environment-fifth {
+    position: relative;
     background: color-mix(in srgb, var(--bm-env) 12%, var(--bm-bg));
+  }
+  /* The environment's name as a tag in the top-right corner, left of the Copy button when there is one. */
+  pre.environment-local::before { content: "local"; }
+  pre.environment-second::before { content: "second"; }
+  pre.environment-third::before { content: "third"; }
+  pre.environment-fourth::before { content: "fourth"; }
+  pre.environment-fifth::before { content: "fifth"; }
+  pre[class*="environment-"]::before {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    color: var(--bm-text-muted);
+    font-family: var(--bb-font-text, Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif);
+    font-size: 0.7rem;
+    line-height: 1.4;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+  pre[class*="environment-"]:has(> .code-copy-button)::before {
+    right: 3.75rem;
   }
 
   /* Line prefixes: each line is an <li data-prefix>; the prefix is drawn in a gutter. */
@@ -1232,7 +1277,7 @@
     content: attr(data-prefix);
     display: inline-block;
     margin-right: 0.75ch;
-    color: var(--bm-text-faint);
+    color: var(--bm-text-muted);
     text-align: left;
     -webkit-user-select: none;
     user-select: none;

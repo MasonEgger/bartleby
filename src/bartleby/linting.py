@@ -1,5 +1,5 @@
-# ABOUTME: Content quality linting: broken links, missing descriptions, orphans.
-# Backs `bartleby lint`; reuses the crossref resolver for broken-link detection.
+# ABOUTME: Content quality linting: broken links, missing descriptions, orphans, accessibility.
+# Backs `bartleby lint`; owns the rule table and reuses the crossref resolver for broken links.
 
 from __future__ import annotations
 
@@ -10,9 +10,10 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from bartleby.crossrefs import resolve_page_crossrefs
+from bartleby.linting_a11y import ACCESSIBILITY_RULES, Rule, lint_accessibility
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Collection
     from pathlib import Path
 
     from bartleby.config import BartlebyConfig
@@ -26,6 +27,38 @@ _SEVERITY_WARNING = "warning"
 # Pull every href out of rendered HTML so we can map inbound links and external URLs.
 _HREF_RE = re.compile(r'href="([^"]+)"')
 
+#: The content-quality rules, in the order their findings print.
+CONTENT_RULES: tuple[Rule, ...] = (
+    Rule(
+        "broken-crossref",
+        _SEVERITY_ERROR,
+        "A .md link resolves to no page.",
+        "point the link at a Markdown file that exists under content/, or remove it",
+    ),
+    Rule(
+        "missing-description",
+        _SEVERITY_WARNING,
+        "A page has no description in its front matter.",
+        "add description: to the front matter; search, previews, and llms.txt read it",
+    ),
+    Rule(
+        "orphaned-page",
+        _SEVERITY_WARNING,
+        "A page is not in the navigation and no other page links to it.",
+        "add the page under nav: in bartleby.yml, or link to it from another page",
+    ),
+    Rule(
+        "broken-external",
+        _SEVERITY_ERROR,
+        "An external link is unreachable. Only checked with --check-external.",
+        "fix the URL, or remove the link",
+    ),
+)
+
+#: Every rule `bartleby lint` knows, content rules first, then accessibility rules.
+RULES: tuple[Rule, ...] = CONTENT_RULES + ACCESSIBILITY_RULES
+RULES_BY_ID: dict[str, Rule] = {rule.id: rule for rule in RULES}
+
 
 @dataclass(slots=True)
 class Finding:
@@ -37,6 +70,7 @@ class Finding:
     :ivar message: Human-readable description of the issue.
     :ivar line: Line number when known; ``0`` when not applicable.
     :ivar fixable: Whether ``--fix`` can resolve this issue automatically.
+    :ivar hint: The concrete fix, printed as ``(fix: ...)`` after the message.
     """
 
     severity: str
@@ -45,6 +79,7 @@ class Finding:
     message: str
     line: int = 0
     fixable: bool = False
+    hint: str = ""
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -54,6 +89,7 @@ class Finding:
             "line": self.line,
             "message": self.message,
             "fixable": self.fixable,
+            "hint": self.hint,
         }
 
 
@@ -64,13 +100,16 @@ def lint_site(
     *,
     check_external: bool = False,
     external_checker: Callable[[str], bool] | None = None,
+    rules: Collection[str] | None = None,
+    skip: Collection[str] = (),
 ) -> list[Finding]:
-    """Run content-quality checks across ``pages`` and return structured findings.
+    """Run the content-quality and accessibility rules across ``pages``.
 
     Checks performed: broken internal cross-references, missing page
-    descriptions, and orphaned pages (not in navigation and with no inbound
-    links). External-link checking is opt-in via ``check_external`` and is off
-    by default so a plain ``lint`` never touches the network.
+    descriptions, orphaned pages (not in navigation and with no inbound
+    links), and every rule in :data:`ACCESSIBILITY_RULES`. External-link
+    checking is opt-in via ``check_external`` and is off by default so a plain
+    ``lint`` never touches the network.
 
     :param pages: Discovered content pages, with ``rendered_content`` populated.
     :param config: The loaded site configuration (used to resolve navigation).
@@ -79,16 +118,20 @@ def lint_site(
     :param external_checker: Predicate returning ``True`` for a reachable URL;
         defaults to :func:`check_external_url`. Only consulted when
         ``check_external`` is ``True``.
-    :returns: Every :class:`Finding`, broken-link errors first.
+    :param rules: Rule ids to run; ``None`` runs every rule.
+    :param skip: Rule ids to leave out.
+    :returns: Every :class:`Finding` of a selected rule, content rules first.
     """
+    selected = (set(RULES_BY_ID) if rules is None else set(rules)) - set(skip)
     findings: list[Finding] = []
     findings.extend(_lint_crossrefs(pages, content_dir))
     findings.extend(_lint_descriptions(pages))
     findings.extend(_lint_orphans(pages, config))
-    if check_external:
+    if check_external and "broken-external" in selected:
         checker = external_checker if external_checker is not None else check_external_url
         findings.extend(_lint_external(pages, checker))
-    return findings
+    findings.extend(lint_accessibility(pages, config))
+    return [finding for finding in findings if finding.rule in selected]
 
 
 def _lint_crossrefs(pages: list[Page], content_dir: Path) -> list[Finding]:
@@ -105,6 +148,7 @@ def _lint_crossrefs(pages: list[Page], content_dir: Path) -> list[Finding]:
                     rule="broken-crossref",
                     file=error.source_path,
                     message=error.message,
+                    hint=RULES_BY_ID["broken-crossref"].hint,
                 )
             )
     return findings
@@ -120,7 +164,8 @@ def _lint_descriptions(pages: list[Page]) -> list[Finding]:
                     severity=_SEVERITY_WARNING,
                     rule="missing-description",
                     file=page.source_path.as_posix(),
-                    message="Page has no description; set one for search and previews",
+                    message="Page has no description",
+                    hint=RULES_BY_ID["missing-description"].hint,
                 )
             )
     return findings
@@ -143,6 +188,7 @@ def _lint_orphans(pages: list[Page], config: BartlebyConfig) -> list[Finding]:
                 rule="orphaned-page",
                 file=page.source_path.as_posix(),
                 message="Page is not in navigation and has no inbound links",
+                hint=RULES_BY_ID["orphaned-page"].hint,
             )
         )
     return findings
@@ -183,6 +229,7 @@ def _lint_external(pages: list[Page], checker: Callable[[str], bool]) -> list[Fi
                         rule="broken-external",
                         file=page.source_path.as_posix(),
                         message=f"External link is unreachable: {href}",
+                        hint=RULES_BY_ID["broken-external"].hint,
                     )
                 )
     return findings

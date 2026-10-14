@@ -52,6 +52,7 @@ nav:
       - Write a Custom Shortcode: guides/posts/write-a-shortcode.md
       - Inject Content with a Hook: guides/posts/inject-content-with-hook.md
       - Configure AI Crawler Directives: guides/posts/ai-crawler-directives.md
+      - Check Accessibility Before You Publish: guides/posts/check-accessibility-before-you-publish.md
   - Reference:
       - All Reference Pages: reference/
       - bartleby.yml Configuration: reference/pages/configuration.md

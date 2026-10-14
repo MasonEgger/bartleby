@@ -24,7 +24,7 @@ Add more pages as Markdown files under `content/`, and list them in the `nav` se
 | `bartleby serve` | Builds the site, serves it, and rebuilds when a file changes |
 | `bartleby build` | Writes the finished site to `site/` |
 | `bartleby validate` | Checks `bartleby.yml` and every page's front matter |
-| `bartleby lint` | Finds broken links, missing descriptions, and orphan pages |
+| `bartleby lint` | Checks links, descriptions, orphan pages, and accessibility (alt text, heading order, link names), with a fix for each finding |
 | `bartleby generate-skill` | Writes agent skills for this site into `.claude/skills/` |
 
 Add `--help` to any command for its options, or `--output json` for machine-readable output.

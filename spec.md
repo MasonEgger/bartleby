@@ -130,6 +130,11 @@ Installed entries can be folded into plan.md per-section Tools blocks; not-insta
    Anything the scaffold or docs claim works, works: feeds carry entries, code highlighting has CSS, and each claim has a test.
    Code or design taken from another project is credited in an acknowledgments file, and its license is checked for compatibility with MIT before it lands.
    Bartleby stays on 0.1.x through this work; 0.2.0 is the next stable release.
+9. Accessible from day one (Mason, 2026-10-14: "we should focus on being a11y compliant from day one; that will be a distinguisher").
+   The bundled themes and the HTML the Markdown pipeline renders pass an axe-core audit with zero violations on every page type, in both color modes and at phone width, and every text-on-color token pair in a bundled theme is pinned at WCAG AA by a test.
+   Nothing conveys meaning by color alone: admonition and environment types carry an icon or hidden text as well as a tint.
+   What an author can still get wrong is caught by `bartleby lint`, which runs an accessibility rule set by default (alt text, heading order, link names, duplicate ids, table headers, iframe titles, `site.language`), prints a fix with every finding, and lists its rules through `--list-rules` and the generated review skill.
+   The scaffold, the feature tour, and the docs site pass that rule set with zero findings, and a test holds each of them there.
 
 ## Non-goals
 
@@ -163,7 +168,7 @@ Installed entries can be folded into plan.md per-section Tools blocks; not-insta
 
 ## Component boundaries
 
-The implementation is 38 single-responsibility modules under `src/bartleby/`, grouped by build-pipeline phase.
+The implementation is 39 single-responsibility modules under `src/bartleby/`, grouped by build-pipeline phase.
 
 Config layer:
 - `config.py`: load and validate `bartleby.yml`.
@@ -213,7 +218,8 @@ Theme:
 - The `themes/` package (replacing the former `theme/` package): the bundled `base`, `material`, and `scrivener` themes, each a complete theme directory.
 
 Quality and plugins:
-- `linting.py`: content quality checks (broken links, missing descriptions, orphans).
+- `linting.py`: the lint rule table and runner; content quality checks (broken links, missing descriptions, orphans).
+- `linting_a11y.py`: the accessibility rules `lint` runs over each page's rendered body (alt text, heading order, link names, ids, table headers, iframe titles, `site.language`).
 - `plugins.py`: base classes, hook dispatch, and `hooks/` directory discovery.
 
 Orchestration and surfaces:
@@ -234,4 +240,5 @@ The stabilization is complete, and 0.2.0 work may begin, when all of the followi
 - The public interfaces (hooks, config schema, template context, agent output formats) are documented and stable enough to build on.
 - `bartleby new site` then `bartleby serve` gives a three-column docs site with a working feature tour from a small `bartleby.yml`, `--full-config` lists every accepted option, and `bartleby enable blog <name>` adds a blog whose RSS and Atom feeds carry entries.
 - `just check` is green, and `bartleby-ssg` installs and runs from a clean environment.
+- The bundled themes pass axe-core with zero violations on every page type; `bartleby lint` runs the accessibility rule set by default; every text-on-color token pair is pinned at WCAG AA.
 - Mason is willing to send it to people and show it off. This is the governing bar.

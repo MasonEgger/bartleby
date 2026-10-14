@@ -117,23 +117,48 @@ On failure, it prints `validation failed`, then one line per error in the form `
 
 ## `bartleby lint`
 
-Check content quality.
+Check content quality and accessibility.
 
 ```
-bartleby lint [--check-external]
+bartleby lint [--check-external] [--rules IDS] [--skip IDS] [--list-rules]
 ```
+
+The command renders every published page the way `build` does, without writing `site/`, and runs every rule below over the result.
+Each finding prints as `<severity> [<rule>] <file>:<line>: <message> (fix: <hint>)`, with the line counted in the Markdown source and left out when the rule has no line to point at.
+With `--output json`, each issue carries `severity`, `rule`, `file`, `line`, `message`, `hint`, and `fixable`, and `summary` counts errors, warnings, and info.
 
 | Rule | Severity | Meaning |
 |------|----------|---------|
-| `broken-crossref` | error | A `.md` link resolves to no page. |
-| `missing-description` | warning | A page has no `description` in its front matter. |
+| `broken-crossref` | error | A .md link resolves to no page. |
+| `missing-description` | warning | A page has no description in its front matter. |
 | `orphaned-page` | warning | A page is not in the navigation and no other page links to it. |
 | `broken-external` | error | An external link is unreachable. Only checked with `--check-external`. |
+| `image-missing-alt` | error | An image has no alt attribute. |
+| `image-alt-is-filename` | warning | An image's alt text is its file name or a bare word such as "image" or "screenshot". |
+| `heading-level-skip` | warning | A heading is more than one level below the one before it, counted from the title (h1). |
+| `heading-empty` | error | A heading has no text. |
+| `link-empty` | error | A link has no text, no aria-label, and no image with alt text inside it. |
+| `link-generic-text` | warning | A link's text is only a stock phrase such as "here", "click here", or "read more". |
+| `link-raw-url-text` | warning | A link's text is a URL longer than 40 characters. |
+| `duplicate-id` | error | The same id appears more than once on a page, so its anchor reaches only the first. |
+| `table-missing-header` | warning | A table has no thead and no th cells in its first row. |
+| `iframe-missing-title` | error | An iframe has no title attribute. |
+| `emphasis-as-heading` | warning | A paragraph is only a short bold or italic run followed by a list or paragraph. |
+| `language-invalid` | error | site.language is not a BCP 47 language tag. |
 
+The accessibility rules (from `image-missing-alt` down) check what an author writes; the bundled themes and the Markdown pipeline already pass an axe-core audit.
+An `alt=""` image is decorative and passes.
+`heading-level-skip` counts from the page title, which the theme renders as the h1, so a body that starts at `###` is reported.
+`duplicate-id` names the heading when two headings share an anchor.
+`language-invalid` checks `site.language` once per run and reports it against `bartleby.yml`.
+`bartleby lint --list-rules` prints this table with each rule's fix, in text or as JSON under a `rules` key, and needs no `bartleby.yml`.
+
+`--rules IDS` runs only the comma-separated rules named, and `--skip IDS` runs every rule but those; an unknown id is a usage error.
 `--check-external` probes each external URL with a HEAD request.
 The check is off by default, so a plain `lint` never touches the network.
 When there are no findings, the command prints `lint: no issues`.
-The command exits 1 only when it finds errors.
+The command exits 1 only when it finds errors; warnings print and exit 0.
+See [Check Accessibility Before You Publish](../../guides/posts/check-accessibility-before-you-publish.md) for a walk through each finding.
 
 ## `bartleby serve`
 

@@ -462,6 +462,18 @@ def test_llms_txt_links_resolve_to_built_markdown_variants(docs_site: Path) -> N
         assert (docs_site / "site" / urlsplit(link).path.strip("/")).is_file()
 
 
+def test_schema_json_carries_the_configured_language(project: Path) -> None:
+    """``site.language`` in bartleby.yml is the ``site.language`` schema.json reports."""
+    config_path = project / "bartleby.yml"
+    text = set_key(config_path.read_text(encoding="utf-8"), "site.language", "de-AT")
+    config_path.write_text(text, encoding="utf-8")
+
+    build(config_path)
+
+    schema = json.loads((project / "site" / "schema.json").read_text(encoding="utf-8"))
+    assert schema["site"]["language"] == "de-AT"
+
+
 def test_agent_outputs_are_identical_across_two_builds(project: Path, tmp_path: Path) -> None:
     """Two builds of the same input produce byte-identical agent files."""
     second = tmp_path / "second"

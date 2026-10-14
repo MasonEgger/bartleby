@@ -67,4 +67,4 @@ To start a new site with the blog and a sample post already in place, run `bartl
 ## Check Your Work
 
 Run `bartleby build` to write the finished site to `site/`.
-Run `bartleby lint` to find broken links, missing descriptions, and orphan pages before you publish.
+Run `bartleby lint` before you publish: it checks links, descriptions, orphan pages, and accessibility (alt text, heading order, link names), and each finding comes with its fix.

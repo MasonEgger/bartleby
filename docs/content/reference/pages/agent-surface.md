@@ -57,7 +57,7 @@ Both files list published pages only, in source-path order.
 
 | Key | Contents |
 |-----|----------|
-| `site` | `title`, `description`, `url`, and `language` (always `en`) |
+| `site` | `title`, `description`, `url`, and `language` (`site.language`, default `en`) |
 | `content_types` | One object per content type, in the shape of `bartleby schema <type>` |
 | `taxonomies` | Each taxonomy with its `name`, `slug_format`, and the `terms` in use with their `count` |
 | `authors` | The public author list, in the shape of `bartleby schema authors` |

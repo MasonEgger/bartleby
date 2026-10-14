@@ -28,6 +28,7 @@ from bartleby.cli import _build_parser, _global_flags
 from bartleby.config import AIConfig, BartlebyConfig, load_config
 from bartleby.config_schema import CONFIG_SCHEMA, ConfigField
 from bartleby.content import Page, TermLink, discover_content
+from bartleby.linting import RULES
 from bartleby.listings import generate_listing_pages
 from bartleby.llm import generate_jsonld
 from bartleby.navigation import NavItem
@@ -440,6 +441,17 @@ def _cli_arguments() -> Surface:
     return code, docs
 
 
+def _lint_rules() -> Surface:
+    """Each lint rule as ``id|severity|description``; the docs table must match the code."""
+    code = {f"{rule.id}|{rule.severity}|{rule.description}" for rule in RULES}
+    body = _sections(_read("cli.md"))["`bartleby lint`"]
+    docs = {
+        f"{row[0].strip('`')}|{row[1]}|{row[2].replace('`', '')}"
+        for row in _table_with_header(body, "Rule").rows
+    }
+    return code, docs
+
+
 def _cli_global_flags() -> Surface:
     code: set[str] = set()
     for action in _global_flags()._actions:
@@ -806,6 +818,7 @@ SURFACES: dict[str, Callable[[], Surface]] = {
     "cli commands": _cli_commands,
     "cli arguments": _cli_arguments,
     "cli global flags": _cli_global_flags,
+    "lint rules": _lint_rules,
     "serve event types": _serve_event_types,
     "serve ready fields": _serve_ready_fields,
     "theme features": _theme_features,

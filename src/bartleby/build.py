@@ -309,7 +309,7 @@ class RenderedContent:
     pages: list[Page]
 
 
-def render_content(config_path: Path) -> RenderedContent:
+def render_content(config_path: Path, *, command: str = "export") -> RenderedContent:
     """Render the published pages' bodies through the build's own render phase.
 
     Runs the build's load, filter, and body-render phases (shortcodes, plugin hooks,
@@ -321,10 +321,11 @@ def render_content(config_path: Path) -> RenderedContent:
     and never ``on_post_build``, since nothing is written.
 
     :param config_path: Path to ``bartleby.yml``.
+    :param command: The command name ``on_startup`` receives (``export`` or ``lint``).
     :returns: The final config and the published pages with ``rendered_content`` set.
     :raises BuildError: When metadata validation or a page's render fails.
     """
-    state = _load_inputs(config_path, None, command="export")
+    state = _load_inputs(config_path, None, command=command)
     try:
         with _pair_failure_hooks(state.plugins):
             _filter_and_validate(state, include_drafts=False)

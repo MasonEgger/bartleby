@@ -69,6 +69,12 @@ The search dialog keeps Tab and Shift+Tab inside it while open.
 
 `tests/test_accessibility.py` builds the scaffold site with both themes and pins the landmarks, names, focus order, heading order, alt text, and the stylesheet cues behind them.
 
+`bartleby lint` runs twelve accessibility rules by default, over the HTML the build renders for each page: `image-missing-alt`, `image-alt-is-filename`, `heading-level-skip`, `heading-empty`, `link-empty`, `link-generic-text`, `link-raw-url-text`, `duplicate-id`, `table-missing-header`, `iframe-missing-title`, `emphasis-as-heading`, and `language-invalid`.
+Every finding now prints the Markdown source line and a fix (`<file>:<line>: <message> (fix: <hint>)`), and the JSON issue carries a `hint` key; the four content rules got fixes too.
+`--rules IDS` and `--skip IDS` pick rules by id, and `--list-rules` prints the rule table in text or JSON without a site.
+The generated review skill lists every rule with its fix.
+`schema.json` reports the configured `site.language` instead of a constant `en`.
+
 `bartleby new site` prints what it created and the exact next command, with the path quoted when it holds a space.
 `bartleby serve` prints the build summary, the bound URL, and how to stop, after the socket binds, so `--port 0` shows the real port.
 `serve --events` opens with a matching `ready` object, and `--output json` carries the same data as text.

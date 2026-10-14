@@ -147,7 +147,7 @@ def build_schema_json(
             "title": config.site.title,
             "description": config.site.description,
             "url": config.site.url,
-            "language": "en",
+            "language": config.site.language,
         },
         "content_types": content_types,
         "taxonomies": taxonomies,

@@ -410,12 +410,39 @@ class LintOutput:
     def to_text(self) -> str:
         if not self.issues:
             return "lint: no issues"
-        lines = [
-            f"{issue['severity']} [{issue['rule']}] {issue['file']}: {issue['message']}"
-            for issue in self.issues
-        ]
+        lines = [_issue_line(issue) for issue in self.issues]
         lines.append(f"{self.errors} error(s), {self.warnings} warning(s), {self.info} info")
         return "\n".join(lines)
+
+
+def _issue_line(issue: dict[str, object]) -> str:
+    """One finding as ``severity [rule] file:line: message (fix: hint)``; absent parts drop."""
+    location = f"{issue['file']}:{issue['line']}" if issue.get("line") else str(issue["file"])
+    line = f"{issue['severity']} [{issue['rule']}] {location}: {issue['message']}"
+    hint = issue.get("hint")
+    return f"{line} (fix: {hint})" if hint else line
+
+
+@dataclass(slots=True)
+class LintRulesOutput:
+    """Result of ``bartleby lint --list-rules``: every rule with its severity and fix."""
+
+    rules: list[dict[str, str]]
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_SUCCESS
+
+    def to_dict(self) -> dict[str, object]:
+        return {"rules": self.rules}
+
+    def to_text(self) -> str:
+        width = max(len(rule["id"]) for rule in self.rules)
+        return "\n".join(
+            f"{rule['id']:<{width}}  {rule['severity']:<7}  {rule['description']}"
+            f" (fix: {rule['hint']})"
+            for rule in self.rules
+        )
 
 
 def format_config_value(value: object) -> str:

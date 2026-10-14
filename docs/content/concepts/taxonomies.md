@@ -51,12 +51,12 @@ categories:
 
 For every taxonomy, Bartleby generates pages at two scopes.
 
-**Global**
+### Global
 
 - `/tags/` lists every tag across the site.
 - `/tags/python/` lists every page tagged `python`.
 
-**Per content type**
+### Per Content Type
 
 - `/blog/tags/` lists the tags used by blog pages.
 - `/blog/tags/python/` lists every blog page tagged `python`.

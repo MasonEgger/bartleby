@@ -44,13 +44,12 @@ from bartleby.content_query import (
     ContentQueryError,
     get_content,
     list_content,
-    select_published,
 )
 from bartleby.content_shapes import CONTENT_SHAPES
-from bartleby.crossrefs import resolve_all_crossrefs, resolve_page_crossrefs
+from bartleby.crossrefs import resolve_page_crossrefs
 from bartleby.errors import format_error
 from bartleby.export import export_content
-from bartleby.linting import lint_site
+from bartleby.linting import RULES, RULES_BY_ID, lint_site
 from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
 from bartleby.metadata import validate_all_metadata
 from bartleby.output import (
@@ -65,6 +64,7 @@ from bartleby.output import (
     ErrorOutput,
     GenerateSkillOutput,
     LintOutput,
+    LintRulesOutput,
     NewPostOutput,
     NewSiteOutput,
     RawOutput,
@@ -437,12 +437,33 @@ def _build_parser() -> argparse.ArgumentParser:
     render_parser.set_defaults(_handler=_cmd_render)
 
     lint_parser = subparsers.add_parser(
-        "lint", help="Check content quality (links, descriptions, orphans)", parents=[flags]
+        "lint",
+        help="Check content quality and accessibility (links, descriptions, orphans, alt text)",
+        parents=[flags],
     )
     lint_parser.add_argument(
         "--check-external",
         action="store_true",
         help="Also verify external URLs (slow, disabled by default)",
+    )
+    lint_parser.add_argument(
+        "--rules",
+        type=_rule_ids,
+        default=None,
+        metavar="IDS",
+        help="Run only these rules, comma-separated (see --list-rules)",
+    )
+    lint_parser.add_argument(
+        "--skip",
+        type=_rule_ids,
+        default=[],
+        metavar="IDS",
+        help="Leave out these rules, comma-separated (see --list-rules)",
+    )
+    lint_parser.add_argument(
+        "--list-rules",
+        action="store_true",
+        help="Print every rule with its severity, meaning, and fix, then exit",
     )
     lint_parser.set_defaults(_handler=_cmd_lint)
 
@@ -572,6 +593,20 @@ def _resolve_config_path(args: argparse.Namespace) -> Path:
             code="usage_error",
         )
     return config_path
+
+
+def _rule_ids(value: str) -> list[str]:
+    """Argparse type for ``--rules`` and ``--skip``: comma-separated ids from the rule table."""
+    ids = [name.strip() for name in value.split(",") if name.strip()]
+    unknown = [name for name in ids if name not in RULES_BY_ID]
+    if unknown:
+        raise argparse.ArgumentTypeError(
+            format_error(
+                f"unknown lint rule {', '.join(unknown)}",
+                hint="run `bartleby lint --list-rules` for the rule ids",
+            )
+        )
+    return ids
 
 
 def _instance_name(value: str) -> str:
@@ -1001,37 +1036,28 @@ def _cmd_render(args: argparse.Namespace) -> RenderOutput:
     )
 
 
-def _cmd_lint(args: argparse.Namespace) -> LintOutput:
-    """Check content quality (``lint``): broken links, missing desc, orphans.
+def _cmd_lint(args: argparse.Namespace) -> LintOutput | LintRulesOutput:
+    """Check content quality and accessibility (``lint``).
 
-    Renders every published page in-memory (no ``site/`` output) so cross-
-    reference and inbound-link analysis has rendered HTML to scan, then runs the
-    linting checks. ``--check-external`` opts into (slow) external URL probing.
+    Renders every published page through the build's own render phase (no
+    ``site/`` output), so the cross-reference, inbound-link, and accessibility
+    rules read the HTML the built page embeds. ``--check-external`` opts into
+    (slow) external URL probing; ``--rules`` and ``--skip`` pick the rules;
+    ``--list-rules`` prints the rule table instead of linting.
     """
+    if args.list_rules:
+        return LintRulesOutput(rules=[rule.to_dict() for rule in RULES])
     config_path = _resolve_config_path(args)
-    project_dir = config_path.parent
-    config = load_config(config_path)
-    content_dir = project_dir / "content"
-    pages, _assets = discover_content(config, content_dir)
-    pages = select_published(pages)
-    generate_all_urls(pages, config)
-
-    from bartleby.templates import create_jinja_env
-
-    env = create_jinja_env(config, project_dir)
-    md_renderer = create_markdown_renderer(config)
-    for page in pages:
-        try:
-            processed = process_shortcodes(page.raw_content, {"page": page}, env)
-        except ShortcodeError:
-            processed = page.raw_content
-        page.rendered_content = render_markdown(processed, md_renderer).html
-
-    # Rewrite .md hrefs to output URLs before linting, mirroring build.py's
-    # pipeline, so the orphan pass sees resolved inbound links, not .md targets.
-    resolve_all_crossrefs(pages, content_dir)
-
-    findings = lint_site(pages, config, content_dir, check_external=args.check_external)
+    rendered = render_content(config_path, command="lint")
+    config, pages = rendered.config, rendered.pages
+    findings = lint_site(
+        pages,
+        config,
+        config_path.parent / "content",
+        check_external=args.check_external,
+        rules=args.rules,
+        skip=args.skip,
+    )
     issues = [finding.to_dict() for finding in findings]
     errors = sum(1 for finding in findings if finding.severity == "error")
     warnings = sum(1 for finding in findings if finding.severity == "warning")

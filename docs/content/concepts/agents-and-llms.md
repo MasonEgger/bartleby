@@ -43,7 +43,7 @@ The CLI answers the same questions live, and every command takes `--output json`
 - `bartleby content list` and `bartleby content get` query the pages.
 - `bartleby render` renders one file for fast feedback.
 - `bartleby export` writes the published content as JSONL, JSON, or CSV.
-- `bartleby lint` checks content quality.
+- `bartleby lint` checks content quality and accessibility; `--list-rules` prints the rule table, and the review skill carries it.
 - `bartleby generate-skill` writes agent skills, described next.
 
 The [CLI reference](../reference/pages/cli.md) lists every flag.

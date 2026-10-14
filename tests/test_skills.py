@@ -296,6 +296,19 @@ def test_review_skill_names_taxonomies_and_types() -> None:
     assert "**tags**: python, web" in review
 
 
+def test_review_skill_lists_every_lint_rule_with_its_fix() -> None:
+    """The review skill names each lint rule, its severity, and its fix, in table order."""
+    from bartleby.linting import RULES
+
+    review = _skill(generate_skills(_pages(), _config(), _authors(), _theme()), "bartleby-review")
+    section = review.split("## Lint rules", 1)[1]
+    positions = [section.index(f"`{rule.id}`") for rule in RULES]
+    assert positions == sorted(positions)
+    for rule in RULES:
+        assert f"`{rule.id}` ({rule.severity}): {rule.description} Fix: {rule.hint}." in section
+    assert "bartleby lint --list-rules --output json" in section
+
+
 def test_ops_skill_states_the_active_theme_and_split_features() -> None:
     """Active features are the enabled-and-implemented ones; the rest are called out."""
     ops = _skill(generate_skills(_pages(), _config(), _authors(), _theme()), "bartleby-ops")

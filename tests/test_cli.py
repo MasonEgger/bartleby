@@ -853,6 +853,78 @@ def test_lint_check_external_off_by_default(
     assert called["checked"] is False
 
 
+def test_lint_runs_accessibility_rules_and_prints_line_and_fix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A page with an unlabeled image fails lint with the file, line, message, and fix."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    page = tmp_path / "mysite" / "content" / "chart.md"
+    page.write_text(
+        '---\ntitle: "Chart"\ndescription: "d"\n---\n\nSee the chart.\n\n<img src="chart.png">\n',
+        encoding="utf-8",
+    )
+    _append_to_config("nav:\n  - Home: index.md\n  - Chart: chart.md\n")
+
+    with pytest.raises(SystemExit) as exc:
+        main(["lint"])
+    assert exc.value.code == 1
+
+    out = capsys.readouterr().out
+    assert (
+        "error [image-missing-alt] chart.md:8: <img src='chart.png'> has no alt attribute" in out
+    )
+    assert "(fix: write alt text" in out
+
+
+def test_lint_rules_and_skip_select_rules(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--rules`` runs only the named rules and ``--skip`` leaves the named ones out."""
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    page = tmp_path / "mysite" / "content" / "chart.md"
+    page.write_text('---\ntitle: "Chart"\n---\n\n<img src="chart.png">\n', encoding="utf-8")
+    _append_to_config("nav:\n  - Home: index.md\n  - Chart: chart.md\n")
+
+    main(["lint", "--rules", "missing-description,orphaned-page", "--output", "json"])
+    rules = {issue["rule"] for issue in _last_json(capsys.readouterr().out)["issues"]}
+    assert rules == {"missing-description", "orphaned-page"}
+
+    with pytest.raises(SystemExit):
+        main(["lint", "--skip", "missing-description", "--output", "json"])
+    rules = {issue["rule"] for issue in _last_json(capsys.readouterr().out)["issues"]}
+    assert "image-missing-alt" in rules
+    assert "missing-description" not in rules
+
+
+def test_lint_unknown_rule_id_is_a_usage_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _scaffold_and_enter(tmp_path, monkeypatch)
+    with pytest.raises(SystemExit) as exc:
+        main(["lint", "--rules", "image-missing-alt,no-such-rule"])
+    assert exc.value.code == 2
+    assert "no-such-rule" in capsys.readouterr().err
+
+
+def test_lint_list_rules_prints_the_table_without_a_site(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--list-rules`` needs no bartleby.yml and prints every rule in text and JSON."""
+    from bartleby.linting import RULES
+
+    monkeypatch.chdir(tmp_path)
+    main(["lint", "--list-rules"])
+    text = capsys.readouterr().out
+    for rule in RULES:
+        assert rule.id in text
+        assert rule.hint in text
+
+    main(["lint", "--list-rules", "--output", "json"])
+    payload = _last_json(capsys.readouterr().out)
+    assert payload["rules"] == [rule.to_dict() for rule in RULES]
+    assert [rule["id"] for rule in payload["rules"]][:1] == ["broken-crossref"]
+
+
 def test_build_dry_run_reports_without_writing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

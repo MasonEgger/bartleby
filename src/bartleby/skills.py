@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING
 from bartleby.agent_surface import build_theme_block
 from bartleby.content import STANDARD_FRONT_MATTER_FIELDS
 from bartleby.content_query import select_published
+from bartleby.linting import RULES
 from bartleby.schema_introspection import (
     derive_authors_schema,
     derive_content_type_schema,
@@ -173,7 +174,26 @@ def _review_skill(
         "bartleby lint --output json",
         "```",
     ]
+    lines += _lint_rules_section()
     return "\n".join(lines) + "\n"
+
+
+def _lint_rules_section() -> list[str]:
+    """Render every lint rule with its severity and fix, so a reviewer knows what lint reports."""
+    lines = [
+        "",
+        "## Lint rules",
+        "",
+        "`bartleby lint` fails on an error and reports a warning. Each finding prints a fix.",
+        "`--rules` and `--skip` take comma-separated ids, as in"
+        " `bartleby lint --skip orphaned-page --output json`;"
+        " `bartleby lint --list-rules --output json` prints this table.",
+        "",
+    ]
+    lines += [
+        f"- `{rule.id}` ({rule.severity}): {rule.description} Fix: {rule.hint}." for rule in RULES
+    ]
+    return lines
 
 
 def _ops_skill(pages: list[Page], config: BartlebyConfig, theme: ResolvedTheme) -> str:

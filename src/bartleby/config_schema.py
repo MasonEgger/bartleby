@@ -8,8 +8,10 @@ It is the single source for ``new site --full-config``, ``config schema``, and t
 configuration reference docs, so none of them keeps its own list of options.
 
 The schema mirrors ``config.py``; it does not drive it. Defaults are read from the
-``config.py`` dataclasses and closed sets from :data:`bartleby.theme_loader.THEME_FEATURES`
-and :data:`bartleby.config.METADATA_FIELD_TYPES`, so a changed default cannot drift.
+:mod:`bartleby.config_model` dataclasses and closed sets from
+:data:`bartleby.theme_loader.THEME_FEATURES` and
+:data:`bartleby.config_model.METADATA_FIELD_TYPES`, so a changed default cannot drift.
+This module reads the leaf only, never :mod:`bartleby.config`, which imports it.
 ``tests/test_config_schema.py`` fails when ``config.py`` accepts a top-level key the
 schema does not describe.
 
@@ -22,16 +24,13 @@ from __future__ import annotations
 import dataclasses
 import difflib
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from bartleby import config
+from bartleby import config_model
 from bartleby.theme_loader import THEME_FEATURES
 
-if TYPE_CHECKING:
-    from pathlib import Path
-
-_FEED_FORMATS = config.FEED_FORMATS
-_COLOR_MODES = config.COLOR_MODES
+_FEED_FORMATS = config_model.FEED_FORMATS
+_COLOR_MODES = config_model.COLOR_MODES
 
 
 @dataclass(slots=True, frozen=True)
@@ -92,7 +91,7 @@ def _default(owner: type, attribute: str) -> object:
 
 def _site_fields() -> tuple[ConfigField, ...]:
     """Fields under ``site`` and ``site.feed``."""
-    site, feed = config.SiteConfig, config.FeedConfig
+    site, feed = config_model.SiteConfig, config_model.FeedConfig
     return (
         _field("site.title", "string", "The site title.", required=True),
         _field(
@@ -170,7 +169,7 @@ def _nav_fields() -> tuple[ConfigField, ...]:
 
 def _theme_fields() -> tuple[ConfigField, ...]:
     """Fields under ``theme``."""
-    theme = config.ThemeConfig
+    theme = config_model.ThemeConfig
     return (
         _field(
             "theme.name",
@@ -232,7 +231,7 @@ def _theme_fields() -> tuple[ConfigField, ...]:
 
 def _top_level_value_fields() -> tuple[ConfigField, ...]:
     """Plain top-level keys: authors file, exclusions, extensions, plugins, assets, output."""
-    root = config.BartlebyConfig
+    root = config_model.BartlebyConfig
     return (
         _field(
             "authors_file",
@@ -244,7 +243,7 @@ def _top_level_value_fields() -> tuple[ConfigField, ...]:
             "exclude_patterns",
             "list",
             "Glob patterns for content files to skip.",
-            default=list(config.DEFAULT_EXCLUDE_PATTERNS),
+            default=list(config_model.DEFAULT_EXCLUDE_PATTERNS),
         ),
         _field(
             "markdown_extensions",
@@ -289,9 +288,9 @@ def _top_level_value_fields() -> tuple[ConfigField, ...]:
 def _content_type_fields() -> tuple[ConfigField, ...]:
     """Fields under ``content_types.<name>``."""
     content_type, pagination, metadata = (
-        config.ContentTypeConfig,
-        config.PaginationConfig,
-        config.MetadataFieldSchema,
+        config_model.ContentTypeConfig,
+        config_model.PaginationConfig,
+        config_model.MetadataFieldSchema,
     )
     base = "content_types.<name>"
     return (
@@ -366,7 +365,7 @@ def _content_type_fields() -> tuple[ConfigField, ...]:
             f"{base}.metadata.<field>.type",
             "string",
             "The front matter field type.",
-            choices=config.METADATA_FIELD_TYPES,
+            choices=config_model.METADATA_FIELD_TYPES,
             required=True,
         ),
         _field(
@@ -398,7 +397,11 @@ def _taxonomy_fields() -> tuple[ConfigField, ...]:
 
 def _ai_fields() -> tuple[ConfigField, ...]:
     """Fields under ``ai``."""
-    ai, skills, context = config.AIConfig, config.SkillsConfig, config.AgentContext
+    ai, skills, context = (
+        config_model.AIConfig,
+        config_model.SkillsConfig,
+        config_model.AgentContext,
+    )
     return (
         _field("ai.llms_txt", "boolean", "Write llms.txt.", default=_default(ai, "llms_txt")),
         _field(
@@ -466,7 +469,7 @@ def _ai_fields() -> tuple[ConfigField, ...]:
 
 def _dev_server_fields() -> tuple[ConfigField, ...]:
     """Fields under ``dev_server``."""
-    dev_server = config.DevServerConfig
+    dev_server = config_model.DevServerConfig
     return (
         _field(
             "dev_server.host",
@@ -528,7 +531,7 @@ def resolve_path(dotted_path: str) -> ConfigField | None:
     :raises ConfigError: If no schema entry accepts the path; the hint names the closest
         known key.
     """
-    segments = config.split_path(dotted_path)
+    segments = config_model.split_path(dotted_path)
     for entry in CONFIG_SCHEMA:
         parts = entry.path.split(".")
         if _segments_match(parts, segments):
@@ -543,7 +546,7 @@ def resolve_path(dotted_path: str) -> ConfigField | None:
     raise _unknown_key(segments)
 
 
-def _unknown_key(segments: list[str]) -> config.ConfigError:
+def _unknown_key(segments: list[str]) -> config_model.ConfigError:
     """Build the error for a path the schema lacks, pointing at the closest key beside it."""
     depth = max(
         len(prefix)
@@ -570,7 +573,7 @@ def _unknown_key(segments: list[str]) -> config.ConfigError:
     else:
         where = f"under {parent}" if parent else "at the top level"
         hint = f"valid keys {where} are {', '.join(known)}"
-    return config.ConfigError("unknown key", key_path=key_path, hint=hint)
+    return config_model.ConfigError("unknown key", key_path=key_path, hint=hint)
 
 
 _TYPE_MESSAGES: dict[str, str] = {
@@ -630,98 +633,9 @@ def override_value(dotted_path: str, text: str) -> Any:
     entry = resolve_path(dotted_path)
     if entry is not None and entry.type_name == "string":
         return text or None
-    value = config.parse_override_value(dotted_path, text)
+    value = config_model.parse_override_value(dotted_path, text)
     if entry is None or value is None or _fits(entry, value):
         return value
-    raise config.ConfigError(
+    raise config_model.ConfigError(
         _TYPE_MESSAGES[entry.type_name], key_path=dotted_path, hint=_type_hint(entry)
     )
-
-
-def resolve_with_sources(
-    config_path: Path, overrides: list[str] | None = None
-) -> dict[str, tuple[Any, str]]:
-    """Resolve every config value together with where it came from.
-
-    This lives beside :data:`CONFIG_SCHEMA`, which already imports :mod:`bartleby.config`,
-    so the dependency stays one-directional. File and ``--set`` tags come from
-    :func:`bartleby.config.source_tags`; a key neither supplied is filled from the
-    schema and tagged :data:`bartleby.config.SOURCE_DEFAULT`. Keys under a user-chosen
-    name (``content_types.<name>...``) get no default entry. A null or empty-mapping
-    section in the file gives no row of its own when schema entries sit beneath it, so
-    the result holds only real leaves.
-
-    :param config_path: Path to the ``bartleby.yml`` file.
-    :param overrides: ``key.path=value`` strings, as for :func:`bartleby.config.load_config`.
-    :returns: Dotted path to ``(value, source)``, sorted by path.
-    :raises FileNotFoundError: If ``config_path`` does not exist.
-    :raises ConfigError: If the file or an override fails validation.
-    """
-    tagged = config.source_tags(config_path, overrides)
-
-    # An empty or null section (`feed: {}`, a bare `theme:`) is a leaf in the file, but
-    # the defaults beneath it are filled below, so the section itself is not a real value.
-    resolved = {
-        path: tagged_value
-        for path, tagged_value in tagged.items()
-        if not (
-            (tagged_value[0] is None or tagged_value[0] == {})
-            and any(entry.path.startswith(f"{path}.") for entry in CONFIG_SCHEMA)
-        )
-    }
-
-    for entry in CONFIG_SCHEMA:
-        if entry.repeatable:
-            continue
-        if not any(config.same_branch(path, entry.path) for path in resolved):
-            resolved[entry.path] = (entry.default, config.SOURCE_DEFAULT)
-    return dict(sorted(resolved.items()))
-
-
-_MISSING = object()
-
-
-def _parsed_value(parsed: config.BartlebyConfig, path: str, raw: Any) -> Any:
-    """Read ``path`` off the loaded config, or return ``raw`` when it has no parsed form.
-
-    A segment is looked up as a mapping key (on a dict) or an attribute (on a dataclass);
-    a path that continues past any other value keeps the raw value. A path that does not
-    resolve (``theme.color_mode.default`` when unset, a design-token name containing a
-    dot) or that lands on a whole dataclass keeps the raw value.
-    """
-    node: object = parsed
-    for segment in path.split("."):
-        if isinstance(node, dict):
-            node = node.get(segment, _MISSING)
-        elif dataclasses.is_dataclass(node):
-            node = getattr(node, segment, _MISSING)
-        else:
-            return raw
-        if node is _MISSING:
-            return raw
-    return raw if dataclasses.is_dataclass(node) else node
-
-
-def resolve_parsed_with_sources(
-    config_path: Path, overrides: list[str] | None = None
-) -> dict[str, tuple[Any, str]]:
-    """Resolve every config value as the build sees it, with where it came from.
-
-    :func:`resolve_with_sources` carries raw YAML values (a quoted feed limit ``"25"`` is
-    the string there). This keeps its sources and takes each value from the loaded
-    :class:`bartleby.config.BartlebyConfig` where a parsed value exists (``25`` as an
-    int), so ``config show`` and ``config get`` print what the build uses. The keys and
-    sources are those of :func:`resolve_with_sources`.
-
-    :param config_path: Path to the ``bartleby.yml`` file.
-    :param overrides: ``key.path=value`` strings, as for :func:`bartleby.config.load_config`.
-    :returns: Dotted path to ``(parsed value, source)``, sorted by path.
-    :raises FileNotFoundError: If ``config_path`` does not exist.
-    :raises ConfigError: If the file or an override fails validation.
-    """
-    resolved = resolve_with_sources(config_path, overrides)
-    parsed = config.load_config(config_path, overrides)
-    return {
-        path: (_parsed_value(parsed, path, raw), source)
-        for path, (raw, source) in resolved.items()
-    }

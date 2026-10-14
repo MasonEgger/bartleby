@@ -16,7 +16,7 @@ key order, and indentation in a file a person wrote survive, as do a byte order 
 and CRLF line endings. This module is the one writer shared by ``config set``,
 ``enable``, and ``--full-config``; nothing else serializes ``bartleby.yml``. The
 dotted-path walk (``split_path`` and ``existing_prefix``) lives in
-:mod:`bartleby.config`, shared with the ``--set`` override layer.
+:mod:`bartleby.config_model`, shared with the ``--set`` override layer.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from ruamel.yaml.error import YAMLError
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 from ruamel.yaml.tokens import CommentToken
 
-from bartleby.config import ConfigError, existing_prefix, split_path, yaml_location
+from bartleby.config_model import ConfigError, existing_prefix, split_path, yaml_location
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

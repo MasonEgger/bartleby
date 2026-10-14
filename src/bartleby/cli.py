@@ -33,10 +33,11 @@ from bartleby.config import (
     ConfigError,
     load_config,
     read_config_text,
+    resolve_parsed_with_sources,
     validate_config_text,
 )
 from bartleby.config_edit import append_to_list, render_full_config, set_key, write_config_text
-from bartleby.config_schema import CONFIG_SCHEMA, override_value, resolve_parsed_with_sources
+from bartleby.config_schema import CONFIG_SCHEMA, override_value
 from bartleby.content import ContentError, discover_content
 from bartleby.content_query import (
     ContentGet,

@@ -127,9 +127,9 @@ The `Justfile` exposes individual targets too: `just lint`, `just typecheck`, `j
 
 ## Architecture
 
-Bartleby is 40 source modules under `src/bartleby/`, organised by build pipeline phase:
+Bartleby is 41 source modules under `src/bartleby/`, organised by build pipeline phase:
 
-- The config layer is `config.py`, `authors.py`, `errors.py`, `config_schema.py` (every `bartleby.yml` key as data: path, type, default, choices, description), `config_edit.py` (the one writer behind `config set`, `enable`, and `new site --full-config`), and `content_shapes.py` (the content-type shapes `bartleby enable` can add; blog is the only one).
+- The config layer is `config.py`, `config_model.py` (the typed dataclasses, constants, `ConfigError`, and path helpers the other config modules share), `authors.py`, `errors.py`, `config_schema.py` (every `bartleby.yml` key as data: path, type, default, choices, description), `config_edit.py` (the one writer behind `config set`, `enable`, and `new site --full-config`), and `content_shapes.py` (the content-type shapes `bartleby enable` can add; blog is the only one).
 - The content layer is `content.py`, `metadata.py`, `urls.py`, and `content_query.py`.
 - Rendering is `markdown_pipeline.py`, `accessibility.py` (the pipeline's last pass: type icons and hidden text on admonitions and environment fences, labels on controls), `shortcodes.py`, `templates.py`, and `crossrefs.py`.
 - Structure is `navigation.py`, `taxonomies.py`, `listings.py`, and `pagination.py`.

@@ -9,14 +9,14 @@ from pathlib import Path
 import pytest
 
 from bartleby import config, theme_loader
-from bartleby.config import OVERRIDE_SOURCE, ConfigError, load_config
-from bartleby.config_schema import (
-    CONFIG_SCHEMA,
-    ConfigField,
+from bartleby.config import (
+    OVERRIDE_SOURCE,
+    ConfigError,
+    load_config,
     resolve_parsed_with_sources,
     resolve_with_sources,
-    schema_field,
 )
+from bartleby.config_schema import CONFIG_SCHEMA, ConfigField, schema_field
 
 FIXTURES = Path(__file__).parent / "fixtures" / "configs"
 

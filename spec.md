@@ -135,6 +135,18 @@ Installed entries can be folded into plan.md per-section Tools blocks; not-insta
    Nothing conveys meaning by color alone: admonition and environment types carry an icon or hidden text as well as a tint.
    What an author can still get wrong is caught by `bartleby lint`, which runs an accessibility rule set by default (alt text, heading order, link names, duplicate ids, table headers, iframe titles, `site.language`), prints a fix with every finding, and lists its rules through `--list-rules` and the generated review skill.
    The scaffold, the feature tour, and the docs site pass that rule set with zero findings, and a test holds each of them there.
+10. Every feature on the mkdocs-material reference renders in both bundled themes (Mason, 2026-10-14: "I want to support ALL of those").
+   The reference is the fifteen feature pages under mkdocs-material's "Reference" section: admonitions, annotations, buttons, code blocks, content tabs, data tables, diagrams, footnotes, formatting, grids, icons and emoji, images, lists, math, and tooltips.
+   The split is the one the embeds already use (decided 2026-10-14): markwright is the batteries-included Markdown library and owns the authoring syntax and the HTML contract for each feature; Bartleby owns the CSS, the scripts, and the bundled assets.
+   The markwright side (annotations, a grid and cards block, a button contract, a `mermaid` fence, icon shortcodes from host-supplied directories, an opt-in lightbox hook) is tracked at MasonEgger/markwright#16 and is specified, planned, and shipped in that repo first; Bartleby consumes the release that carries it and stays on markwright's option defaults.
+   Bartleby ships what cannot live in a Markdown library because it is JavaScript or a font: KaTeX typesets every `arithmatex` element, mermaid renders every `mermaid` fence, and tablesort sorts the tables, each bundled in the `base` theme, credited in ACKNOWLEDGMENTS.md, and loaded only on a page that needs it; no page fetches from a CDN.
+   The pieces mkdocs-material builds in its own theme code get Bartleby equivalents in `base` with both themes styled: annotation tooltips, buttons, grids and cards, inline icons with size classes, image alignment and figures, a lightbox, tooltips for titles and abbreviations and footnotes, code line selection with a shareable hash, and linked content tabs.
+   Icon shortcodes resolve against the packs the themes already ship, Octicons and Lucide (decided 2026-10-14; Material Design Icons, FontAwesome, and Simple Icons are deferred).
+   Search is a text field in the header, as in mkdocs-material: focusing it opens the dialog and typing goes to the query, in both themes, through the existing `bartleby:search-open` event.
+   Scrivener's one accent is forest green, the same hue as material's, with every text-on-color pair re-pinned at AA; fence labels take the accent, and an environment name renders as a tab fused to the top-right edge of its block, outside the code area, where it cannot collide with the Copy button.
+   `bartleby new page <title> [--dir DIR]` writes a page with front matter and appends its `nav` entry through the same config writer `enable` uses, and the scaffold home page and the quickstart lead with the command.
+   The feature tour shows every reference feature with its source beside a visible result (the attribute-list example changes to one a reader can see), and the docs reference gets one page per feature with the syntax, the markup, and the theme hooks.
+   Goal 9 holds throughout: every addition passes the axe-core audit, the contrast pins, and `bartleby lint` at zero findings on the tour and the docs.
 
 ## Non-goals
 
@@ -164,6 +176,7 @@ Installed entries can be folded into plan.md per-section Tools blocks; not-insta
 - Config from environment variables (for example `BARTLEBY_SITE__BASE_URL`, as Hugo does) (2026-10-11): `--set` covers CI for now; add a third layer only when someone asks.
 - Skill generation rework (2026-10-11): not in the Goal 8 plan; it gets its own plan section later.
   Generate skills for agents in general, not only Claude Code's layout, and only when a flag asks for it (`generate-skill` is already a separate command, and `ai.skills.regenerate_on_build` defaults to off).
+- Material Design Icons, FontAwesome Free, and Simple Icons as bundled icon packs (2026-10-14): the shortcode extension resolves against Octicons and Lucide; a larger pack adds 10 to 30 MB to the wheel and waits for someone to ask.
 - Any 0.2.0 feature work.
 
 ## Component boundaries
@@ -243,4 +256,5 @@ The stabilization is complete, and 0.2.0 work may begin, when all of the followi
 - `bartleby new site` then `bartleby serve` gives a three-column docs site with a working feature tour from a small `bartleby.yml`, `--full-config` lists every accepted option, and `bartleby enable blog <name>` adds a blog whose RSS and Atom feeds carry entries.
 - `just check` is green, and `bartleby-ssg` installs and runs from a clean environment.
 - The bundled themes pass axe-core with zero violations on every page type; `bartleby lint` runs the accessibility rule set by default; every text-on-color token pair is pinned at WCAG AA.
+- Every mkdocs-material reference feature has a tour section with a visible result and a docs page, renders in both themes with no CDN request, and the bundled typesetter, diagram renderer, and table sorter load only where a page uses them.
 - Mason is willing to send it to people and show it off. This is the governing bar.

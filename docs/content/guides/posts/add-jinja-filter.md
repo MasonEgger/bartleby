@@ -58,5 +58,5 @@ Bartleby loads `hooks/*.py` at build start and registers each module-level funct
 
 ## See Also
 
-- [Plugins and hooks](../../concepts/plugins-and-hooks.md): the discovery model
-- [Plugin hook events](../../reference/pages/plugin-hooks.md): the full event list
+- [Plugins and hooks](../../concepts/plugins-and-hooks.md) explains the discovery model.
+- [Plugin hook events](../../reference/pages/plugin-hooks.md) lists every event.

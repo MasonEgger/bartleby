@@ -26,7 +26,7 @@ Bartleby bundles three themes:
 | Theme | What it is |
 |-------|------------|
 | `base` | Unstyled templates, the search script, and the icons that every other theme builds on |
-| `material` | A header bar, navigation tabs, a section sidebar, and a table of contents in an indigo palette |
+| `material` | A header bar, navigation tabs, a section sidebar, and a table of contents in a forest green palette |
 | `scrivener` | Bartleby's own theme: a plain reading layout in the system sans with one accent color |
 
 Set `theme.name` in `bartleby.yml`.

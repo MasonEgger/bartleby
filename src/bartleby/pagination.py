@@ -39,7 +39,7 @@ def paginate(
     :param url_format: Template for subsequent page URLs. May reference
         ``{page}``.
     :returns: At least one :class:`PaginatorPage`. An empty input produces
-        a single empty paginator page rather than an empty list — callers
+        a single empty paginator page rather than an empty list; callers
         can always render "page 1 of 1".
     """
     if not items:

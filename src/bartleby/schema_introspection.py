@@ -1,4 +1,4 @@
-# ABOUTME: Schema introspection — derive content-type, author, and taxonomy schemas.
+# ABOUTME: Schema introspection: derive content-type, author, and taxonomy schemas.
 # Backs `bartleby schema` and the static schema.json the agent surface reuses.
 
 from __future__ import annotations

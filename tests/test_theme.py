@@ -246,7 +246,7 @@ def test_vendored_bundle_is_real(filename: str) -> None:
     assert bundle.exists(), f"missing vendored bundle: {filename}"
     text = bundle.read_text(encoding="utf-8")
     assert len(text.encode("utf-8")) >= expected["min_size"], (
-        f"{filename} is smaller than a real bundle — still a stub?"
+        f"{filename} is smaller than a real bundle; still a stub?"
     )
     assert expected["signature"] in text, (
         f"{filename} lacks the {expected['signature']!r} signature string"

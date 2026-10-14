@@ -80,5 +80,5 @@ The static file copies to `site/robots.txt` unmodified.
 
 ## See Also
 
-- [Agent integration](../../concepts/agents-and-llms.md): why publishing for agents and allowing crawlers are separate decisions
-- [bartleby.yml configuration](../../reference/pages/configuration.md#ai): every `ai` key
+- [Agent integration](../../concepts/agents-and-llms.md) explains why publishing for agents and allowing crawlers are separate decisions.
+- The [bartleby.yml configuration](../../reference/pages/configuration.md#ai) reference lists every `ai` key.

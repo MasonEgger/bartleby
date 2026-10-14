@@ -1,4 +1,4 @@
-# ABOUTME: Tests for the hybrid Tailwind pipeline — binary resolver and CSS preference.
+# ABOUTME: Tests for the hybrid Tailwind pipeline: binary resolver and CSS preference.
 # Covers PATH/cache/download resolution, checksum-abort, and compiled-CSS preference.
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-# ABOUTME: CLI commands using argparse — new, build, validate, serve.
+# ABOUTME: CLI commands using argparse: new, build, validate, serve.
 # Top-level entry point for the bartleby executable.
 
 from __future__ import annotations

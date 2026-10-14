@@ -43,14 +43,14 @@ def aggregate_feed_path(feed_format: str) -> str:
 
 def generate_rss(pages: list[Page], content_type_name: str, site: SiteConfig) -> str:
     """Render an RSS 2.0 feed for ``pages`` belonging to ``content_type_name``."""
-    title = f"{site.title} — {content_type_name.title()}"
+    title = f"{site.title} - {content_type_name.title()}"
     link = absolute_url(site.url, f"/{content_type_name}/")
     return _render_rss(_sorted_pages(pages), title, link, site, category=False)
 
 
 def generate_atom(pages: list[Page], content_type_name: str, site: SiteConfig) -> str:
     """Render an Atom 1.0 feed for ``pages`` belonging to ``content_type_name``."""
-    title = f"{site.title} — {content_type_name.title()}"
+    title = f"{site.title} - {content_type_name.title()}"
     feed_id = absolute_url(site.url, f"/{content_type_name}/")
     self_href = absolute_url(site.url, f"/{content_type_name}/atom.xml")
     return _render_atom(_sorted_pages(pages), title, feed_id, self_href, site, category=False)

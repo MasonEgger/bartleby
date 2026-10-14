@@ -122,27 +122,27 @@ Every template receives the context that the [template context reference](../../
 Some behavior lives in `base`, so every theme that extends it must keep a few promises.
 Break one and the matching feature fails quietly.
 
-- **The reading column.** Mark the element that holds the page body with the `data-search-highlight-root` attribute.
+- Mark the element that holds the page body, the reading column, with the `data-search-highlight-root` attribute.
   The search script highlights matches only inside it.
   Without the attribute it falls back to `main article`, then `main`.
   The bundled themes also give that element a layout class: `prose-column` in `scrivener`.
-- **The search event.** The search component opens on a `bartleby:search-open` event on `window`.
+- The search component opens on a `bartleby:search-open` event on `window`.
   A trigger button dispatches it with `window.dispatchEvent(new CustomEvent('bartleby:search-open'))`.
   The component also opens on `/` and on Ctrl+K or Cmd+K, so search stays reachable if you drop the trigger.
-- **The search modal.** `base.html` includes `partials/search.html` right after the header, inside the `header` block, when the `search` feature is on.
+- `base.html` includes the search modal, `partials/search.html`, right after the header, inside the `header` block, when the `search` feature is on.
   If you override the whole `header` block, include `partials/search.html` yourself.
   Write the modal markup against the `bartlebySearch()` Alpine component that `static/js/search.js` registers.
-- **The navigation and table of contents helpers.** `partials/nav_macros.html` provides the `holds` and `first_url` macros, and `partials/toc_macros.html` provides `entries` and `tracker`.
+- The navigation and table of contents helpers live in `partials/nav_macros.html` (the `holds` and `first_url` macros) and `partials/toc_macros.html` (`entries` and `tracker`).
   Import them with `{% from "partials/nav_macros.html" import holds %}` instead of copying the logic.
   Because your theme extends `base`, the imports resolve with no extra work.
-- **The section navigation partial.** `partials/section_nav.html` works out which tree the sidebar shows and whether `nav.toc-fold` folds the table of contents.
+- The section navigation partial, `partials/section_nav.html`, works out which tree the sidebar shows and whether `nav.toc-fold` folds the table of contents.
   Import it with `{% import "partials/section_nav.html" as section with context %}` and read `section.sidebar_items`, `section.sidebar_title`, `section.sidebar_index_url`, and `section.toc_folded`.
   The bundled themes use it for their three-column layout.
-- **The color-mode script.** When the `color-mode.toggle` feature is on, `base.html` runs a small script in `<head>` before the page paints.
+- When the `color-mode.toggle` feature is on, `base.html` runs a small color-mode script in `<head>` before the page paints.
   It reads the `localStorage` key `bartleby-color-mode`, falls back to `color_mode.default`, then to the system setting, and sets `data-theme` on `<html>`.
   Gate your toggle button on `feature('color-mode.toggle')` too.
   The button must write the same key, `bartleby-color-mode`, with the value `light` or `dark`, and set `document.documentElement.dataset.theme`.
-- **The stylesheet link.** `base.html` links `/css/main.css`.
+- `base.html` links the stylesheet at `/css/main.css`.
   Your theme provides that file in `static/css/main.css`, or users produce it with `bartleby theme compile`.
 
 ## Step 5: Add Styles and Compile Them

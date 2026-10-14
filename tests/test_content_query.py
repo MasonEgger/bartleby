@@ -1,4 +1,4 @@
-# ABOUTME: Tests for content query — `bartleby content list` and `content get`.
+# ABOUTME: Tests for content query: `bartleby content list` and `content get`.
 # Covers curated-field listing, type filtering, date sorting, draft exclusion, and single-page get.
 
 from __future__ import annotations

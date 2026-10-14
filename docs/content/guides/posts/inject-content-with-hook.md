@@ -65,5 +65,5 @@ The [plugin hook reference](../../reference/pages/plugin-hooks.md#priority-order
 
 ## See Also
 
-- [Plugins and hooks](../../concepts/plugins-and-hooks.md): the discovery model
-- [Plugin hook events](../../reference/pages/plugin-hooks.md): the full event list
+- [Plugins and hooks](../../concepts/plugins-and-hooks.md) explains the discovery model.
+- [Plugin hook events](../../reference/pages/plugin-hooks.md) lists every event.

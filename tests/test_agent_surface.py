@@ -1,4 +1,4 @@
-# ABOUTME: Tests for the static agent surface — schema.json + content-index.json.
+# ABOUTME: Tests for the static agent surface: schema.json + content-index.json.
 # Covers artifact shape, field curation, llms.txt discovery, alternate links, collisions, toggle.
 
 from __future__ import annotations

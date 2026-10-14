@@ -1,4 +1,4 @@
-# ABOUTME: SEO meta tag generation — Open Graph, Twitter Cards, canonical URLs.
+# ABOUTME: SEO meta tag generation: Open Graph, Twitter Cards, canonical URLs.
 # Produces structured tag dicts the base template iterates over.
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ def generate_all_meta_tags(page: Page, site: SiteConfig) -> dict[str, object]:
 
 
 def _resolve_image(page: Page, site: SiteConfig) -> str | None:
-    """Resolve the OG/Twitter image — page front matter first, then site default."""
+    """Resolve the OG/Twitter image: page front matter first, then site default."""
     image_raw = page.custom_metadata.get("image")
     image = image_raw if isinstance(image_raw, str) else None
     if image is None:

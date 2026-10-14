@@ -2,18 +2,26 @@
 // ABOUTME: Colors and fonts read --bb-* token variables so theme.tokens can recolor it.
 //
 // Fidelity target
-//   The look and layout of mkdocs-material: an indigo header bar, navigation
+//   The look and layout of mkdocs-material: a colored header bar, navigation
 //   tabs under it, a left section sidebar, a right table of contents, and a
 //   quiet reading column in a Roboto-style face. Visual intent was confirmed
 //   against the mkdocs-material checkout; no CSS was copied (Bartleby
 //   reimplements, it does not port).
 //
 // Palette decisions
-//   primary  #3f51b5  Material indigo 500: header bar, links in light mode.
-//   accent   #536dfe  Material indigo A200: hover, focus rings, active TOC entry.
+//   primary  #1f801f  forest green (CSS forestgreen #228b22 at 92% per channel,
+//            same hue): header bar and buttons. forestgreen itself is 4.39:1
+//            under white text, short of WCAG AA for normal text; this shade
+//            is 5.04:1.
+//   link     primary at 80% toward black (#196619), so links on the white page
+//            and on the #f5f5f5 surface are 7.10:1 and 6.52:1.
+//   accent   #2e7d32  a softer green for hover, focus rings, and the active TOC
+//            entry; 5.13:1 on white, 4.70:1 on the surface.
 //   light    white page, near-black text at roughly 87% opacity, muted text at 54%.
 //   dark     "slate": #1e2129 page, #262a35 surfaces, text at 87% white. The
-//            primary color keeps the header; links lighten toward white.
+//            primary color keeps the header; links go to #6fbf6f and the accent
+//            to #8fd48f, lighter forest greens that read on the dark page.
+//   tests/test_theme_contrast.py pins each pair's ratio.
 //   Every color is a CSS variable with a fallback, so an empty theme.tokens map
 //   still renders. Overridable tokens: color.primary, color.accent, color.bg,
 //   color.text, color.bg-dark, color.text-dark, font.text, font.code, radius.
@@ -22,9 +30,9 @@
 // markwright hooks
 //   markwright emits class hooks and ships no CSS, so tailwind.css styles them
 //   here: a translucent yellow marker for highlights, a title bar for fence
-//   labels, tinted blocks with a colored left rule per fence environment (as the
-//   admonitions are), surface cards for embeds, and round primary controls with
-//   a small elevation for the slideshow and image compare.
+//   labels, a block washed with one hue per fence environment (no left rule,
+//   the same as the admonitions), surface cards for embeds, and round primary
+//   controls with a small elevation for the slideshow and image compare.
 //
 // Type decisions
 //   Roboto when installed, then the system UI stack (no webfont download).

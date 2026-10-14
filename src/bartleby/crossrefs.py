@@ -1,4 +1,4 @@
-# ABOUTME: Cross-reference resolution — rewrite .md links to output URLs.
+# ABOUTME: Cross-reference resolution: rewrite .md links to output URLs.
 # Catches broken cross-references at build time and points at the offending page.
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ def resolve_page_crossrefs(
     :param current_page: The page being rendered (used for relative-path resolution).
     :param all_pages: All known content pages (used to look up targets).
     :param content_dir: The site's ``content/`` directory.
-    :returns: ``(rewritten_html, errors)`` — the modified HTML and any
+    :returns: ``(rewritten_html, errors)``: the modified HTML and any
         :class:`CrossRefError` for unresolved targets.
     """
     del content_dir  # path resolution works in terms of source_path; kept for parity

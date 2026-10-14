@@ -109,4 +109,4 @@ An unknown key, or `enable` together with `disable`, fails the same way.
 
 - [`markwright` in the configuration reference](../../reference/pages/configuration.md#markwright)
 - [Markdown extensions](../../reference/pages/markdown-extensions.md)
-- [Markdown Pipeline](../../concepts/markdown-pipeline.md): why markwright loads before the pymdownx extensions
+- [Markdown Pipeline](../../concepts/markdown-pipeline.md) explains why markwright loads before the pymdownx extensions.

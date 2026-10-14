@@ -27,7 +27,7 @@ def _make_page(
     custom: dict[str, str | int | bool | list[str] | datetime.date] | None = None,
     author_keys: list[str] | None = None,
 ) -> Page:
-    """Build a minimal Page with overrides — keeps each test focused on one field."""
+    """Build a minimal Page with overrides; keeps each test focused on one field."""
     return Page(
         source_path=Path(source),
         abs_source_path=Path("/abs") / source,
@@ -168,7 +168,7 @@ def test_valid_choice_passes() -> None:
 
 
 def test_multiple_errors_all_reported() -> None:
-    """All independent field errors surface — validation does not short-circuit."""
+    """All independent field errors surface; validation does not short-circuit."""
     schema = {
         "difficulty": MetadataFieldSchema(field_type="string", required=True),
         "count": MetadataFieldSchema(field_type="integer"),

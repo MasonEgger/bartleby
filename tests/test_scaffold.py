@@ -275,7 +275,7 @@ def test_scaffold_prose_follows_the_writing_rules() -> None:
     banned = re.compile(rf"\b(?:{BANNED_WORDS})\b", re.I)
     for path in [*(root / "scaffold").rglob("*.md"), *(root / "scaffold_blog").rglob("*.md")]:
         text = path.read_text(encoding="utf-8")
-        assert not re.search("[–—‘’“”]", text), path
+        assert not re.search("[\u2013\u2014\u2018\u2019\u201c\u201d]", text), path
         assert banned.search(text) is None, path
 
 

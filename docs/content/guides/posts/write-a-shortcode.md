@@ -79,5 +79,5 @@ Its template reads the body from the `content` variable:
 
 ## See Also
 
-- [Shortcodes reference](../../reference/pages/shortcodes.md): the full syntax and the variables a template receives
-- [Customization seams](../../concepts/customization-seams.md): where `shortcodes/` fits with the other extension points
+- The [Shortcodes reference](../../reference/pages/shortcodes.md) has the full syntax and the variables a template receives.
+- [Customization seams](../../concepts/customization-seams.md) shows where `shortcodes/` fits with the other extension points.

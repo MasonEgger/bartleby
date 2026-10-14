@@ -329,7 +329,7 @@ def test_build_reports_shared_directory_asset_collision(project: Path) -> None:
 
 
 def test_build_cleans_output_dir(project: Path) -> None:
-    """``site/`` is cleaned at the start of each build — stale files vanish."""
+    """``site/`` is cleaned at the start of each build; stale files vanish."""
     site_dir = project / "site"
     site_dir.mkdir()
     (site_dir / "stale.html").write_text("stale")

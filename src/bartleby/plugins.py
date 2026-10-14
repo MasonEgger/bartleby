@@ -1,4 +1,4 @@
-# ABOUTME: Plugin system — base classes, hook dispatch, and hooks/ directory discovery.
+# ABOUTME: Plugin system: base classes, hook dispatch, and hooks/ directory discovery.
 # Provides BasePlugin (16 hooks), PluginCollection (priority-ordered dispatch), and discover_hooks.
 
 from __future__ import annotations
@@ -191,7 +191,7 @@ def _load_hook_module(path: Path) -> ModuleType:
     module.__file__ = str(path)
     source = path.read_text(encoding="utf-8")
     code = compile(source, str(path), "exec")
-    exec(code, module.__dict__)  # noqa: S102 — trusted project-local hook code
+    exec(code, module.__dict__)  # noqa: S102  # trusted project-local hook code
     return module
 
 

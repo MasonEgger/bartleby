@@ -94,7 +94,7 @@ def copy_colocated_assets(
     :raises AssetCollisionError: When an asset's directory holds more than
         one page (see :class:`AssetCollisionError`).
     """
-    del content_dir  # currently unused — kept to match spec signature
+    del content_dir  # currently unused, kept to match spec signature
     pages_by_dir: dict[str, list[Page]] = {}
     for page in pages:
         pages_by_dir.setdefault(page.source_path.parent.as_posix(), []).append(page)
@@ -115,7 +115,7 @@ def drop_draft_only_assets(
 
     An asset survives when its directory still contains a published page, or
     when it never had any associated page to begin with (a genuine orphan,
-    unaffected by draft filtering — see the fallback in
+    unaffected by draft filtering; see the fallback in
     :func:`copy_colocated_assets`). Without this, a draft's co-located asset
     falls through that same orphan fallback and leaks into the output at its
     source path once the draft page itself is filtered out.

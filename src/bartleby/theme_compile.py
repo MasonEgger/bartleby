@@ -1,4 +1,4 @@
-# ABOUTME: Hybrid Tailwind pipeline — resolve the standalone binary and compile theme CSS.
+# ABOUTME: Hybrid Tailwind pipeline: resolve the standalone binary and compile theme CSS.
 # Resolution order: tailwindcss on PATH -> cached binary -> explicit SHA-256-verified download.
 
 from __future__ import annotations

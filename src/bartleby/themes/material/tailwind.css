@@ -14,9 +14,9 @@
     display: none !important;
   }
   :root {
-    --bm-primary: var(--bb-color-primary, #3f51b5);
+    --bm-primary: var(--bb-color-primary, #1f801f);
     --bm-primary-dark: color-mix(in srgb, var(--bm-primary) 80%, black);
-    --bm-accent: var(--bb-color-accent, #536dfe);
+    --bm-accent: var(--bb-color-accent, #2e7d32);
     --bm-bg: var(--bb-color-bg, #ffffff);
     --bm-surface: color-mix(in srgb, var(--bm-bg) 96%, black);
     --bm-text: var(--bb-color-text, #212121);
@@ -24,7 +24,7 @@
     --bm-text-muted: color-mix(in srgb, var(--bm-text) 62%, var(--bm-bg));
     --bm-text-faint: color-mix(in srgb, var(--bm-text) 38%, var(--bm-bg));
     --bm-border: color-mix(in srgb, var(--bm-text) 14%, var(--bm-bg));
-    --bm-link: var(--bm-primary);
+    --bm-link: var(--bm-primary-dark);
     --bm-code-bg: color-mix(in srgb, var(--bm-text) 5%, var(--bm-bg));
     --bm-code-text: color-mix(in srgb, var(--bm-text) 90%, var(--bm-accent));
     --bm-on-primary: #ffffff;
@@ -58,7 +58,8 @@
     --bm-surface: color-mix(in srgb, var(--bm-bg) 94%, white);
     --bm-text: var(--bb-color-text-dark, #e6e8ee);
     --bm-heading: #ffffff;
-    --bm-link: color-mix(in srgb, var(--bm-accent) 65%, white);
+    --bm-accent: #8fd48f;
+    --bm-link: #6fbf6f;
     --bm-code-bg: color-mix(in srgb, var(--bm-text) 7%, var(--bm-bg));
     --bm-code-text: color-mix(in srgb, var(--bm-text) 85%, var(--bm-accent));
     --bm-mark: color-mix(in srgb, #ffeb3b 26%, transparent);
@@ -801,13 +802,13 @@
     border-radius: var(--bm-radius);
   }
 
-  /* Admonitions and collapsible blocks (pymdownx.details). */
+  /* Admonitions and collapsible blocks (pymdownx.details): a washed box with a
+     tinted title bar and a hairline border, no rule on the left edge. */
   :is(.admonition, .prose details) {
     --bm-adm: #448aff;
     margin: 1.25rem 0;
     padding: 0 0.8rem;
     border: 1px solid color-mix(in srgb, var(--bm-adm) 45%, transparent);
-    border-left-width: 0.25rem;
     border-radius: var(--bm-radius);
     background: color-mix(in srgb, var(--bm-adm) 5%, var(--bm-bg));
     font-size: 0.85em;
@@ -1199,7 +1200,7 @@
     font-weight: 500;
   }
 
-  /* Environments: a tinted block with a colored left rule, as material's admonitions are. */
+  /* Environments: a block washed with one hue per environment, no left rule. */
   .environment-local { --bm-env: var(--bm-env-local); }
   .environment-second { --bm-env: var(--bm-env-second); }
   .environment-third { --bm-env: var(--bm-env-third); }
@@ -1210,8 +1211,7 @@
   pre.environment-third,
   pre.environment-fourth,
   pre.environment-fifth {
-    border-left: 0.2rem solid var(--bm-env);
-    background: color-mix(in srgb, var(--bm-env) 10%, var(--bm-bg));
+    background: color-mix(in srgb, var(--bm-env) 12%, var(--bm-bg));
   }
 
   /* Line prefixes: each line is an <li data-prefix>; the prefix is drawn in a gutter. */

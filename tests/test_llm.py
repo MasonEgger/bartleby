@@ -163,7 +163,7 @@ def test_markdown_variant_written(tmp_path: Path) -> None:
 
 
 def test_markdown_variant_strips_front_matter(tmp_path: Path) -> None:
-    """The ``.md`` variant contains only the body — no YAML front matter."""
+    """The ``.md`` variant contains only the body, no YAML front matter."""
     page = _page(source="blog/posts/a.md", title="A", raw="Body only.")
     write_markdown_variant(page, tmp_path)
     contents = (tmp_path / "blog" / "posts" / "a" / "index.md").read_text()

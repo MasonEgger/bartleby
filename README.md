@@ -6,7 +6,7 @@ Bartleby takes Markdown content and turns it into a fast, search-indexed, agent-
 
 ## Why Bartleby
 
-Most static site generators treat AI agents as an afterthought. Bartleby treats them as a first-class audience alongside human readers. Every page is published as HTML for browsers, Markdown for LLM crawlers, and JSON-LD for structured-data consumers. The site root carries `llms.txt` and `llms-full.txt` so agents can navigate the corpus without crawling page-by-page.
+Bartleby publishes for AI agents as well as for people. Every page is published as HTML for browsers, Markdown for LLM crawlers, and JSON-LD for structured-data consumers. The site root carries `llms.txt` and `llms-full.txt` so agents can navigate the corpus without crawling page-by-page.
 
 For human authors, the surface area is small: write Markdown with YAML front matter, configure `bartleby.yml`, and run `bartleby build`. Everything else (Markdown extensions, theme, feeds, search index) is wired up by default.
 
@@ -59,23 +59,25 @@ Set `theme.name: material` in `bartleby.yml` to switch to the Material look.
 
 ## Features
 
-- **Markdown** with markwright, pymdownx, and the standard Python-Markdown extensions
-- **Three bundled themes**: `scrivener` (the default), `material`, and the shared `base`; compiled CSS ships in the wheel, so no Tailwind install is needed
-- **Theme system**: select a theme by `theme.name`, `theme.path`, or `theme.package`; compose with `extends`; `bartleby theme eject` and `bartleby theme inspect` expose every file
-- **Dark mode** and a light/dark toggle in every bundled theme
-- **Search** via a JSON index lunr.js consumes client-side
-- **Feeds**: RSS 2.0 and Atom 1.0 per content type
-- **Sitemap** + gzipped sitemap + robots.txt with AI crawler directives
-- **SEO**: Open Graph, Twitter Card, canonical URLs, JSON-LD
-- **Agent output**: `llms.txt`, `llms-full.txt`, `schema.json`, `content-index.json`, and a Markdown variant alongside every published page
-- **Generated skills**: `bartleby generate-skill` writes write, review, and ops skills from your site's real shape
-- **Taxonomies**: global and per-content-type listings
-- **Pagination** for listing pages
-- **Cross-references**: relative `.md` links rewritten to output URLs
-- **Shortcodes**: `[% ... %]` syntax for reusable Jinja2 fragments
-- **Plugin hooks**: 16 events, from `hooks/*.py` or `bartleby.plugins` entry points
-- **CLI** with `new`, `build`, `validate`, `serve`, `schema`, `content`, `render`, `lint`, `export`, `generate-skill`, `theme`, `config`, `enable`, and `disable`; every command takes `--output json`
-- **Dev server** on Starlette and uvicorn, with change-driven rebuilds and live reload on the same port
+Markdown is rendered with markwright, pymdownx, and the standard Python-Markdown extensions.
+Three themes ship in the wheel as compiled CSS, so no Tailwind install is needed: `scrivener` (the default), `material`, and the shared `base` they both extend.
+Select a theme by `theme.name`, `theme.path`, or `theme.package`, compose one with `extends`, and expose every file with `bartleby theme eject` and `bartleby theme inspect`.
+Every bundled theme has a dark mode and a light/dark toggle.
+
+Search runs client-side from a JSON index that lunr.js consumes.
+Feeds come in RSS 2.0 and Atom 1.0 per content type.
+The build writes a plain and a gzipped sitemap, a `robots.txt` with AI crawler directives, and Open Graph, Twitter Card, canonical URL, and JSON-LD tags on every page.
+
+The agent output is `llms.txt`, `llms-full.txt`, `schema.json`, `content-index.json`, and a Markdown variant alongside every published page.
+`bartleby generate-skill` writes write, review, and ops skills from your site's real shape.
+
+Taxonomies get global and per-content-type listings, and listing pages paginate.
+Relative `.md` links are rewritten to output URLs.
+Shortcodes use `[% ... %]` syntax for reusable Jinja2 fragments.
+Plugin hooks cover 16 events and load from `hooks/*.py` or `bartleby.plugins` entry points.
+
+The CLI has `new`, `build`, `validate`, `serve`, `schema`, `content`, `render`, `lint`, `export`, `generate-skill`, `theme`, `config`, `enable`, and `disable`, and every command takes `--output json`.
+The dev server runs on Starlette and uvicorn, with change-driven rebuilds and live reload on the same port.
 
 ## Documentation
 
@@ -91,9 +93,9 @@ Or read the source directly:
 
 - [Installation](docs/content/installation.md)
 - [Quickstart](docs/content/quickstart.md)
-- [Concepts](docs/content/concepts/): how Bartleby thinks about content, URLs, templates, and plugins
-- [Guides](docs/content/guides/): task-oriented walkthroughs
-- [Reference](docs/content/reference/): config, CLI, and hook APIs
+- [Concepts](docs/content/concepts/) cover how Bartleby thinks about content, URLs, templates, and plugins.
+- [Guides](docs/content/guides/) are task-oriented walkthroughs.
+- [Reference](docs/content/reference/) pages list the config keys, CLI commands, and hook APIs.
 
 The plugin hooks, the `bartleby.yml` schema, the template context and base-theme blocks, the theme manifest and feature names, the `bartleby` commands and flags, and the agent output formats are stable for 0.x, and the CHANGELOG calls out any breaking change to them.
 
@@ -126,16 +128,16 @@ The `Justfile` exposes individual targets too: `just lint`, `just typecheck`, `j
 
 Bartleby is 37 source modules under `src/bartleby/`, organised by build pipeline phase:
 
-- **Config layer**: `config.py`, `authors.py`, `errors.py`, `config_schema.py` (every `bartleby.yml` key as data: path, type, default, choices, description), `config_edit.py` (the one writer behind `config set`, `enable`, and `new site --full-config`), `content_shapes.py` (the content-type shapes `bartleby enable` can add; blog is the only one)
-- **Content layer**: `content.py`, `metadata.py`, `urls.py`, `content_query.py`
-- **Rendering**: `markdown_pipeline.py`, `shortcodes.py`, `templates.py`, `crossrefs.py`
-- **Structure**: `navigation.py`, `taxonomies.py`, `listings.py`, `pagination.py`
-- **Output**: `search.py`, `feeds.py`, `sitemap.py`, `seo.py`, `llm.py`, `assets.py`, `icons.py`, `output.py`
-- **Agent surface**: `agent_surface.py`, `schema_introspection.py`, `skills.py`, `export.py`, `linting.py`
-- **Theme**: `theme_loader.py`, `theme_compile.py`, and the bundled themes under `themes/` (`base`, `material`, `scrivener`)
-- **Plugin system**: `plugins.py`
-- **Orchestration**: `build.py`
-- **Surfaces**: `cli.py`, `server.py`
+- The config layer is `config.py`, `authors.py`, `errors.py`, `config_schema.py` (every `bartleby.yml` key as data: path, type, default, choices, description), `config_edit.py` (the one writer behind `config set`, `enable`, and `new site --full-config`), and `content_shapes.py` (the content-type shapes `bartleby enable` can add; blog is the only one).
+- The content layer is `content.py`, `metadata.py`, `urls.py`, and `content_query.py`.
+- Rendering is `markdown_pipeline.py`, `shortcodes.py`, `templates.py`, and `crossrefs.py`.
+- Structure is `navigation.py`, `taxonomies.py`, `listings.py`, and `pagination.py`.
+- Output is `search.py`, `feeds.py`, `sitemap.py`, `seo.py`, `llm.py`, `assets.py`, `icons.py`, and `output.py`.
+- The agent surface is `agent_surface.py`, `schema_introspection.py`, `skills.py`, `export.py`, and `linting.py`.
+- The theme layer is `theme_loader.py`, `theme_compile.py`, and the bundled themes under `themes/` (`base`, `material`, `scrivener`).
+- The plugin system is `plugins.py`.
+- Orchestration is `build.py`.
+- The surfaces are `cli.py` and `server.py`.
 
 See [`spec.md`](spec.md) for the full specification.
 

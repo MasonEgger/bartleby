@@ -1,4 +1,4 @@
-# ABOUTME: Content quality linting — broken links, missing descriptions, orphans.
+# ABOUTME: Content quality linting: broken links, missing descriptions, orphans.
 # Backs `bartleby lint`; reuses the crossref resolver for broken-link detection.
 
 from __future__ import annotations

@@ -48,7 +48,7 @@ def get_icon_path(
         if not icon_name.startswith(prefix):
             continue
         rest = icon_name[len(prefix) :]
-        # FontAwesome lives under "fontawesome-brands/" — strip the leading
+        # FontAwesome lives under "fontawesome-brands/"; strip the leading
         # "brands-" from the rest if present, since the prefix already
         # consumed "fontawesome-".
         if pack_key == "fontawesome" and rest.startswith("brands-"):

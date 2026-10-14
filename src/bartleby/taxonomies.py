@@ -1,4 +1,4 @@
-# ABOUTME: Taxonomy system — term collection, page mapping, and page generation.
+# ABOUTME: Taxonomy system: term collection, page mapping, and page generation.
 # Produces site-wide and per-content-type taxonomy index and term listing pages.
 
 from __future__ import annotations
@@ -98,7 +98,7 @@ def build_taxonomies(pages: list[Page], config: BartlebyConfig) -> AllTaxonomies
 
 def generate_taxonomy_pages(taxonomy_data: AllTaxonomies, config: BartlebyConfig) -> list[Page]:
     """Produce virtual :class:`Page` objects for taxonomy index and term URLs."""
-    del config  # currently unused — kept for parity with spec and future filtering
+    del config  # currently unused, kept for parity with spec and future filtering
     pages: list[Page] = []
 
     for taxonomy_name, data in taxonomy_data.global_taxonomies.items():

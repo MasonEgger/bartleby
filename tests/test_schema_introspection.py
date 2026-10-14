@@ -1,4 +1,4 @@
-# ABOUTME: Tests for schema introspection — content-type, authors, taxonomy schemas.
+# ABOUTME: Tests for schema introspection: content-type, authors, taxonomy schemas.
 # Covers the derivation functions and the `bartleby schema` CLI command.
 
 from __future__ import annotations

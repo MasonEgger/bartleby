@@ -1,4 +1,4 @@
-# ABOUTME: LLM-friendly output — llms.txt, llms-full.txt, markdown variants, JSON-LD.
+# ABOUTME: LLM-friendly output: llms.txt, llms-full.txt, markdown variants, JSON-LD.
 # Produces the agent-readable artifacts that make Bartleby sites navigable by LLMs.
 """Agent-readable page output.
 

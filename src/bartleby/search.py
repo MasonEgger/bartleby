@@ -25,10 +25,10 @@ def build_search_index(pages: list[Page], config: BartlebyConfig) -> dict[str, o
 
     :param pages: All published pages whose HTML has been rendered.
     :param config: The parsed Bartleby config (currently used for the
-        config block — language defaults to English).
+        config block; language defaults to English).
     :returns: A dict with ``config`` and ``docs`` keys, JSON-serialisable.
     """
-    del config  # not yet used — placeholder for future i18n-aware config
+    del config  # not yet used, placeholder for future i18n-aware config
     docs: list[dict[str, object]] = []
     for page in select_published(pages):
         tags = page.taxonomy_values.get("tags", [])

@@ -1,4 +1,4 @@
-# ABOUTME: Shortcode preprocessing — parse [% %] syntax and render as Jinja2 fragments.
+# ABOUTME: Shortcode preprocessing: parse [% %] syntax and render as Jinja2 fragments.
 # Resolves shortcodes/{name}.html templates before markdown rendering runs.
 
 """Shortcode preprocessing.
@@ -41,7 +41,7 @@ def process_shortcodes(
     """Render every ``[% ... %]`` block/inline shortcode in ``markdown_source``.
 
     Fenced code blocks (triple-backtick or triple-tilde) and inline ``code``
-    spans are left untouched — shortcode syntax shown inside them is
+    spans are left untouched; shortcode syntax shown inside them is
     treated as literal text, not as an invocation.
 
     :param markdown_source: Raw markdown content (pre-render).

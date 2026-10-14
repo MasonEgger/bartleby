@@ -300,7 +300,7 @@ def _resolve_author_objects(
 ) -> list[Author | str]:
     """Map ``author_keys`` to :class:`Author` objects, falling back to the key itself.
 
-    Returning the bare key string for unknown authors keeps the build going —
+    Returning the bare key string for unknown authors keeps the build going;
     metadata validation is the right place to fail on unknown keys, not here.
     """
     resolved: list[Author | str] = []

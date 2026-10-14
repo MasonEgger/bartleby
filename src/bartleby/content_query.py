@@ -1,4 +1,4 @@
-# ABOUTME: Content query — list and get discovered pages with curated fields.
+# ABOUTME: Content query: list and get discovered pages with curated fields.
 # Backs `bartleby content list` and `bartleby content get`; shares published selection with build.
 
 from __future__ import annotations
@@ -111,7 +111,7 @@ def list_content(
     :param pages: Discovered content pages.
     :param config: The loaded site configuration.
     :param content_type: When set, only pages of this content type are listed.
-    :param sort: Sort key — ``date`` (default, newest first), ``title``, or ``path``.
+    :param sort: Sort key: ``date`` (default, newest first), ``title``, or ``path``.
     :param limit: Maximum number of entries to return.
     :returns: A :class:`ContentList` carrying the curated entries and their count.
     """

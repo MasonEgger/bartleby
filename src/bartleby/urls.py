@@ -29,7 +29,7 @@ def absolute_url(site_url: str, path: str) -> str:
 
 
 def slugify(text: str) -> str:
-    """Bartleby's URL slug helper — python-slugify with ``&`` mapped to ``and``."""
+    """Bartleby's URL slug helper: python-slugify with ``&`` mapped to ``and``."""
     return _raw_slugify(text, replacements=_SLUG_REPLACEMENTS)
 
 
@@ -113,7 +113,7 @@ def _resolve_field(field_name: str, page: Page) -> str:
 
 
 def _slug_for(page: Page) -> str:
-    """The page's URL slug — front-matter override wins, else slugified filename stem."""
+    """The page's URL slug: front-matter override wins, else slugified filename stem."""
     if page.slug_override:
         return slugify(page.slug_override)
     return slugify(page.abs_source_path.stem)

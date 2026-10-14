@@ -155,7 +155,7 @@ def parse_front_matter(text: str) -> tuple[dict[str, Any], str]:
     closing_marker = f"\n{FRONT_MATTER_DELIMITER}"
     closing = after_opening.find(closing_marker)
     if closing == -1:
-        # First line was `---` but no closing delimiter — treat as no front matter.
+        # First line was `---` but no closing delimiter; treat as no front matter.
         return {}, text
 
     front_matter_block = after_opening[:closing]
@@ -218,7 +218,7 @@ def discover_content(
     :param config: Parsed Bartleby config (used for content type paths,
         taxonomies, and exclude patterns).
     :param content_dir: The site's ``content/`` directory.
-    :returns: ``(pages, assets)`` — every discovered markdown file becomes a
+    :returns: ``(pages, assets)``: every discovered markdown file becomes a
         :class:`Page`; every other file becomes a :class:`ColocatedAsset`.
     """
     pages: list[Page] = []

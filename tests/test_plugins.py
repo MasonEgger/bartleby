@@ -129,7 +129,7 @@ def test_discover_hooks_module_level_only() -> None:
     """Functions named ``on_<event>`` are registered; private/helper names are not."""
     project_dir = Path(__file__).parent / "fixtures" / "hooks_site"
     collection = discover_hooks(project_dir)
-    # No "_helper" or arbitrary helpers got picked up — only on_* names map to events.
+    # No "_helper" or arbitrary helpers got picked up; only on_* names map to events.
     for event_name in collection.events:
         assert event_name.startswith("on_")
 

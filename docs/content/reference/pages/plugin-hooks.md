@@ -29,11 +29,11 @@ If the export raises a `BuildError` after `on_startup` (a missing `content/` dir
 
 Events fall into three kinds:
 
-- **Threaded events** pass a value, such as the config or the HTML, through every handler.
+- Threaded events pass a value, such as the config or the HTML, through every handler.
   A handler that returns `None` leaves the value unchanged.
   Any other return value replaces it for the next handler.
-- **Notification events** ignore the return value.
-- **Query events** (only `on_page_read_source`) stop at the first handler that returns something other than `None`.
+- Notification events ignore the return value.
+- Query events (only `on_page_read_source`) stop at the first handler that returns something other than `None`.
 
 ## Lifecycle
 

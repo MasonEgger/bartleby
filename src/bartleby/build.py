@@ -857,7 +857,7 @@ def _pair_failure_hooks(plugins: PluginCollection) -> Iterator[None]:
 
 
 def _template_type_for(page: Page, content_type: object) -> str:
-    """Pick the template type bucket — taxonomy and listing pages bypass post/page logic."""
+    """Pick the template type bucket: taxonomy and listing pages bypass post/page logic."""
     taxonomy_kind = page.custom_metadata.get(TAXONOMY_KIND_KEY)
     if taxonomy_kind == TaxonomyKind.TERM:
         return "taxonomy"
@@ -904,7 +904,7 @@ def _render_404(
     not_found_page = Page(
         source_path=Path("404.md"),
         abs_source_path=not_found_source,
-        title="404 — Not Found",
+        title="404 - Not Found",
         description="The requested page could not be found.",
     )
     not_found_page.output_url = "/404.html"
@@ -951,8 +951,8 @@ async def async_build(
     """Async wrapper around :func:`build` for use with ``asyncio.run``.
 
     The sync build does the heavy lifting; this coroutine offloads it to a
-    worker thread (so the surrounding async program — e.g. the dev server's
-    HTTP loop — can keep running) and returns the same :class:`BuildResult`.
+    worker thread (so the surrounding async program, e.g. the dev server's
+    HTTP loop, can keep running) and returns the same :class:`BuildResult`.
     Plugin hooks always execute in the calling process: by running the build
     in a thread (not a child process) the hook registration, dispatch, and
     Jinja2 environment never cross a process boundary.
@@ -981,7 +981,7 @@ def extract_excerpt(markdown_source: str, separator: str | None) -> str:
 def calculate_readtime(text: str) -> int:
     """Estimate read time in minutes assuming ~265 words per minute.
 
-    :param text: Page text (markdown or HTML — tags are stripped first).
+    :param text: Page text (markdown or HTML; tags are stripped first).
     :returns: Integer number of minutes, always at least ``1``.
     """
     plain = _HTML_TAG_RE.sub(" ", text)

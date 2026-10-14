@@ -28,7 +28,7 @@ class NavItem:
 
 @dataclass(slots=True)
 class Navigation:
-    """Resolved navigation for a build — tree of NavItems plus a flat page order."""
+    """Resolved navigation for a build: tree of NavItems plus a flat page order."""
 
     items: list[NavItem]
     pages_flat: list[Page]

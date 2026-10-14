@@ -48,7 +48,7 @@ def generate_listing_pages(
         given (standalone calls, tests), one renderer is built here and
         reused across every content type, so a single call to this
         function never creates more than one renderer.
-    :returns: List of virtual listing pages — one per listing URL (multiple
+    :returns: List of virtual listing pages, one per listing URL (multiple
         when pagination is enabled).
     """
     active_renderer = renderer if renderer is not None else create_markdown_renderer(config)

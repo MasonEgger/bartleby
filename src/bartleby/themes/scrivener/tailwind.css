@@ -869,12 +869,13 @@
     border-top: 1px solid var(--sc-ink);
   }
 
-  /* Admonitions: a single colored rule, a bold run-in title, no icon. */
+  /* Admonitions: a faint wash of one hue, a bold run-in title, no icon, no rule.
+     A colored edge is the generic callout look; the wash alone is the
+     do-markdownit convention markwright's syntax comes from. */
   :is(.admonition, .prose details) {
     --sc-adm: #3f5f8f;
     margin: 0 0 var(--sc-ruling-unit);
     padding: var(--sc-quarter) var(--sc-half);
-    border-left: 3px solid var(--sc-adm);
     background: color-mix(in srgb, var(--sc-adm) 6%, var(--sc-paper));
     font-size: 0.9375rem;
     line-height: 1.5;
@@ -1300,7 +1301,8 @@
     font-weight: 600;
   }
 
-  /* Environments: a 2px rule on the left edge and a faint wash of the same hue. */
+  /* Environments: the whole block takes a faint wash of one hue, as on
+     DigitalOcean's community site, with no rule on the edge. */
   .environment-local { --sc-env: var(--sc-env-local); }
   .environment-second { --sc-env: var(--sc-env-second); }
   .environment-third { --sc-env: var(--sc-env-third); }
@@ -1311,8 +1313,7 @@
   pre.environment-third,
   pre.environment-fourth,
   pre.environment-fifth {
-    border-left: 2px solid var(--sc-env);
-    background: color-mix(in srgb, var(--sc-env) 8%, var(--sc-paper));
+    background: color-mix(in srgb, var(--sc-env) 10%, var(--sc-paper));
   }
 
   /* Line prefixes: each line is an <li data-prefix>; the prefix is drawn in a gutter. */

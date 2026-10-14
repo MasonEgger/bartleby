@@ -2,6 +2,7 @@
 
 ## Recent
 <!-- 10 most recent lessons, newest first -->
+- A colored rule on the left edge plus a tinted box is the generic callout kit; when a syntax has an upstream reference (do-markdownit for markwright), read its `styles/` before inventing a treatment. DigitalOcean tints the whole code block per environment and gives callouts a wash with no edge rule, so scrivener now does the same (2026-10-13)
 - A subparser that re-attaches a parent parser's flags resets them to the parent's defaults, so a global flag given before the subcommand name is lost. Give the subparser copies `default=argparse.SUPPRESS` and keep the real defaults on the top-level parser (2026-10-13)
 - An assert-less test is found by an AST walk over `tests/` for functions with no `assert`, `pytest.raises`, `pytest.fail`, or `assert*`/`check*` call; nine sat in the suite. Prove an override reached a validator by writing a value the validator rejects into the file and passing the override that repairs it (2026-10-13)
 - A docs line that quotes a command's count (`Ejected theme 'scrivener' (56 files)`, `34 modules`) drifts with every added file; pin each one with a test that runs the command or lists the directory and compares to the quoted number (2026-10-13)
@@ -11,9 +12,9 @@
 - An output-directory guard must check overlap in both directions: the output inside an input directory, and an input directory inside the output (`output_dir: themes` with `theme.path: themes/own`). One `is_relative_to` only catches the first (2026-10-13)
 - Replace a directory by moving the old one aside, moving the new one in, then deleting the old one. Delete-first leaves a window with no output and nothing to restore when the move fails (2026-10-13)
 - A watchdog handler must only enqueue; one worker that drains after a quiet window turns an editor's probe, rename, write, and unlink into one build. Catch `Exception` in that worker and report it, because a hook `SyntaxError` or a config file missing mid-save otherwise kills the thread in silence (2026-10-13)
-- ruamel writes YAML 1.2 and PyYAML reads 1.1, so a string ruamel leaves plain (`Yes`, `on`, `1e3`) comes back a boolean or number through the loader. Before dumping a string, ask PyYAML's implicit resolver for its tag and double-quote anything that is not `str` (2026-10-12)
 
 ## Architecture
+- ruamel writes YAML 1.2 and PyYAML reads 1.1, so a string ruamel leaves plain (`Yes`, `on`, `1e3`) comes back a boolean or number through the loader. Before dumping a string, ask PyYAML's implicit resolver for its tag and double-quote anything that is not `str` (2026-10-12)
 - A printed "next command" is a claim the user will paste, so build it with `shlex.quote` and test a site name with a space and one with a trailing slash. Step 15's first draft printed an unquoted path that broke on a space (2026-10-12)
 - A startup URL must print after the socket binds, because port 0 only resolves then. Build the serve summary where the bound port is known (`DevServer._serve`), not in the CLI from config (2026-10-12)
 - A server's catch list for author-facing errors must be the same tuple the CLI's error map is built from (`cli.LABELED_ERRORS`, derived from `_ERROR_CODES`), not a hand-copied list. A labeled error outside the list kills the watcher thread with no message (2026-10-12)
@@ -152,3 +153,6 @@
 ## Documentation
 - When a string config key starts storing CLI text as typed, every hint and doc line that told users to wrap a value in `'"..."'` becomes wrong (the quotes get stored). Grep hints and guides for the old quoting advice when changing value typing (2026-10-12)
 - A docs line that quotes a command's count (`Ejected theme 'scrivener' (56 files)`, `34 modules`) drifts with every added file; pin each one with a test that runs the command or lists the directory and compares to the quoted number (2026-10-13)
+
+## Design
+- A colored rule on the left edge plus a tinted box is the generic callout kit; when a syntax has an upstream reference (do-markdownit for markwright), read its `styles/` before inventing a treatment. DigitalOcean tints the whole code block per environment and gives callouts a wash with no edge rule, so scrivener now does the same (2026-10-13)

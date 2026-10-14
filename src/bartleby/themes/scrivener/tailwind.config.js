@@ -45,7 +45,7 @@
 //
 //   markwright hooks. markwright emits class hooks and ships no CSS, so tailwind.css
 //   styles them here: a muted marker wash for highlights, a header strip for fence
-//   labels, a 2px left rule plus a faint wash per fence environment (the one place
+//   labels, a faint wash over the whole block per fence environment (the one place
 //   several hues appear, since environments exist to be told apart), hairline
 //   cards for embeds, ink-on-paper controls for the slideshow and image compare.
 //

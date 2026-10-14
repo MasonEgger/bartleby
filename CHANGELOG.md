@@ -157,6 +157,10 @@ The server watches the selected theme's directories, a `theme.path` inside or ou
 In text mode a failed rebuild prints each error to stderr and a good one prints `Rebuilt N pages in X ms`.
 Changing `output_dir` while serving moves the output and the serving to the new directory.
 
+The scrivener theme no longer draws a colored rule on the left edge of admonitions, collapsible sections, and fence environment blocks.
+Each keeps its faint wash of one hue, the way DigitalOcean's community site renders the do-markdownit syntax that markwright comes from.
+The wash on environment blocks is a little stronger now that it carries the whole signal.
+
 `pymdownx.tabbed` now defaults to `alternate_style`, so content tabs render in the shape both themes style.
 A `markdown_extensions` override for an extension Bartleby configures (`pymdownx.tabbed`, `pymdownx.arithmatex`, `pymdownx.emoji`) merges over the bundled options instead of replacing them, so setting one key keeps the rest.
 The tour's Critic Markup source block prints the literal markers instead of being processed itself.

@@ -168,7 +168,7 @@ Installed entries can be folded into plan.md per-section Tools blocks; not-insta
 
 ## Component boundaries
 
-The implementation is 39 single-responsibility modules under `src/bartleby/`, grouped by build-pipeline phase.
+The implementation is 40 single-responsibility modules under `src/bartleby/`, grouped by build-pipeline phase.
 
 Config layer:
 - `config.py`: load and validate `bartleby.yml`.
@@ -218,6 +218,7 @@ Theme:
 - The `themes/` package (replacing the former `theme/` package): the bundled `base`, `material`, and `scrivener` themes, each a complete theme directory.
 
 Quality and plugins:
+- `lint_rules.py`: the `Rule` and `Finding` shapes the two lint modules share, importing nothing from the package.
 - `linting.py`: the lint rule table and runner; content quality checks (broken links, missing descriptions, orphans).
 - `linting_a11y.py`: the accessibility rules `lint` runs over each page's rendered body (alt text, heading order, link names, ids, table headers, iframe titles, `site.language`).
 - `plugins.py`: base classes, hook dispatch, and `hooks/` directory discovery.

@@ -24,36 +24,13 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from typing import TYPE_CHECKING
 
+from bartleby.lint_rules import Finding, Rule
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from bartleby.config import BartlebyConfig
     from bartleby.content import Page
-    from bartleby.linting import Finding
-
-
-@dataclass(frozen=True, slots=True)
-class Rule:
-    """One lint rule as the docs, the CLI, and the generated skills describe it.
-
-    :ivar id: The stable kebab-case rule id that findings and ``--rules`` use.
-    :ivar severity: ``"error"`` (fails the command) or ``"warning"``.
-    :ivar description: One sentence saying what the rule reports.
-    :ivar hint: The fix every finding of this rule prints.
-    """
-
-    id: str
-    severity: str
-    description: str
-    hint: str
-
-    def to_dict(self) -> dict[str, str]:
-        return {
-            "id": self.id,
-            "severity": self.severity,
-            "description": self.description,
-            "hint": self.hint,
-        }
 
 
 ACCESSIBILITY_RULES: tuple[Rule, ...] = (
@@ -302,9 +279,6 @@ class _Source:
 
 def _finding(rule_id: str, file: str, message: str, line: int) -> Finding:
     """A finding of ``rule_id`` with the rule's severity and hint filled in."""
-    # linting imports this module for the rule table, so Finding is imported on use.
-    from bartleby.linting import Finding
-
     rule = _RULES_BY_ID[rule_id]
     return Finding(
         severity=rule.severity, rule=rule.id, file=file, message=message, line=line, hint=rule.hint

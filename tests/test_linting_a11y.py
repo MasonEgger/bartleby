@@ -17,13 +17,14 @@ from bartleby.cli import main
 from bartleby.config import load_config
 from bartleby.content import Page
 from bartleby.linting import RULES, Finding, lint_site
-from bartleby.linting_a11y import ACCESSIBILITY_RULES, Rule, lint_accessibility
+from bartleby.linting_a11y import ACCESSIBILITY_RULES, lint_accessibility
 from bartleby.markdown_pipeline import create_markdown_renderer, render_markdown
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from bartleby.config import BartlebyConfig
+    from bartleby.lint_rules import Rule
 
     PageFactory = Callable[[str], Page]
 

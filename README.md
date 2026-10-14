@@ -127,14 +127,14 @@ The `Justfile` exposes individual targets too: `just lint`, `just typecheck`, `j
 
 ## Architecture
 
-Bartleby is 39 source modules under `src/bartleby/`, organised by build pipeline phase:
+Bartleby is 40 source modules under `src/bartleby/`, organised by build pipeline phase:
 
 - The config layer is `config.py`, `authors.py`, `errors.py`, `config_schema.py` (every `bartleby.yml` key as data: path, type, default, choices, description), `config_edit.py` (the one writer behind `config set`, `enable`, and `new site --full-config`), and `content_shapes.py` (the content-type shapes `bartleby enable` can add; blog is the only one).
 - The content layer is `content.py`, `metadata.py`, `urls.py`, and `content_query.py`.
 - Rendering is `markdown_pipeline.py`, `accessibility.py` (the pipeline's last pass: type icons and hidden text on admonitions and environment fences, labels on controls), `shortcodes.py`, `templates.py`, and `crossrefs.py`.
 - Structure is `navigation.py`, `taxonomies.py`, `listings.py`, and `pagination.py`.
 - Output is `search.py`, `feeds.py`, `sitemap.py`, `seo.py`, `llm.py`, `assets.py`, `icons.py`, and `output.py`.
-- The agent surface is `agent_surface.py`, `schema_introspection.py`, `skills.py`, `export.py`, `linting.py`, and `linting_a11y.py` (the accessibility rules `lint` runs over each page's rendered body).
+- The agent surface is `agent_surface.py`, `schema_introspection.py`, `skills.py`, `export.py`, `lint_rules.py` (the `Rule` and `Finding` shapes both lint modules share), `linting.py`, and `linting_a11y.py` (the accessibility rules `lint` runs over each page's rendered body).
 - The theme layer is `theme_loader.py`, `theme_compile.py`, and the bundled themes under `themes/` (`base`, `material`, `scrivener`).
 - The plugin system is `plugins.py`.
 - Orchestration is `build.py`.

@@ -2,6 +2,7 @@
 
 ## Recent
 <!-- 10 most recent lessons, newest first -->
+- Two sibling modules that need each other's types (`linting` runs `linting_a11y`, which builds `Finding`) get a leaf module for the shared shapes (`lint_rules.py`: `Rule`, `Finding`); the runner re-exports them so importers keep their path. A function-local import to dodge the cycle is the pattern lessons.md already refused on 2026-10-12 (2026-10-14)
 - A tree-node dataclass with `parent` and `children` fields needs `eq=False`: `list.index(node)` compares siblings with the generated `__eq__`, which recurses through the links until `RecursionError`. Identity is the equality a tree wants (2026-10-14)
 - Python-Markdown carries no source positions, so a finding on rendered HTML maps back to a line by searching `page.raw_content` for a distinctive needle (image file name, heading text, href) and adding the front-matter offset, computed as `text[: len(text) - len(raw_content)].count("\n")` from the file (2026-10-14)
 - A command that reads rendered HTML (lint) must render through the build's own phase (`build.render_content`), not a private loop: the private loop in `_cmd_lint` skipped plugin hooks and the theme's icon dirs, so its HTML differed from what the build embeds (2026-10-14)
@@ -11,9 +12,9 @@
 - Fading white text to 80% opacity on a 5:1 colored bar drops it to 3.8:1; that one rule was 88 of material's 132 axe nodes. Mark nav state with a background or an inset underline, never by dimming the text (2026-10-14)
 - axe's "background color could not be determined" at phone width comes from elements clipped inside a horizontal scroll container (the nav row, a scrolling table), not from a failing pair; the same elements pass at 1280. Report it, do not chase it (2026-10-14)
 - Tailwind's minifier prints `::before` as `:before` in `main.css`; a test that greps the compiled CSS must match the short form. And `python3 -m http.server --directory` must serve a built site at its root, because the theme links `/css/main.css` root-absolute (2026-10-14)
-- An Alpine focus trap needs no template change: `this.$root.addEventListener("keydown", ...)` in the component's `init` sees the modal's own element, and a Playwright walk of Tab, Shift+Tab, and Escape proves it in both themes in one run (2026-10-14)
 
 ## Architecture
+- Two sibling modules that need each other's types (`linting` runs `linting_a11y`, which builds `Finding`) get a leaf module for the shared shapes (`lint_rules.py`: `Rule`, `Finding`); the runner re-exports them so importers keep their path. A function-local import to dodge the cycle is the pattern lessons.md already refused on 2026-10-12 (2026-10-14)
 - A command that reads rendered HTML (lint) must render through the build's own phase (`build.render_content`), not a private loop: the private loop in `_cmd_lint` skipped plugin hooks and the theme's icon dirs, so its HTML differed from what the build embeds (2026-10-14)
 - Python-Markdown carries no source positions, so a finding on rendered HTML maps back to a line by searching `page.raw_content` for a distinctive needle (image file name, heading text, href) and adding the front-matter offset, computed as `text[: len(text) - len(raw_content)].count("\n")` from the file (2026-10-14)
 - ruamel writes YAML 1.2 and PyYAML reads 1.1, so a string ruamel leaves plain (`Yes`, `on`, `1e3`) comes back a boolean or number through the loader. Before dumping a string, ask PyYAML's implicit resolver for its tag and double-quote anything that is not `str` (2026-10-12)

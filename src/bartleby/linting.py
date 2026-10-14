@@ -4,13 +4,13 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from bartleby.crossrefs import resolve_page_crossrefs
-from bartleby.linting_a11y import ACCESSIBILITY_RULES, Rule, lint_accessibility
+from bartleby.lint_rules import Finding, Rule
+from bartleby.linting_a11y import ACCESSIBILITY_RULES, lint_accessibility
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection
@@ -58,39 +58,6 @@ CONTENT_RULES: tuple[Rule, ...] = (
 #: Every rule `bartleby lint` knows, content rules first, then accessibility rules.
 RULES: tuple[Rule, ...] = CONTENT_RULES + ACCESSIBILITY_RULES
 RULES_BY_ID: dict[str, Rule] = {rule.id: rule for rule in RULES}
-
-
-@dataclass(slots=True)
-class Finding:
-    """One content-quality issue reported by :func:`lint_site`.
-
-    :ivar severity: ``"error"``, ``"warning"``, or ``"info"``.
-    :ivar rule: Stable machine-readable rule name (e.g. ``"orphaned-page"``).
-    :ivar file: Source path of the offending page.
-    :ivar message: Human-readable description of the issue.
-    :ivar line: Line number when known; ``0`` when not applicable.
-    :ivar fixable: Whether ``--fix`` can resolve this issue automatically.
-    :ivar hint: The concrete fix, printed as ``(fix: ...)`` after the message.
-    """
-
-    severity: str
-    rule: str
-    file: str
-    message: str
-    line: int = 0
-    fixable: bool = False
-    hint: str = ""
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "severity": self.severity,
-            "rule": self.rule,
-            "file": self.file,
-            "line": self.line,
-            "message": self.message,
-            "fixable": self.fixable,
-            "hint": self.hint,
-        }
 
 
 def lint_site(

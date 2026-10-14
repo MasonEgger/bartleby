@@ -306,12 +306,12 @@ class TestDogfood:
     """The sites Bartleby ships pass its own accessibility rules."""
 
     @pytest.mark.parametrize("shape", [[], ["--blog"]])
-    def test_scaffold_has_no_accessibility_findings(
+    def test_scaffold_has_no_findings_at_all(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, shape: list[str]
     ) -> None:
         main(["new", "site", str(tmp_path / "site"), *shape, "--quiet"])
         monkeypatch.chdir(tmp_path / "site")
-        assert _accessibility_findings() == []
+        assert _all_findings() == []
 
     def test_docs_site_has_no_findings_at_all(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -330,11 +330,6 @@ def _all_findings() -> list[dict[str, object]]:
     payload = json.loads(buffer.getvalue().splitlines()[-1])
     issues: list[dict[str, object]] = payload["issues"]
     return issues
-
-
-def _accessibility_findings() -> list[dict[str, object]]:
-    accessibility_ids = {rule.id for rule in ACCESSIBILITY_RULES}
-    return [issue for issue in _all_findings() if issue["rule"] in accessibility_ids]
 
 
 class TestThroughLintSite:

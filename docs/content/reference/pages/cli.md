@@ -131,7 +131,7 @@ With `--output json`, each issue carries `severity`, `rule`, `file`, `line`, `me
 |------|----------|---------|
 | `broken-crossref` | error | A .md link resolves to no page. |
 | `missing-description` | warning | A page has no description in its front matter. |
-| `orphaned-page` | warning | A page is not in the navigation and no other page links to it. |
+| `orphaned-page` | warning | A page is not in the navigation, no other page links to it, and no reachable listing shows it. |
 | `broken-external` | error | An external link is unreachable. Only checked with `--check-external`. |
 | `image-missing-alt` | error | An image has no alt attribute. |
 | `image-alt-is-filename` | warning | An image's alt text is its file name or a bare word such as "image" or "screenshot". |

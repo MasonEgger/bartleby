@@ -18,7 +18,17 @@ if TYPE_CHECKING:
 
     from bartleby.config import BartlebyConfig
     from bartleby.content import Page
+    from bartleby.navigation import NavItem
 
+__all__ = (
+    "CONTENT_RULES",
+    "Finding",
+    "RULES",
+    "RULES_BY_ID",
+    "Rule",
+    "check_external_url",
+    "lint_site",
+)
 
 # Severity levels used in findings, matching the spec's lint summary buckets.
 _SEVERITY_ERROR = "error"
@@ -44,7 +54,8 @@ CONTENT_RULES: tuple[Rule, ...] = (
     Rule(
         "orphaned-page",
         _SEVERITY_WARNING,
-        "A page is not in the navigation and no other page links to it.",
+        "A page is not in the navigation, no other page links to it,"
+        " and no reachable listing shows it.",
         "add the page under nav: in bartleby.yml, or link to it from another page",
     ),
     Rule(
@@ -139,26 +150,54 @@ def _lint_descriptions(pages: list[Page]) -> list[Finding]:
 
 
 def _lint_orphans(pages: list[Page], config: BartlebyConfig) -> list[Finding]:
-    """Report pages that are neither in navigation nor linked from any other page."""
+    """Report pages that nothing reaches.
+
+    A page is reachable when the navigation holds it, another page links to it, or
+    it belongs to a content type whose generated listing (``/<name>/``) is itself in
+    the navigation or linked from a page. The listing pages are generated after the
+    lint page set is built, so they are reasoned about by URL rather than searched.
+    """
     from bartleby.navigation import build_navigation
 
     nav = build_navigation(config, pages)
-    nav_urls = {page.output_url for page in nav.pages_flat if page.output_url}
-    inbound = _inbound_urls(pages)
+    reachable = _nav_urls(nav.items) | _inbound_urls(pages)
     findings: list[Finding] = []
     for page in pages:
-        if page.output_url in nav_urls or page.output_url in inbound:
+        if page.output_url in reachable:
             continue
+        listing_url = f"/{page.content_type_name}/" if page.content_type_name else None
+        if listing_url in reachable:
+            continue
+        message = "Page is not in navigation and has no inbound links"
+        hint = RULES_BY_ID["orphaned-page"].hint
+        if listing_url is not None:
+            message += f", and nothing reaches its listing {listing_url} either"
+            hint = (
+                f"add {listing_url} under nav: in bartleby.yml,"
+                " or link to the page from another page"
+            )
         findings.append(
             Finding(
                 severity=_SEVERITY_WARNING,
                 rule="orphaned-page",
                 file=page.source_path.as_posix(),
-                message="Page is not in navigation and has no inbound links",
-                hint=RULES_BY_ID["orphaned-page"].hint,
+                message=message,
+                hint=hint,
             )
         )
     return findings
+
+
+def _nav_urls(items: list[NavItem]) -> set[str]:
+    """Collect every URL the navigation tree links to, listing links included."""
+    urls: set[str] = set()
+    for item in items:
+        if item.url:
+            urls.add(item.url)
+        if item.index_url:
+            urls.add(item.index_url)
+        urls |= _nav_urls(item.children)
+    return urls
 
 
 def _inbound_urls(pages: list[Page]) -> set[str]:

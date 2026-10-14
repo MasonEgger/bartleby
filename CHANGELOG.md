@@ -302,6 +302,9 @@ The docs site builds on the Scrivener theme, with a corrected listing, excerpt, 
 - `bartleby build` and `serve` report an unwritable project directory or output directory as a labeled error that names the directory and suggests `chmod` or `output_dir`, instead of a traceback.
   An `output_dir` on another filesystem no longer raises a traceback either.
 - The docs site enables `feeds` for guides, so its feed links lead to feeds with entries.
+- `bartleby lint` no longer reports a post as orphaned when its content type's listing is in `nav` or linked from a page, since the generated listing links to every post.
+  A post whose listing nothing reaches is still reported, and the finding names the listing to add.
+  The `--blog` scaffold lints clean.
 
 ### Dependencies
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from bartleby.config import BartlebyConfig, load_config
 from bartleby.content import Page
 from bartleby.linting import Finding, lint_site
 
@@ -15,13 +16,14 @@ def _page(
     *,
     description: str | None = "A description.",
     rendered_content: str = "",
+    content_type_name: str | None = "blog",
 ) -> Page:
     page = Page(
         source_path=Path(source),
         abs_source_path=Path("/abs") / source,
         title=source,
         description=description,
-        content_type_name="blog",
+        content_type_name=content_type_name,
     )
     page.output_url = output_url
     page.rendered_content = rendered_content
@@ -75,16 +77,51 @@ def test_present_description_not_flagged() -> None:
 
 def test_orphan_page_detected() -> None:
     """A page with no inbound links and not in nav yields an orphan finding."""
-    orphan = _page("blog/posts/lonely.md", "/blog/posts/lonely/")
+    orphan = _page("guides/lonely.md", "/guides/lonely/", content_type_name=None)
     linker = _page(
-        "blog/posts/hub.md",
-        "/blog/posts/hub/",
-        rendered_content='<a href="/blog/posts/hub/">self</a>',
+        "guides/hub.md",
+        "/guides/hub/",
+        rendered_content='<a href="/guides/hub/">self</a>',
+        content_type_name=None,
     )
-    findings = lint_site([orphan, linker], _config(), Path("/content"))
+    findings = lint_site(
+        [orphan, linker], _config(nav=[{"Hub": "guides/hub.md"}]), Path("/content")
+    )
     orphans = [f for f in findings if f.rule == "orphaned-page"]
-    assert any(f.file == "blog/posts/lonely.md" for f in orphans)
+    assert [f.file for f in orphans] == ["guides/lonely.md"]
     assert all(f.severity == "warning" for f in orphans)
+    assert "nav" in orphans[0].hint
+
+
+def test_post_on_a_listing_in_nav_is_not_orphan() -> None:
+    """A post shows on its content type's generated listing, so a listing in nav reaches it."""
+    post = _page("blog/posts/lonely.md", "/blog/posts/lonely/")
+    findings = lint_site([post], _config(nav=[{"Blog": "blog/"}]), Path("/content"))
+    assert [f for f in findings if f.rule == "orphaned-page"] == []
+
+
+def test_post_on_a_listing_linked_from_a_page_is_not_orphan() -> None:
+    """A link to the listing page reaches every post on it."""
+    post = _page("blog/posts/lonely.md", "/blog/posts/lonely/")
+    home = _page(
+        "index.md",
+        "/",
+        rendered_content='<a href="/blog/">the blog</a>',
+        content_type_name=None,
+    )
+    findings = lint_site([post, home], _config(nav=[{"Home": "index.md"}]), Path("/content"))
+    assert [f for f in findings if f.rule == "orphaned-page"] == []
+
+
+def test_post_whose_listing_is_unreachable_names_the_listing() -> None:
+    """A post is an orphan when nothing reaches its listing, and the fix names the listing."""
+    post = _page("blog/posts/lonely.md", "/blog/posts/lonely/")
+    home = _page("index.md", "/", content_type_name=None)
+    findings = lint_site([post, home], _config(nav=[{"Home": "index.md"}]), Path("/content"))
+    orphans = [f for f in findings if f.rule == "orphaned-page"]
+    assert [f.file for f in orphans] == ["blog/posts/lonely.md"]
+    assert "/blog/" in orphans[0].message
+    assert orphans[0].hint.startswith("add /blog/ under nav:")
 
 
 def test_linked_page_is_not_orphan() -> None:
@@ -95,7 +132,9 @@ def test_linked_page_is_not_orphan() -> None:
         "/blog/posts/hub/",
         rendered_content='<a href="/blog/posts/target/">go</a>',
     )
-    findings = lint_site([target, linker], _config(), Path("/content"))
+    findings = lint_site(
+        [target, linker], _config(nav=[{"Hub": "blog/posts/hub.md"}]), Path("/content")
+    )
     orphans = [f.file for f in findings if f.rule == "orphaned-page"]
     assert "blog/posts/target.md" not in orphans
 
@@ -149,9 +188,9 @@ def test_finding_is_structured() -> None:
     assert finding.to_dict()["rule"] == "orphaned-page"
 
 
-def _config() -> object:
-    """A minimal stand-in config; linting only reads content_types/nav indirectly."""
-    from bartleby.config import load_config
-
+def _config(nav: list[dict[str, object]] | None = None) -> BartlebyConfig:
+    """The sample site's config; ``nav`` replaces its automatic navigation when given."""
     sample = Path(__file__).parent / "fixtures" / "site" / "bartleby.yml"
-    return load_config(sample)
+    config = load_config(sample)
+    config.nav = nav
+    return config
